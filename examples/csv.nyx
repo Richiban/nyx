@@ -1,0 +1,32 @@
+import csv
+
+def cmp(a, b):
+    return (a > b) - (a < b)
+
+''  Write stocks data as comma-separated values
+resource {
+    def stocksFileW = using open("stocks.csv", "w", newline="")
+    def writer = csv.writer(stocksFileW)
+
+    writer.writerows([
+        ['GOOG', 'Google, Inc.', 505.24, 0.47, 0.09],
+        ['YHOO', 'Yahoo! Inc.', 27.38, 0.33, 1.22],
+        ['CNET', 'CNET Networks, Inc.', 8.62, -0.13, -1.4901]
+    ])
+}
+
+''  Read stocks data, print status messages
+resource {
+    def stocksFile = using open("stocks.csv", "r")
+    def stocks = csv.reader(stocksFile)
+
+    def status_labels = map {
+        -1 -> "down"
+        0  -> "unchanged"
+        1  -> "up" 
+    }
+
+    for stocks as ticker, name, price, change, pct:
+        def status = status_labels[cmp(float(change), 0.0)]
+        println("{name} is {status} {float(pct)}")
+}

@@ -1,6 +1,6 @@
 ''	------------------------- 
-  	---------- Nyx ---------- 
-  	------------------------- 
+      ---------- Nyx ---------- 
+      ------------------------- 
 
 
 
@@ -8,40 +8,34 @@
 ''  ------- Comments -------
 
     Comments are started with two single quotes together `''`.
-    To make a comment span multiple lines you just intend the subsequent lines more than the first line.
+    To make a comment span multiple lines you just intent the subsequent lines more than the quotes that started the comment.
 
-	This means that there's no need for a separate block comment construct; anything intented further 
-	than the `''` is considered part of the comment
+    This means that there's no need for a separate block comment construct; anything indented further 
+    than the `''` is considered part of the comment
 
 
 
 ''	------- Variables ------- 
-  	Variables are defined using the 'def' keyword.
+      Variables are defined using the 'def' keyword.
 def name = "Fred"
 
 ''	Variables are, by default, immutable. If you need a value you can mutate you
    can create a reference cell using the function `ref`
 def age = ref 21
 
-'' Reference cells define operators for replacing and manipulating their contents
-   in a way that makes it feel like imperative programming
 
-age := 22
-age += 1
-
-'' Reference cells are optimised away, where possible, by the compiler
-
-''	Note that, despite the fact that Nyx is strongly-typed, in these examples we're not
-  	specifying any variable types. More on that later.
-
+''  Mutable variables are specified with the `mut` keyword instead of `def`
 
 
 '' 	------- Literals ------- 
-  	There are a few types of literal in Nyx. Some you will be used to, such as ints, strings and
-  	bits.
+      There are a few types of literal in Nyx. Some you will be used to, such as ints, strings and
+      bits.
 def age = 21		''	int
 def name = "Fred"	''	string
 def factor = 1.5	''	double
+
+'' Tags
+def mode :: #read | #readwrite = #readwrite '' 
 
 ''	Ranges
 def range = 1..5
@@ -56,63 +50,61 @@ def first5Letters = str.subString ..4
 ''	Tuples
 
 ''	A comma joins two or more values together into a tuple. each member of the tuple can be
-''	of any type
-def things = "John", "Alexander", 5, Uri()
+      of any type
+def things = ("John", "Alexander", 5, Uri())
 
 ''	Because Nyx supports union types a tuple can be enumerated. In the above example the
-''	tuple "things" is of type (string, string, int, Uri), and can be used as a Sequence
-''	of the following type: Sequence(string|int|Uri).
+      tuple "things" is of type (string, string, int, Uri), and can be used as a Sequence
+    of the following type: Sequence(string|int|Uri).
 
 for things as thing:
-	thing
-	| case s :: string:  "We have a string: " s
-	  case i :: int:  "We have an integer: " i
-	  case uri :: Uri:  "We have a uri: " uri
-	| print
+    thing
+    \	case s :: string:  	"We have a string: {s}"
+        case i :: int:  	"We have an integer: {i}"
+        case uri :: Uri:  	"We have a uri: {uri}"
+    \ print
 
 ''	Other literals might not be found in other languages, such as object literals.
-''	In Nyx these are called records are are analogous to named tuples in other languages
 def coordinates = ( x = 1, y = 2 )
 
 ''	Target-typed collection literals, defaults to List
 def numbers = [1, 2, 3]
 
 ''	Table literals
-''	This is shorthand for writing a list of objects that have the same structure but
-''	differing contents. Example:
+    This is shorthand for writing a list of objects that have the same structure but
+    differing contents. Example:
 
 def namesAndAges =
-	[| name 		| age	|
-	 | "Felix" 		| 22	|
-	 | "Taylor" 	| 30	|
-	 | "Peter" 		| 28	|
-	 | "Sean" 		| 45	|]
+    [| name 		| age	|
+     | "Felix" 		| 22	|
+     | "Taylor" 	| 30	|
+     | "Peter" 		| 28	|
+     | "Sean" 		| 45	|]
 
 ''	This is equivalent to:
 def namesAndAges = [
-	( name = "Felix", age =  22 ),
-	( name = "Taylor", age =  30 ),
-	( name = "Peter", age =  28 ),
-	( name = "Sean", age = 45 )
+    ( name = "Felix", 	age = 22 ),
+    ( name = "Taylor", 	age = 30 ),
+    ( name = "Peter", 	age = 28 ),
+    ( name = "Sean", 	age = 45 )
 ]
 
 
 
 ''	------- Tags ------- 
-''  Tags in Nyx are a special type of literal. A tag's name is also its value, which is also its type.
-''  If you know Typescript then tags are similar to Typescript's string literal types
-''  If you know Erlang then tags are similar to atoms except, of course, they're strongly typed
+    Tags in Nyx are a special type of literal. A tag's name is also its value, which is also its type.
+    If you know Typescript then tags are similar to Typescript's string literal types
+    If you know Erlang then tags are similar to atoms except, of course, they're strongly typed
 
 ''  Tags can be used as values:
 def x = #my_tag
 
 ''  And also types:
-def y :: Option(#my_second_tag) = None
+def y :: Option(#my_second_tag) = #my_second_tag
 
 ''  Tags are especially useful when combined with union types, such as for passing flags to functions:
-
 def openFile(fileName :: string, mode :: #read | #readwrite): 
-	...
+    ...
 
 
 ''  Question: Should these be called "symbols" instead? And written `$my_symbol`?
@@ -120,8 +112,8 @@ def openFile(fileName :: string, mode :: #read | #readwrite):
 
 
 ''	------- Functions and maps ------- 
-''	Since Nyx contains many concepts from functional programming, it is useful to be able to easily
-''	write a function literal.
+    Since Nyx contains many concepts from functional programming, it is useful to be able to easily
+    write a function literal.
 
 def print1 = { print "1" }
 ''   which can also be written as:
@@ -129,111 +121,110 @@ def print1(): print "1"
 
 items.iter print
 
-''	<| is the backwards pipe operator, also known as the apply operator. Same as `<|` in F# or `$` in Haskell
-def names = data.map <| { item: item.name }
+''	<\ is the backwards pipe operator, also known as the apply operator. Same as `<|` in F# or `$` in Haskell
+def names = data.map <\ { item: item.name }
 
 Web.makeRequest (
-	url = "http://some.api.com/"
-	success (error?, response?, data?) =
-		print "There was an error: "error". The response was "data )
+    url = "http://some.api.com/"
+    success (error?, response?, data?) =
+        print "There was an error: "error". The response was "data )
 
-''	This sumList example defines a function making use of a match expression. | is the pipe operator in Nyx
-rec sumList list:
-	list
-	| case []             : 0
-	  case [head, ...tail]: head + sumList tail
+''	This sumList example defines a function making use of a match expression. \ is the pipe operator in Nyx
+rec sumList(xs): xs
+    \ case []             : 0
+      case [head, ...tail]: head + sumList tail
 
 
-''	Note that, as in the case above, if the entire function consists of a single match expression then
-''  you can merge the function definition and case statements together
+''	Note that, as in the example above, if the entire function consists of a single match expression then
+    you can merge the function definition and case statements together, dropping the need to name an argument
 rec sumList case []             : 0
-	        case [head, ...tail]: head + sumList tail
+            case [head, ...tail]: head + sumList tail
 
 ''	Simple member access can be turned into a function as such:
 def namesAndAges =
-	[| name 		| age	|
-	 | "Felix" 		| 22	|
-	 | "Taylor" 	| 30	|
-	 | "Peter" 		| 28	|
-	 | "Sean" 		| 45	|]
+    [| name 		| age	|
+     | "Felix" 		| 22	|
+     | "Taylor" 	| 30	|
+     | "Peter" 		| 28	|
+     | "Sean" 		| 45	|]
 
-def ages = namesAndAges | map { age }
+def ages = namesAndAges \ map { age }
 
 ''	If you want a parameter to be optional, prefix its name with a ?
-''	Note that any optional parameters will automatically be wrapped in an option type.
-''	The compiler handles optional parameters by inserting None at the callsite.
+    Note that any optional parameters will automatically be wrapped in an option type.
+    The compiler handles optional parameters by inserting None at the callsite.
 
-def printMessage(?message): 		''	"message" is of type `string?` (short for `string | ()`)
-	message
-	| case () :  "You didn't say anything"
-	  case msg:  "You said: " msg
-	| println
+def printMessage(?message): 		''	"message" is of type `string?` (short for `Option(string)`)
+    message
+    \ case #none     :  "You didn't say anything"
+      case #some, msg:  "You said: " msg
+    \ println
 
 ''	You can also make parameters optional by giving a default value. In this case the type of
-''	the parameter is still `Option(t)` as far as any callers are concerned but the type is
-''	automatically unwrapped for you inside the method. If None was supplied at the callsite
-''	then it will be substituted for the default value you gave in the method declaration
-printResults (left = "left", middle, right = "right") =
-	print "{left}, {middle}, {right}"
+     the parameter is still `Option(t)` as far as any callers are concerned but the type is
+     automatically unwrapped for you inside the method. If None was supplied at the callsite
+     then it will be substituted for the default value you gave in the method declaration
+printResults(left = "left", middle, right = "right"):
+    print "{left}, {middle}, {right}"
 
-printResults ("1", "2", "3")	''	legal
-printResults ("1", "3")			''	legal
-printResults "1"				''	Not legal
-printResults ()					''	Not legal
-printResults (middle = "2")		''	Legal. Instead of supplying each argument individually you can supply an
-								''	object with the same shape as the list of parameters. More examples:
+printResults("1", "2", "3")	''	legal
+printResults("1", "3")			''	legal
+printResults"1"				''	Not legal
+printResults()					''	Not legal
+printResults(middle = "2")		''	Legal. Instead of supplying each argument individually you can supply an
+                                ''	object with the same shape as the list of parameters. More examples:
 
 ''	Function arguments can be thought of as a single object with a number of properties.
 type Person = (name :: string, age :: string)
 
-john = Person ("John", 28)
+def john = Person("John", 28)
 
 def f(name :: string, age :: int): "{name} is {age} years old."
 
 f(john.name, john.age)	''	Conventional method call
 f(john)					''	This is legal as the object 'john' has the right shape for the collection of
-						''	parameters for the function f.
+                        ''	parameters for the function f.
 
 
 ''	An incomplete expression (including operators, indexers and member calls) can be wrapped in
-''	parentheses to turn it into a function.
+      parentheses to turn it into a function.
 double = (* 2)
 double 5 		''	=> 10
 
 def names = "John", "Adam", "Alexander"
-def backwards_names = names.map { _.reverse() }	''	=> ["nhoJ", "madA", "rednaxelA"]
+def backwards_names = names.map { reverse() }	''	=> ["nhoJ", "madA", "rednaxelA"]
 def first_letters = names.map { _[0] }			''	=> ["J", "A", "A"]
-def long_names = names.where { length > 5 }. 	''	=> ["Alexander"]
+def long_names = names.filter { length > 5 } 	''	=> ["Alexander"]
 
 
 '' Functions can be composed. Think of it as pre-preparing a pipe
 def firstThree(str :: string): str.substring(0, 3)
 def reverse(str :: string): str.reverse()
 
-lastThree = reverse >> firstThree >> reverse
+def lastThree = reverse >> firstThree >> reverse
 
 '' The following two statements are equivalent
-"Hello" | (reverse >> firstThree >> reverse)	''	=> "llo"
-"Hello" | reverse | firstThree | reverse		''	=> "llo"
+"Hello" \ (reverse >> firstThree >> reverse)	''	=> "llo"
+"Hello" \ reverse \ firstThree \ reverse		''	=> "llo"
 
 
 ''	Functions have the signature `a -> b`, where `a` and `b` are the types
-''	of the function's input and output, respectively.
-''	All functions in Nyx take *one* value as input and product one value as output.
-''	This doesn't sound very useful until you consider that tuples allow you to
-''	pass multiple values as one and unit allows you to return no values.
+     of the function's input and output, respectively.
+     All functions in Nyx take *one* value as input and product one value as output.
+     This doesn't sound very useful until you consider that tuples allow you to
+     pass multiple values as one and unit allows you to return no values.
 
-''	Functions are not the only objects that have this signature `a -> b`, however.
-''	The type `a -> b` is called a `map`, and there are a number of maps in Nyx, not
-''	just functions. Dictionaries are an example, as are strings. Any object of type
-''	`map` is considered 'applicable', and can be 'called' just like a function
+     Functions are not the only objects that have this signature `a -> b`, however.
+     The type `a -> b` is called a `map`, and there are a number of maps in Nyx, not
+     just functions. Dictionaries are an example, as are strings. Any object of type
+     `map` is considered 'applicable', and can be 'called' just like a function
 
-// f :: int -> int
+spec int -> int
 def f(x): x * 2
 
 f(2)					'' 4
 
-// dict :: string:  string
+spec string -> string
 def dict = map { "Hello" -> "Bonjour"; "Goodbye" -> "Au revoir" }
 
 dict("Hello")		'' "Bonjour"
@@ -243,7 +234,7 @@ def greeting = "Hello, "
 greeting("John")		'' "Hello, John"
 
 ''  Note: there is no overloading in Nyx. With optional/named parameters and union types 
-    there is so little need for overloading that it's not worth the considerable effort
+    there is so little need for overloading that it's not worth the considerable complication to the compiler
 
 
 
@@ -253,42 +244,43 @@ greeting("John")		'' "Hello, John"
     main types you will be using: `nyx/String` and `nyx/StringBuffer`.
 
     Note: `nyx/String`, like `nyx/Int32` is so common that it has a keyword for it built 
-    into the language. This allows you to use simply `string` instead, with no need to import
-    `nyx`.
+    into the language. This allows you to use simply `string` instead, with no need to 
+    explicitly import `nyx`.
 
 
 ''
-	------- If-statements and branching -------
+    ------- If-statements and branching -------
 
 '' If-statements
 
 if cond:
-	some_code()
+    some_code()
 else:
-	some_other_code()
+    some_other_code()
 
 
+''  If-statements can have many branches, obviating the need for `else if` or `elif` chains
 if cond1:
-		some_code()
+        some_code()
    cond2: 
-		some_other_code()
+        some_other_code()
    else:
-		yet_more_code()
+        yet_more_code()
 
 ''	A pattern is something that can be assigned to (in a variable
-''	assignment or parameter declaration) or tested against (in a
-''	match expression). Here are some examples:
+    assignment or parameter declaration) or tested against (in a
+    match expression). Here are some examples:
 def names = ["Joey", "Elizabeth", "Samantha"]
 
 ''	Array destructuring
-''  Note that, since this pattern may fail, you must use the `try` keyword instead of `def`
-try [first, second, third, ...] = names
-first 							''	=> "Joey"
-second 							''	=> "Elizabeth"
-third 							''	=> "Samantha"
+    Note that, since this pattern may fail, you must use the `is` keyword instead of `def`
+if names is [first, second, third, ...]:
+    println(first) 		''	=> "Joey"
+    println(second) 	''	=> "Elizabeth"
+    println(third) 		''	=> "Samantha"
 
 ''	Object destructuring by position
-def john = Person ("John", 28)
+def john = Person("John", 28)
 def name, age = john
 name							''	=> "John"
 age								''	=> 28
@@ -300,18 +292,18 @@ age2							''	=> 28
 
 
 ''	Splats can be used in list destructuring. Patterns can be used when declaring
-''	parameters to a function
+    parameters to a function
 def results = ["Jamie", "Alex", "Robin", "Sam", "Jo", "Ashley"]
 def printResults [first-place, second-place, third-place, ...rest] =
-	firstPlace 					''	=> "Jamie"
-	secondPlace 				''	=> "Alex"
-	thirdPlace 					''	=> "Robin"
-	rest 						''	=> ["Sam", "Jo", "Ashley"]
+    firstPlace 					''	=> "Jamie"
+    secondPlace 				''	=> "Alex"
+    thirdPlace 					''	=> "Robin"
+    rest 						''	=> ["Sam", "Jo", "Ashley"]
 
 ''	Destructuring can be arbitrarily nested. Labels can be used (as <identifier>)
-'' 	when destructuring so that you still have
-''	a variable holding the value that has been destructured.
-''	Especially useful with nested destructuring:
+     when destructuring so that you still have
+    a variable holding the value that has been destructured.
+    Especially useful with nested destructuring:
 [[x, ...xs] as list1, [y, ...ys] as list2] = [ [1,2,3], [4,5,6] ]
 x     	#=> 1
 xs    	#=> [2,3]
@@ -322,37 +314,38 @@ list2 	#=> [4,5,6]
 
 
 ''	Object and array destructuring can be combined. Also, splats can be used
-''	alone to ignore the results of it.
+    alone to ignore the results of it.
 def text = "Hello world"
 def (length = length, letters = [firstLetter, ..., lastLetter]) = text
 
 '' Pattern matching is done using a series of `case` keywords. Unlike many other languages
-'' there isn't exactly a `match` statement; instead a series of `case` keywords form a 
-'' pattern matching function which can be used as a function or piped to immediately.
-'' When piping to a function immediately the compile will erase the creation of a function
-'' object for performance
+   there isn't exactly a `match` statement; instead a series of `case` keywords form a 
+   pattern matching function which can be used as a function or piped to immediately.
+   When piping to a function immediately the compile will erase the creation of a function
+   object for performance
 
 spec int -> string
 def classifyNumber = { 
-	case 0: "zero"
-	case 1..10: "small"
-	case > 10: "really big!"
-	else: "unknown"
+    case 0    : "zero"
+    case 1..10: "small"
+    case > 10 : "really big!"
+    else      : "unknown"
 }
 
 def oddOrEven(n):
-	n % 2
-	| case 0: "even"
-	  else : "odd"
+    n % 2
+    \ case 0: "even"
+      else  : "odd"
 
-def fizzbuzz(range :: seq int):
-	range | map { i ->
-		i % 3, i % 5
-		| case 0, 0: "fizzbuzz"
-		  case 0, _: "fizz"
-		  case _, 0: "buzz"
-		  else: string(i)
-	}
+def fizzbuzz(range :: seq(int)):
+    range
+    \ map { i:
+        i % 3, i % 5
+        \ case 0, 0: "fizzbuzz"
+          case 0, _: "fizz"
+          case _, 0: "buzz"
+          else: string(i)
+    }
 
 
 '' ------- Loops and queries ------- 
@@ -369,11 +362,10 @@ data = [1, 2, 3]
 for data as item: println(item)
 
 
-''
-	Behind the scenes for-loops are compiled into function calls. The variables that
-	can be declared are defined by the function being called. For example: the type
-	<list> has a method "for" that takes a function that takes *two* parameters.
-	This means that the following are possible:
+''  Behind the scenes for-loops are compiled into function calls. The variables that
+    can be declared are defined by the function being called. For example: the type
+    <list> has a method "for" that takes a function that takes *two* parameters.
+    This means that the following are possible:
 
 ''	Foreach loop with index variable as well using zip-enumeration
 def data = ["one", "two", "three"]
@@ -387,37 +379,37 @@ def data = ["one", "uno"; "two", "dos"; "three", "tres"]
 for dict as key, value: print "{key} => {value}"
 
 ''	The above code is exactly equivalent to the following:
-data | iter { key, value:  print "{key} => {value}" }
+data \ iter { key, value:  print "{key} => {value}" }
 
 ''	If you want to ignore one of the variables available to you in the loop you can
-''	either: simply omit the variable (if the variable you're omitting is at the end
-''	of the list of available variables) or use the wildcard '_' in its place. E.g.
+    either: simply omit the variable (if the variable you're omitting is at the end
+    of the list of available variables) or use the wildcard '_' in its place. E.g.
 for dict as _, value: 
-	print "I only care about {value} in this dictionary"
+    print "I only care about {value} in this dictionary"
 
 ''	Note that, as with almost any statement in Nyx, a for loop is also an expression.
-''	This means that is can be used on the RHS of an assignment by 'selecting' a value.
-''	This brings us on to:
+    This means that is can be used on the RHS of an assignment by 'selecting' a value.
+    This brings us on to:
 
 ''	Querying
 
 type Person = (name :: string, age :: int)
-	def sayHello() = "Hello, my name is {@name} and I am {@age}"
+    def sayHello(): "Hello, my name is {name} and I am {age}"
 
-''	Constructors can be referenced as if they're a method
-def people = ["John", "Adam", "Xavier"].select(Person)
+''  Constructors can be referenced as if they're a method
+def people = ["John", "Adam", "Xavier"] \ select(Person)
 
 def numSelected =
-	for checkboxes as checkbox
-	where checkbox.isSelected
-	| count
+    for checkboxes as checkbox
+    where checkbox.isSelected
+    \ count
 
 
 def totalSpendForCustomer =
-	for order from orders
-	where order.customerId == 5
-	select order.total
-	| sum
+    for orders as order
+    where order.customerId == 5
+    yield order.total
+    \ sum
 
 '' You can do complicated queries such as joins, and even combine them
 '' with 'do' to make superloops
@@ -426,20 +418,20 @@ join order from orders on order.customerId == customer.customerId
 where order.total > 100 and customer.age > 18
 distinct order.customerId, customer.name
 do:
-	console?.log "{customer.name} (id: {order.id}) is over 18 and has at least 1 order over $100"
+    console?.log "{customer.name} (id: {order.id}) is over 18 and has at least 1 order over $100"
 
 
-'' -------	Classes & types ------- 
-''	The powerful type inference means that type annotation are rarely
-''	necessary.
+'' -------	Types: Type expressions ------- 
+    The powerful type inference means that type annotation are rarely
+    necessary.
 
-''   Some basic types:
+    Some basic types:
 
-''	Anything (alias: any. The top type for Nyx, or the set of all possible values. All types can be assigned to 'any')
-''	Null (alias: (). The Unit type for Nyx. Has only one value: '()')
-''	Undefined (alias: {}. The bottom type for Nyx, or the set of no values. 'Undefined' can be assigned to all types.)
+    Anything (alias: any. The top type for Nyx, or the set of all possible values. All types can be assigned to 'any')
+    Null (alias: (). The Unit type for Nyx. Has only one value: '()')
+    Undefined (alias: {}. The bottom type for Nyx, or the set of no values. 'Undefined' can be assigned to all types.)
 
-''	A function can take an argument of type 'any'. This allows any object to be passed in.
+    A function can take an argument of type 'any'. This allows any object to be passed in.
 
 def f(a :: any) = string a
 
@@ -447,16 +439,16 @@ def f(a :: any) = string a
 
 def f() :: undefined = throw NotImplementedException
 
-'' Set Operations
+''  Set Operations
 
-''	The type system in Nyx is based on set theory. When defining a value such as 'x :: string'
-''	that can read as 'value x which is a member of the set of all strings'. This allows us to perform operations
-''	on the type system to create new types or type contraints using the type syntax. The available operations are:
+      The type system in Nyx is based on set theory. When defining a value such as 'x :: string'
+      that can read as 'value x which is a member of the set of all strings'. This allows us to perform operations
+      on the type system to create new types or type contraints using the type syntax. The available operations are:
 
 def x :: string | int = ...	'' (|) is a set union. In this case 'x' is a member of the set which is a union of 
-							'' strings and ints, meaning that in this case x is a string or an int  
+                            '' strings and ints, meaning that in this case x is a string or an int  
 
-def x :: (string, int) = ...	'' (*) gives the cartesian product of two (or more) sets, i.e. a tuple.
+def x :: (string, int) = ...	'' (,) gives the cartesian product of two (or more) sets, i.e. a tuple.
 
 def x :: A & B = ...			'' (&) gives the intersection between two sets. So x is of type A *and* type B.
 
@@ -467,12 +459,17 @@ A | B === B | A
 
 ''	Associativity:
 
-(A | B) | C  == A | (B | C)
+(A | B) | C === A | (B | C)
 
-''	Reduction
+''	Reduction:
 
-A | A == A 				'' This has implications, particularly around options. For example if a generatic function returns T case null but T is (string case null)
-						'' in one case then the return type of (string case null) case null collapses down to just string case null
+A | A == A  
+
+''  Distributivity:
+
+A | (B & C) == (A | B) & (A | C)
+
+(A, B) | (A, C) == (A, B | C)
 
 ''	The Unit type is so-called because it has exactly one member and can be thought of as '1' when it comes to set theory. 
 ''	For example, for any value a => a * 1 === a. In the same way, for any type A, A * () === A.
@@ -486,67 +483,108 @@ def x = head([]) '' x :: undefined
 
 ''	The above code will always fail and the compiler will highlight the fact that any code after this is unreachable. 
 
-''	In Nyx, record types can be thought of as abstract types, or interfaces. When thinking of interfaces think
+
+''	-------	Types: Tuples -------
+''	Tuples are a way of grouping values together. They are immutable (by default) and can contain any type of value. 
+''  Each tuple is optionally named; if you do not supply a name then the field is said to be 'positional' and its name
+''  will be the value of the index of the field. For example, the following tuple:
+
+type MyTuple = (string, data :: string, int)
+
+''  Is equivalent to:
+type MyTuple = (
+    0 :: string
+    data :: string
+    2 :: int
+)
+
+
+''	In Nyx, tuple types can be thought of as abstract types, or interfaces. When thinking of interfaces think
 ''	of structural interfaces, meaning that they don't need to be explicitly implemented. Example below:
 
 type Named = (name :: string)
 
 type Person = (name :: string)
 
-def john :: Named = Person "John"	''	This is legal even though Person doesn't
-									''	explicitly derive from Named
+def john :: Named = Person("John")	''	This is legal even though Person doesn't
+                                    ''	explicitly derive from Named
 
-''	Mixins are interfaces that can also have method implementations. Example below:
-
-type Named = (
-	name :: string
-	sayHello () = "Hello, my name is {name}" 
-)
+type Named = ( name :: string )
+    def sayHello(): "Hello, my name is {name}" 
 
 ''	Types can be extended via the mechanism of type intersections:
 type Person = Named & (age :: int)
 
 type Pet = (name :: string)
 
-def sayName (named :: Named) = "Your name is {named.name}"
+def sayName(named :: Named): "Your name is {named.name}"
 
-sayName (Person "John")	''	Valid, as Person explicitly implements INamed
+sayName(Person "John")	''	Valid, as Person explicitly implements INamed
 
-sayName (Pet "Rex") 		''	Also valid, as Pet has the right 'shape'
-							''	for Named, even though it doesn't explicitly
-							''	implement it
+sayName(Pet "Rex") 		''	Also valid, as Pet has the right 'shape'
+                            ''	for Named, even though it doesn't explicitly
+                            ''	implement it
 
-''	Records can also have optional members.
+''	Tuples can also have optional members.
 
 type Person1 = (name :: string; petsName? :: string)
 
 ''   This could also be written as a type union, as seen below:
 
-type Person2 = (name :: string, petsName = ()) | (name :: string, petsName :: string)
+type Person2 = 
+    | (name :: string, petsName = #none)
+    | (name :: string, petsName :: string)
 
-''  Note that, even though the type of 'petsName' has been declared as 'string', is is actually 'string?'
+''  Note that, even though the type of 'petsName' has been declared as 'string', it ends up being `string?`
 
-''	As well as records, types can also be defined as an explicit set. Example:
+''	Enums can be modelled through tag unions. Example:
 
-type Colour = { Red, Green, Blue }
+type Colour = #red | #green | #blue
 
-''	Members of a set can hold values, making them analogous to F#'s discriminated unions. Although they appear
-''	limited in only being able to contain a single value this value can, of course, be a tuple or record type.
+''  Discriminated unions can be modelled through unions of tuples, where a tag in the first position is used 
+    as the discriminator. Example:
 
-type ContactInfo = { None, Telephone string, Email string, EmailAndTelephone (email :: string, telephone :: string) }
+type Shape = 
+    | (#circle, radius :: number)
+    | (#rectangle, width :: number, height :: number)
 
-''	The equivalent of 'void' from conventional programming languages is unit, or the empty tuple.
-''	It is written as '()'
+''  You can then pattern match on the tag to extract the values:
 
-type Unit = ()
+spec Shape -> number
+def area case (#circle, radius)          : Math.pi * radius ** 2
+         case (#rectangle, width, height): width * height
 
-''	The value of unit is written as '()', which can also be thought of as the 0-tuple.
+type ContactInfo = 
+    | #none
+    | (#telephone, string)
+    | (#email, string)
+    | (#email_and_telephone, email :: string, telephone :: string)
 
-def unit :: () = () 		'' The convention is to read () as "none", "nothing" or "null".
+'' Usage: 
 
-''	Record types can be defined inline at the point of their use.
-def calculateDistance (point :: (x :: int, y :: int)) =
-	Math.sqrt point.x ^ 2 + point.y ^ 2
+def sendMessage(contactInfo :: ContactInfo):
+    contactInfo
+    \ case #none:
+        () '' Do nothing
+      case #telephone, telephone:
+        sendSMS(telephone)
+      case #email, email:
+        sendEmail(email)
+      case #email_and_telephone, email, telephone:
+        sendEmail(email)
+        sendSMS(telephone)
+
+''	There is no equivalent of 'void' from other languages; it is convention to use the tag '#none' instead.
+''  Note: you may ask why we don't use the empty tuple () instead of #none. The reason is that, since tuples are
+''  structurally typed, () is actually the top type of all tuples.
+
+spec string -> #none
+def writeToConsole(message):
+    ...
+
+''	Tuple types can be defined inline at the point of their use.
+def calculateDistance (point :: (x :: int, y :: int)):
+    Math.sqrt point.x ^ 2 + point.y ^ 2
 
 
 type A = ( a :: string )
@@ -554,19 +592,17 @@ type B = ( b :: string )
 
 def obj :: A & B = ( a = "a", b = "b" )
 
-type Point = (x: number, y: number)
-def p = Point(x = 1, y = 4)	//	Tuples and records are convertible to one another, but records cannot be converted to other records
-def p' :: (int, int) = p
-def p'' :: Point = p'
 
+''  -------	Specs -------
+''  Specs are a syntax for writing the type of a definition separately. They are optional but are recommended for exported functions
 
-'' -------	Specs -------
-'' Types can be specified inline in Nyx with the `::` syntax, for example:
+''  Types can be specified inline in Nyx with the `::` syntax, for example:
 
 def x :: string = "Hello world"
 
-'' For functions, or definitions involving generics, inline types annotations can quickly make the definitions long and unwieldy. Nyx allows
-'' types to be written on a separate line above the definition, in a spec:
+''  For some definitions, such as functions or definitions involving generics or contexts, inline types annotations can quickly make 
+''  the definitions long and unwieldy. Nyx allows
+''  types to be written on a separate line above the definition, in a spec:
 
 spec string
 def x = "Hello world"
@@ -581,65 +617,143 @@ def greet(name): "Hello, {name}!"
 spec a -> a
 def self(x): x 
 
-''  Exported functions should be given a spec
+''  Exported functions should be given a spec; you'll get a compiler warning if you don't.
+
+    Specs can optionally specify the name of the definition they apply to. This would normally be ommitted
+    on definitions (where the definition immediately follows the spec) but is required on specs present in 
+    a trait where there is no definition attached
+
+    For example:
+
+trait MyTrait:
+    spec aMethod :: (string -> string) '' Spec name required (no definition is attached)
+
+    spec string -> string
+    def anotherMethod(x): x '' Spec name can be omitted because it is attached to a definition
 
 
 '' -------	Contexts -------
-'' Nyx doesn't have static members; it allows programming that feels like accessing static but in a safe way using contexts.
 
+    Contexts are a way of controlling access to stuff.
+    Contexts appear as a sort of extra parameter on a function;
+    when a function specifies a context that it runs in, all the members of that context are available to it. For example:
+    
 spec [CurrencyConversionTable] (Pounds, Dollars) -> Dollars
 def addPoundsAndDollars(p, d):
-	CurrencyConversionTable.convert(p, #dollars)
+    convert(p, #dollars) '' `convert` is a function on the `CurrencyConversionTable` context
 
-'' All console programs implicitly run in ConsoleContext, giving access to things like `print` and `readline`
+''  This is how effect control is done in Nyx
+
+''  All console programs implicitly run in ConsoleContext, giving access to things like `print` and `readline`
 
 def main():
-	sayHello()
+    sayHello()
 
-'' Functions can be annotated with a context. The functions on that context are now available to call within that function, and functions
-'' that in turn require that context can be called
+''  Functions can be annotated with a context. The functions on that context are now available to call within that function, and functions
+''  that in turn require that context can be called
 spec [ConsoleContext] () -> ()
 def sayHello():
-	println("Hello world!")
+    println("Hello world!")
 
 
-'' -------	Failing: exceptions and return values -------
+''  Contexts can be combined. For example, the following function requires a context that has both `ConsoleContext` and `FileSystemContext`:
+spec [ConsoleContext, FileSystemContext] () -> ()
+def readAndPrintFile(filename):
+    def contents = file.open(filename).contents
+
+    print(contents)
+
+
+
+''  Contexts also allow for Haskell-style typeclasses. For example, the following context allows any type to be converted to a string:
+
+trait Writeable(a):
+    spec write :: a -> string
+
+type Person = (name :: string, age :: int)
+
+impl Writeable(Person):
+    ''  Note that the spec is inferred from the trait and doesn't need to be written again
+    def write(p): "{p.name} is {p.age} years old"
+
+
+spec [Writeable(a)] a -> string
+def someFunction(x):
+    println(write(x)) ''  Since we're in the context of Writeable, the function `write` is in scope
+
+
+''  When in a function body, in order to call another function that requires a context, you have two options (let's say you're
+''  in function `f` and you want to call function `g`):
+''	    a) add the context to your function's signature, therefore passing the need to create a context on to your caller
+''	    b) create a context yourself, start a context block, and then call `g` within that block
+''      c) import an `impl` that gives you the context that you need
+
+type MyContext = (
+    m :: string -> ()
+)
+
+def g[MyContext](): 
+    m("Hello world") '' `m` is in scope from context `MyContext`
+
+
+def f():
+    g() ''  This will fail because `g` requires a context that `f` doesn't have
+
+def f[MyContext](): 
+    g() ''  This works because we have added the context to `f`'s signature
+
+def f():
+    def c :: MyContext = (def m(s): println(s))
+
+    context(c):
+        g() ''  This works because we have created an instance of the necessary context and started a context block
+
+def f():
+    import aModule/containingAnImplOf/MyContext ''  This works because we have imported an impl that gives us the context we need
+
+    g()
+
+''  -------	Failing: exceptions and return values -------
 
 ''	There are two methods of failing in Nyx. There are Errors and Exceptions. These behave slightly differently from
-  	other languages in that: Exceptions can be thrown but not caught, and Errors are not 'thrown'
-   	they are simply returned value. This works because, in Nyx, it is a compiler error to call a function
-  	that returns a value (other than '()', a.k.a 'unit') without either: 
-  		a) consuming the result in some way, e.g. print (returnSomeData ())
-  		b) ignoring the result by passing it to the ignore function, e.g. `ignore (returnSomeData ())`
-  		c) ignoring the result by assigning it to the wildcard variable '_', e.g. def _ = returnSomeData ()
+      other languages in that: Exceptions can be thrown but not caught, and Errors are not 'thrown'
+       they are simply returned. This works because, in Nyx, it is a compiler error to call a function
+      that without either: 
+          a) consuming the result in some way, e.g. `println(returnSomeData())`
+          b) ignoring the result by passing it to the ignore function, e.g. `ignore(returnSomeData())`
+          c) ignoring the result by assigning it to the wildcard variable '_', e.g. `_ = returnSomeData ()`
 
 ''  For cases that are well-known to possibly fail or have no value to return, you should instead return an `Error` instance
-spec CustomerId -> Customer | Error(#not_found) | Error(#database_unreachable)
+spec CustomerId -> Result(Customer, #not_found | #database_unreachable)
 def getCustomer(id): ...
+
+''  Note that, due to the Distributivity law detailed above, it doesn't matter whether you write
+''  `Error(#not_found) | Error(#database_unreachable)` or `Error(#not_found | #database_unreachable)`
 
 ''  You can then filter out the error cases manually:
 getCustomer(someId)
-| case c :: Customer: println("We found the customer")
-  case Error(#not_found): println("A customer with that ID was not found")
-  case Error(#database_unreachable): println("We couldn't reach the database")
+\ case Ok(c): "We found the customer"
+  case Error(#not_found): "A customer with that ID was not found"
+  case Error(#database_unreachable): "We couldn't reach the database"
+\ println
 
 ''  Or make use of the `except` builder, provided in the standard library, which has a custom keyword `try` for the `bind` construct.
     This allows us to use what feels like traditional exception handling where errors returned by an expression preceded by a `try` 
     are filtered out of the result expression and bubbled up to the `except` builder
 
-spec CustomerId -> Customer | Error(#cust_not_found)
-def get_customer(id):   ...
+spec CustomerId -> Result(Customer, #customer_not_found)
+def getCustomer(id):   ...
 
-spec Customer -> Order | Error(#no_orders)
-def get_latest_order(customer): ...
+spec Customer -> Result(Order, #no_orders)
+def getLatestOrder(customer): ...
 
 def result = except {
-    def customer = try get_customer("someid")
-    def latest_order = try get_latest_order(customer)
+    def customer = try getCustomer("someid")
+    def latestOrder = try getLatestOrder(customer)
 
-    return latest_order.total
+    return latestOrder.total
 }
-''  `result` has inferred type of `int | Error(#cust_not_found | #no_orders)`
+''  `result` has inferred type of `Result(int, #customer_not_found | #no_orders)`
 
 
 
@@ -652,34 +766,63 @@ def f(x): x
 ''	This function takes in an object and then just returns it. What type is `a`? Any? No. If the compiler
 ''	can't infer the type of the argument it will try to make your function generic.
 ''	So, rewriting the above function in full:
-def f (x :: a) :: a: x		''	This way the function is still strongly-typed but will work on any type
+spec a -> a
+def f(x): x		''	This way the function is still strongly-typed but will work on any type
 
 ''  Note that there isn't a syntax for introducing a type parameter for a function; you just use a type variable (that
-	must start with a lowercase letter) and the function will be made generic
+    must start with a lowercase letter) and the function will be made generic
 
 
 spec Map(string, a) -> ()
-def printDict (values :: Map string) =
-	for list as item: println(item)
+def printDict(values) =
+    values \ iter(println)
 
+
+
+
+'' ------- Classes -------
+
+''  Nyx doesn't have classes, but there are a number of ways in which you can simulate them. The first is to define
+''  the type, and then give it a constructor function that takes in the necessary parameters and creates an instance
+''  of the type. 
+''  For example, the following code creates a class-like structure for a `ResourceController`:
+
+type ResourceController = (
+    get :: string -> Result(Resource, #not_found)
+    post :: Resource -> #ok | Error
+)
+    def apply(repo :: ResourceRepository) :: ResourceController: (
+        def get(id): repo.get(id) \ Option.map(toJson)
+        def post(data): repo.save(data)
+    )
+
+''  Captures allow for private state, such as in the following counter class:
+type Counter = (
+    count :: int
+    inc :: () -> ()
+    dec :: () -> ()
+)
+    def apply() :: Counter: 
+        mut count = 0
+        ( def count: count
+          def inc(): set count = count + 1
+          def dec(): set count = count - 1 ) 
 
 
 
 '' ------- Type narrowing -------
 
 '' 	Nullable / optional types
-''	There is no traditional concept of null in nyx. If you want to represent a value that may be missing you
-''	must wrap the type in the Option union.
-def stringLength :: int option = None
+''	There is no concept of `null` in nyx. If you want to represent a value that may be missing you
+''	must wrap the type in something like the option union
+def stringLength :: Option(int) = #none
 
 ''	Option is a type alias, and is defined as follows:
-type Option(t) = t | ()
+type Option(t) = (#some, t) | #none
 
 ''	The type is generic, meaning that `t` can be any type. `Option` is equal to `t | ()`, meaning that any member of
-''	`t` or the empty tuple () is regarded as a member of `Option(t)`
-
 ''	Note that the option type has a special shorthand syntax supported by the compiler. You can instead write:
-def stringLength :: int? = ()
+def stringLength :: int? = #none
 
 ''	You can't use an optional string as if it were a string. E.g. This is not allowed:
 def input :: string? = ""
@@ -688,26 +831,25 @@ def stringLength = input.length
 ''	If you want to access properties on the string object you must either:
 ''	1. Use a match expression
 def stringLength =
-	input
-	| case ():  0
-	  case s:  s.length 	'' Note that the compiler can infer that s is a string in this case, since all other 
-							'' cases have been exhausted by this point
+    input
+    \ case #none:  0
+      case s   :  s.length 	'' Note that the compiler can infer that s is a string in this case, since all other 
+                            '' cases have been exhausted by this point
 
 ''	2. Use an if expression. Note that in the block when the compiler knows that the string is not null,
 ''	the type has automatically changed from <String?> to <String>. This is called "type narrowing"
-def stringLength (input :: string?) =
-	if input == ():
-		0
-	else:
-		input.length ''	In this else block the input variable has been "narrowed" to a string
+spec string? -> int
+def stringLength(input):
+    if input == #none: 0
+    else input.length ''	In this else block the input variable has been "narrowed" to a string
 
 ''	3. Use the standard library's bang operator "!". This will cause a runntime error to be thrown if the value is 'nothing'
 def stringLength = input!.length
-print input!
+print(input!)
 
 ''	Note that the postfix bang operator "!" is actually compiler shorthand for .force()
 ''	The above example could also be written as:
-print input.force()
+print <| input.force()
 
 ''	4. Use the map operator "*.". This means that if the value is null the entire expression will
 ''	not be evaluated, and null will be returned. Note that in this example the type of stringLength is not
@@ -722,52 +864,24 @@ def stringLength = input.map { length }
 ''	Nullable types work together with optional parameters. In the following examples the external signature
 ''	shows that the type of startIndex is `int?`, and the compiler will allow the function to be called without
 ''	supplying that parameter. However, inside the function the type of startIndex appears to be `int`
-def slice (list, startIndex ? 1) =
-	list.slice startIndex
+def slice(list, startIndex = 1):
+    list.slice startIndex
 
 
 
 ''	------- Standard library ------- 
 
 ''  Main abstractions (traits)
-Source(t) 					'' Equivalent to .NET's IEnumerable<T>. May or may not be infinite, may or may not be in memory
+Seq(t) 					    '' Equivalent to .NET's IEnumerable<T>. May or may not be infinite, may or may not be in memory
 └ Collection(t) 			'' An in-memory collection of `t`s. Finite in size
   ├ List(t)					'' A collection of `t`s that supports random access by index
-  ├ Seq(t) 				    '' A linear collection in memory. Getting an element by index requires walking through the collection
+  ├ Series(t) 				'' A linear collection in memory. Getting an element by index requires walking through the collection
   ├ Set(t) 					'' An unordered collection of `t`s that supports fast addition and 'contains' checking
-  ├ Lookup(k, v) 			'' A collection of `v` values stored against a key `k`. Multiple values may exist for each `k`
-  ├ Dictionary(a, b) 		'' A collection of `(a, b)` value pairs that supports lookup in both directions
-  └ Map(k, v) 				'' A collection of `v` values stored against a key `k`. Each `k` has a single value `v`
-
-''  Immutable implementations marked in CAPS
-Source(t) 					
-├ GENERATOR(t) 	 			'' A generator function that may yield any number of `t`s. May be infinite			
-└ Collection(t) 			
-  ├ List(t)		
-  │ ├ ARRAYLIST(t)
-  │ └ ARRAY(t)		
-  ├ Seq(t)
-  │ ├ LINKEDLIST(t)
-  ├ Set(t) 					
-  ├ Lookup(k, v) 			
-  ├ Dictionary(a, b) 		
-  └ Map(k, v) 				
-
-''  Mutable implementations marked in CAPS
-Source(t) 					
-├ GENERATOR(t) 	 			'' A generator function that may yield any number of `t`s. May be infinite			
-└ Collection(t) 			
-  ├ List(t)		
-  │ ├ ARRAYLIST(t)
-  │ └ ARRAY(t)		
-  ├ Seq(t)
-  │ ├ LINKEDLIST(t)
-  ├ Set(t) 					
-  ├ Lookup(k, v) 			
-  ├ Dictionary(a, b) 		
-  └ Map(k, v) 				
-
-
+  │ └ SortedSet(t) 			'' A sorted collection of `t`s that supports fast addition and 'contains' checking
+  ├ Map(k, v) 				'' A collection of `v` values stored against a key `k`. Each `k` has a single value `v`
+  │ └ BiMap(a, b) 		    '' A collection of `(a, b)` value pairs that supports lookup in both directions
+  └ Lookup(k, v) 			'' A collection of `v` values stored against a key `k`. Multiple values may exist for each `k`
+    
 ''  Async collections
 Stream
 ├ ASYNCGENERATOR(t)	
@@ -776,17 +890,17 @@ Stream
 
 
 Array(t) :: List(t)
-			├ Map(int, t)
-			│  └ Collection((int, t))
-			│     └ Source((int, t))
-			└ Collection(t)
-			   └ Source(t)
+            ├ Map(int, t)
+            │  └ Collection((int, t))
+            │     └ Source((int, t))
+            └ Collection(t)
+               └ Source(t)
 
 
 
 Dictionary(key, value) :: Map(key, value)
-						    └ Collection((key, value))
-								└ Sequence((key, value))
+                            └ Collection((key, value))
+                                └ Sequence((key, value))
 
 
 Promise(t)
@@ -799,46 +913,48 @@ Promise(t)
 
 
 type Source(a) =
-	( getEnumerator :: () -> Enumerator(a) )
+    ( getEnumerator :: () -> Enumerator(a) )
 
 type Collection(a) =
-	Sequence(a) & ( count :: int )
+    Sequence(a) & ( count :: int )
 
 type Map(key, value) =
-	Collection(a) & ( get :: key -> value )
+    Collection(a) & ( get :: key -> value )
 
 type List(a) =
-	Map(int, a) & Collection(a)
+    Map(int, a) & Collection(a)
 
 
 ''	Implementations
 type LinkedList(a) =
-	() | (a, LinkedList(a))
-	& Sequence(a) 
-		def getEnumerator():
-			seq { 
-				mut current = this
+    () | (a, LinkedList(a))
+    & Sequence(a) 
+        def getEnumerator():
+            seq { 
+                mut current = this
 
-				while this is (head, tail):
-					yield head
-					set current = tail
-			}
+                while this is (head, tail):
+                    yield head
+                    set current = tail
+            }
 
 type NonEmptyLinkedList(a) =
-	a | (a, NonEmptyLinkedList(a))
-	& NonEmptySequence(a)
-		def head = this | case (head, _) | head:  head
-		def getEnumerator():
-		  	seq {
-		  		yield head
+    a | (a, NonEmptyLinkedList(a))
+    & NonEmptySequence(a)
+        def head = this \ case (head, _) | head:  head
+        def getEnumerator():
+              seq {
+                  mut current = this
 
-		  		mut current = this
+                loop:
+                    yield current.head
 
-		  		while current is (#not_last, _, tail):
-		  			set current = tail
-		  			yield current.head
-	  		} 
-  		
+                    if (current is (head, tail)):
+                        set current = tail
+                    else:
+                        return
+              } 
+          
 
 
 ''	Most of the collection types, as well as sequence, provide a non-empty variant. This is because
@@ -854,8 +970,8 @@ type User = (id :: UserId, firstName :: string, surname :: string)
 type UserRepository = (get :: UserId -> User)
 
 def userRepository = UserRepository (
-	get userId:
-		User (id = userId, firstName = "Bob", surname = "Jones"))
+    get userId:
+        User (id = userId, firstName = "Bob", surname = "Jones"))
 
 '' ------- Modules -------
 
@@ -890,33 +1006,35 @@ export def x = 5 '' Compiler warning: Exported definitions should have an attach
 module MyModule 
 
 module Functions: '' Full name is MyModule/Functions
-	export def f(x): x * 2
+    export def f(x): x * 2
 
-	export def g(x): x ** 2
+    export def g(x): x ** 2
 
-	export def i = 0
+    export def i = 0
 
 '' Static members
 
 type Point = (x :: number, y :: number)
-	def static origin = Point (x = 0, y = 0)
-	def static default = origin
+    def origin = Point (x = 0, y = 0)
+
+
+def Default(Point):
+    def default = Point.origin
 
 ''	Types are not arranged in a typical heirachy (with with all types ultimately deriving from Object). Instead
 ''	types are regarded to be derived from another type based on their shapes, so B is assignable to A if B's members
 ''	are a (non-strict) superset of A's.
 ''	For example:
 
-spec n :: number -> Point
+spec n :: number -> type
 type Point(n) = (x :: n, y :: n)
 
-''  The use of discard `_` as a type parameter means "Compiler, you figure it out. I don't want to write it here."
-spec number -> _
+spec number -> type
 type Point3D(n) = (x :: n, y :: n, z :: n)
-	def length: sqrt(x * x + y * y + z * z) '' This is basically an extension method
+    def length: sqrt(x * x + y * y + z * z)
 
 
-spec t -> _ where t :: (name :: string)
+spec t -> type where t :: (name :: string)
 type NamedList(t):
     ...
 
@@ -932,21 +1050,17 @@ import math
 import io
 
 ''  But an import block is preferred
-
 import:
     math
     io
 
 ''  Imports can be given a local name to avoid name conflicts:
-
 import io/file as f
 
 ''  This means that the contents of the `file` module are not available in scope, but instead through the given name `f`
-
 def myFile = f.open("/somefile.txt")
 
 ''  Importing can be done anywhere in a file, allowing the use of imports inside scopes to limit naming conflicts
-
 def myFunction():
     import io/file
 
@@ -957,52 +1071,52 @@ def myFunction():
 
 ''  ------- Abstractions -------
 
-	Traits are supported.
+    Traits are supported.
     where a type is an abstraction over objects, a trait is an abstraction over types.
     
     The Number trait (with the alias `number`) is defined in the standard library as such:
 
 trait Number(t):
-	spec (+) :: (t, t) -> t 
-  	spec (-) :: (t, t) -> t 
-  	spec (/) :: (t, t) -> t 
-  	spec (*) :: (t, t) -> t 
-	spec one :: t
-	spec zero :: t
+    spec (+) :: (t, t) -> t 
+      spec (-) :: (t, t) -> t 
+      spec (/) :: (t, t) -> t 
+      spec (*) :: (t, t) -> t 
+    spec one :: t
+    spec zero :: t
 
 ''	Number essentially forms a type constraint. Int and float both conform and are therefore considered numbers
 
 ''	These are very useful for collections. E.g. given the Trait Summable:
 
 trait Summable(t):
-	spec (+)  :: (t, t) ->  t
-	spec zero :: t
+    spec (+)  :: (t, t) ->  t
+    spec zero :: t
 
 
-''  Which can be implemented with
+''  Unlike OO languages, traits are not implemented directly by the type in question. The implementation is defined separately:
 
 impl Summable(int):
-	(+) (x, y): x + y
-	zero = 0
+    def (+) (x, y): x + y
+    def zero = 0
 
 
 ''	Enables the Seq.sum function to be defined as:
 
 module Seq:
-	[Summable(a)] seq(a) -> a
-	def sum(xs) = Seq.fold(xs, (+), zero) '' `+` and `zero` come from `Summable(a)`
+    [Summable(a)] seq(a) -> a
+    def sum(xs) = Seq.fold(xs, (+), zero) '' `+` and `zero` come from `Summable(a)`
 
-''	An important concept in Nyx is that of a type with a default value. This allows the keyword `nil` to be used
-trait Nil(a):
-	nil :: a
+''	An important concept in Nyx is that of a type with a default value. This allows the keyword `default` to be used
+trait Default(a):
+    default :: a
 
 ''   This means that the reduce function on sequences does not need a seed value; the type itself can provide one
 
-spec [Nil(a)] (list(a), (a, a) -> a) -> a
+spec [Default(a)] (list(a), (a, a) -> a) -> a
 rec reduce(xs, f):
-	xs
-	| case []:  nil
-	  case [head, ...tail]: f(head, reduce(tail, f))
+    xs
+    \ case []:  default
+      case [head, ...tail]: f(head, reduce(tail, f))
 
 
 
@@ -1015,16 +1129,13 @@ type Nat = n :: int where n >= 0
 
 ''  Or in function signatures:
 spec (n :: int) -> int where n >= 0
-rec factorial
-	case 0:  1
-	case n:  n * factorial (n - 1)
+rec factorial case 0:  1
+              case n:  n * factorial (n - 1)
 
 spec (n :: nat) -> y :: int where x >= 0, y >= 1
 rec factorial2(n):
-    if n = 0:
-    	1
-    else:
-    	n * factorial2 (n - 1)
+    if n = 0: 1
+    else: n * factorial2 (n - 1)
 
 
 def x = -1
@@ -1033,42 +1144,43 @@ print (factorial x) 	''	Compiler error: "Type restriction failure: `int x` has n
 
 type Nat = x :: int where x >= 0
 
-type OrderedPair = (x :: number, y :: number) where x < y
+spec a :: number -> type
+type OrderedPair(a) = (x :: a, y :: a) where x < y
 
 spec (int, lower :: int, upper :: int) -> ret :: int where lower <= ret <= upper
 def clamp(x, lower, upper): 
-	if x < `lower`: lower
-	   x > `upper`: upper
-	   else: x
+    if x < `lower`: lower
+       x > `upper`: upper
+    else: x
 
 
 spec (x :: int, y :: int) -> z :: int where (z == x or z == y) and (z >= x and z >= y)
 def max(x, y): if x > y: x else: y
 
 class Array(t):
-	...
+    ...
 
-	spec index :: number -> t where index >= 0 and index < this.length
-	def apply(index):
-		...
+    spec index :: number -> t where index >= 0 and index < this.length
+    def apply(index):
+        ...
 
 
 '' Similar to Typescript, Nyx doesn't support overloading but it does support multiple call signatures on a single function
 '' In this way the return type of the function depends on the types passed in
 
-spec (string, #read) -> ReadableFile
-spec (string, #readwrite) -> WriteableFile
+spec case (string, #read) -> ReadableFile
+     case (string, #readwrite) -> WriteableFile
 def open(filename, mode): 
-	...
+    ...
 
 
 ''  This is equivalent to, but easier to write than, 
 spec (string, mode :: #read | #readwrite) -> 
-	mode
-	| case #read: ReadableFile
-	  case #readwrite: WriteableFile 
+    mode
+    \ case #read: ReadableFile
+      case #readwrite: WriteableFile 
 def open(filename, mode): 
-	...
+    ...
 
 
 '' ------- Type functions --------
@@ -1076,15 +1188,15 @@ def open(filename, mode):
     Nyx allows type definitions to be essentially "type functions", i.e. types that calculate other types at compile-time.
 
 type Elem(x):
-	x
-	| case String: Char
-  	  case Array[t]: t
-  	  case Iterable[t]: t
+    x
+    \ case String: Char
+        case Array[t]: t
+        case Iterable[t]: t
 
 ''  or:
 
-type Elem case String: Char
-          case Array(t) | Iterable(t): t
+type Elem (String): Char
+        | (Array(t) | Iterable(t)): t
 
 
 
@@ -1097,8 +1209,8 @@ def f = { x :: int: x * 2 }
 def g :: int -> int = { _ + 2 }
 
 ''  A shorthand lambda does two things:
-	* it allows you to omit the lambda parameter
-	* all members of the implicit parameter get lifted into scope
+    * it allows you to omit the lambda parameter
+    * all members of the implicit parameter get lifted into scope (i.e. the function runs _int the context of_ its single parameter)
 
 ''  This allows:
 def names = people | map { name }
@@ -1108,14 +1220,14 @@ def names = people | map { p: p.name }
 
 '' This allows computation expression-style constructs:
 def names = seq {
-	for people as p:
-		yield p.name
+    for people as p:
+        yield p.name
 }
 
 '' As a rewriting of:
 def names = seq({ builder:
-	for people as p:
-		builder.yield(p.name)	
+    for people as p:
+        builder.yield(p.name)	
 })
 
 
@@ -1123,15 +1235,15 @@ type Point = (x :: int, y :: int)
 
 '' Given the above `Point` class you can initialise it like this:
 def p = Point {
-	x = 4
-	y = 5
+    x = 4
+    y = 5
 }
 
 
 '' The braces desugar into a lambda passed to the auto-generated `apply` method on the type:
 def p = Point.apply({ builder: 
-	builder.x = 4
-	builder.y = 5
+    builder.x = 4
+    builder.y = 5
 })
 
 
@@ -1151,7 +1263,7 @@ def p :: Point = __<p-builder>__.build()
     A builder is used by applying a builder value with a lambda
 
 some_builder {
-	'' Some code
+    '' Some code
 }
 
 ''  What makes a builder different from other higher-order functions is that extra language constructs are available
@@ -1161,8 +1273,8 @@ some_builder {
     `SequenceBuilder` has implemented support for `yield`, so this becomes valid:
 
 seq {
-	yield "hello"
-	yield "world"
+    yield "hello"
+    yield "world"
 }
 
 ''  Note that, while `yield` is included here for learning purposes, it's not actually required and the above is 
@@ -1175,50 +1287,59 @@ seq {
 ''  This desugars to:
 
 seq.apply({ builder ->
-	builder.yield("hello world")
+    builder.yield("hello")
+    builder.yield("world")
 })
 
 ''  Builders are the preferred syntax for initialising things like maps:
-def some_map =
-	map {
-		yield (1, "one")
-		yield (2, "two")
-	}
+def someMap =
+    map {
+        yield (1, "one")
+        yield (2, "two")
+    }
 
 ''  Note: the map builder in the standard library uses the contexts feature to provide the `->` operator inside the builder lambda,
     making the preferred form:
-def some_map =
-	map {
-		1 -> "one"
-		2 -> "two"
-	}
+def someMap =
+    map {
+        1 -> "one"
+        2 -> "two"
+    }
 
 ''  Builders are also how async/await is implemented in the standard library. `async` is the instance of the builder
 ''  and `await` is a custom keyword for the `bind` method
 
 def async = (
-	@customKeyword("await")
-	def bind(m, f):
-		...
+    @customKeyword("await")
+    def bind(m, f):
+        ...
 )
 
 def greetingAsync =
-	async {
-		def name = await get_name()
+    async {
+        def name = await get_name()
 
-		return "Hello, {name}"
-	}
+        return "Hello, {name}"
+    }
 
 ''  Which is rewritten to:
 def greetingAsync =
-	async.apply({ builder ->
-		builder.bind(get_name(), { name ->
-			builder.return("Hello, {name}")
-		})
-	})
+    async.apply({ builder ->
+        builder.bind(get_name(), { name ->
+            builder.return("Hello, {name}")
+        })
+    })
 
 
 ''  Example: HTML builder
+
+def html = (
+    def head(body :: HtmlBuilder -> HtmlElement): HtmlElement
+
+    def body(body :: HtmlBuilder -> HtmlElement): HtmlElement
+
+    def apply(block :: [typeof(this)] () -> HtmlElement): HtmlElement
+)
 
 def result = html {                                        
     head {                                               
@@ -1247,7 +1368,7 @@ def result = html {
             "some text"
             ul {
                 for 1..5 as i:
-                	li { "{i} * 2 = {i * 2}" }
+                    li { "{i} * 2 = {i * 2}" }
             }
         }
     }
@@ -1258,10 +1379,10 @@ def result = html {
 ''  This is a regular type definition
 
 type Option(t) = (#some, t) | #none
-	def force():
-		this
-		| case (#some, val): val
-		  case #none: throw (#force_none)
+    def force():
+        this
+        \ case (#some, val): val
+          case #none: throw (#force_none)
 
 ''  This is a constuctor, Nyx's equivalent of a nominal type
     It is both a function and a type definition
@@ -1271,22 +1392,22 @@ type Option(t) = (#some, t) | #none
     Constructors can be "fallible", where they return an Option
 
 constructor Email(value :: string):
-	if Regex("[^@]@[^@]\.[^@]").matches(s):
-		Some(value)
-	else 
-		None
+    if Regex("[^@]@[^@]\.[^@]").matches(s):
+        Some(value)
+    else 
+        None
 
 ''  This results in a type equivalent to:
 
 type Email = value :: string where isValidEmail(value)
-	def static isValidEmail(s :: string):
-		Regex("[^@]@[^@]\.[^@]").matches(s)
+    def static isValidEmail(s :: string):
+        Regex("[^@]@[^@]\.[^@]").matches(s)
 
 
 
 ''  ------- Operators -------
 
-    Operator overloading: Nyx doesn't allow you to create your own operators, but it has a list of operators that
+    Operator overloading: while Nyx doesn't allow you to create your own operators, it has a list of operators that
     are considered valid that you can choose from. Some of them are considered "spare", in that they have no pre-defined
     meaning in Nyx, leaving you free to give them your own.
 
@@ -1302,7 +1423,7 @@ type Email = value :: string where isValidEmail(value)
 
 ''  ------- Misc -------
 
-    You can use `...` as to make code compile without supplying a body. 
+    You can use `...` to make code compile without supplying a body. 
     It's a bit like `throw NotImplementedException` but will give a compiler warning.
 
     Since there's no overloading in Nyx, tuples and tuple types get automatically unwrapped for you.
@@ -1313,360 +1434,61 @@ type Email = value :: string where isValidEmail(value)
 ''  -------- Standard library -------
 
 
-trait MapBuilder:
-    spec (->) :: (k, v) -> ()
+type MapBuilder = (
+    (->) :: (k, v) -> ()
+)
 
-def map(block :: [MapBuilder]() -> ()):
-    def map = HashMap()
-    def builder :: MapBuilder = (
-        def (->)(k, v): map.add(k, v)
-    )
+type Map = ...
+    def apply(block :: [MapBuilder]() -> ()):
+        def map = HashMap()
 
-    context(builder):
-        block()
+        context(def (->)(k, v): map.add(k, v)):
+            block()
 
-    map
+        map
+
+def myMap = Map {
+    "hello" -> "world"
+    "foo" -> "bar"
+}
 
 
 type Option(a) = (#some, a) | #none 
     spec (a -> b) -> Option(b)
     def map(f): this
-        | case #some, val -> (#some, f(val))
+        \ case #some, val -> (#some, f(val))
           case #none -> #none
           
     def force() :: a: this
-        | case #some, val -> val
+        \ case #some, val -> val
           case #none -> throw InvalidOperationException()
 
-type Result(success, err) = (#ok, success) | (#error, err)
+type Error(err) = (#error, err)
+    spec (err -> a) -> Error(a)
+    def map(f): this
+        \ case #error, err -> (#error, f(err))
+
+type Ok(result) = (#ok, result)
+    spec (result -> a) -> Ok(a)
+    def map(f): this
+        \ case #ok, val -> (#ok, f(val))
+
+type Result(success, err) = Ok(success) | Error(err)
     spec () -> Option(success)
     def toOption(): this
-        | case #ok, val: (#some, val)
+        \ case #ok, val: (#some, val)
           case _: #none
 
+    spec (err -> a) -> Result(success, a)
+    def mapErr(f): this
+        \ case #ok, val: #ok(val)
+          case error: error
 
+    spec (success -> a) -> Result(a, err)
+    def mapOk(f): this
+        \ case #ok, val: #ok(f(val))
+          case #error, err: #error(err)
 
 
 
-''  ------- Examples -------
 
-	Fizzbuzzbaz
-
-	Fizzbuzzbaz is a variant of fizzbuzz, where the function should take a list of `rules` at runtime.
-	For example, 3 -> "fizz", 5 -> "buzz", 7 -> "baz", meaning that a multiple of 3 and 7 would be replaced
-	with "fizzbaz" etc.
-
-
-type NumberGame = (rules :: Collection(int, string))
-  spec int -> string
-  def playNumber(i):
-    rules
-    | collect { divisor, word: if i % divisor == 0: word else () }
-    | mkString
-    | case "": i.toString()
-      case s: s
-
-  spec (int, int) -> Source(string)
-  def apply(start: Int, end: Int) = start..end | map(playNumber)
-
-def main() =
-  def fizzbuzz = NumberGame(
-    3 -> "fizz"
-    5 -> "buzz"
-    7 -> "baz"
-  )
-
-  for fizzbuzz(1, 100) as r:
-    println(r)
-
-
-
-import:
-    vscode
-    common
-    Enumerable { Enumerable }
-    utils/lines as lineUtils
-    selectionsAndRanges { wordRangeToPosition }
-    io/SubjectIOBase { IterationOptions }
-
-export type LinePair =
-    | (prev :: undefined, current :: TextLine)
-    | (prev :: TextLine,  current :: undefined)
-    | (prev :: TextLine,  current :: TextLine)
-
-spec common.Change -> ((number, number) -> number)
-def changeToDiff
-    case #greaterThan:
-        { x, y: x > y }
-    else: 
-        { x, y: x < y }
-
-
-export spec TextDocument, Position -> TextLine
-def getNearestSignificantLine(document, position):
-    def currentLine = document.lineAt(position.line)
-
-    if currentLine.isEmptyOrWhitespace:
-        def lines = lineUtils.iterLinesOutwards(document, position.line)
-
-        for lines as backwardsLine, forwardsLine:
-            if backwardsLine and !backwardsLine.isEmptyOrWhitespace:
-                return backwardsLine
-
-            if forwardsLine and !forwardsLine.isEmptyOrWhitespace:
-                return forwardsLine
-
-    return currentLine
-
-export spec TextLine -> TextLine
-def rangeWithoutIndentation(line):
-    line.range.with {
-        start = line.range.start.with {
-            character = line.firstNonWhitespaceCharacterIndex
-        }
-    }
-
-export spec Change, Direction, TextDocument, TextLine -> TextLine | ()
-def getNextLineOfChangeOfIndentation(change, direction, document, currentLine):
-    def diff = changeToDiff(change)
-    def lines = iterLines(document, (
-        startingPosition = currentLine.range.start,
-        direction,
-        currentInclusive = false,
-    ))
-
-    lines
-    | filter { !isEmptyOrWhitespace }
-    | filter { diff(firstNonWhitespaceCharacterIndex, currentLine.firstNonWhitespaceCharacterIndex) /= 0 }
-    | tryHead
-
-
-export spec(TextLine, TextLine) -> RelativeIndentation
-def getRelativeIndentation(startingLine, targetLine):
-    if targetLine.isEmptyOrWhitespace:
-        return #no-indentation
-
-    if startingLine.firstNonWhitespaceCharacterIndex >
-       targetLine.firstNonWhitespaceCharacterIndex:
-        return #less-indentation
-
-    if startingLine.firstNonWhitespaceCharacterIndex <
-       targetLine.firstNonWhitespaceCharacterIndex:
-        return #more-indentation
-
-    return #same-indentation
-
-export spec TextDocument, IterationOptions -> Source(LinePair)
-def iterLinePairs(document, options):
-    iterLines(document, (...options, currentInclusive = true))
-    | pairwise()
-    | map {
-        case a, b if options.direction == "forwards": (prev = a, current = b)
-        case a, b: (prev = b, current = a)
-    }
-
-export spec TextDocument, Position, Direction -> TextLine | ()
-def getNextSignificantLine(document, position, direction):
-    def lines = iterLines(document, (
-        startingPosition = position,
-        direction,
-        currentInclusive = false,
-    ))
-
-    lines | tryFind(lineIsSignificant)
-
-
-''  A "stop line" is one that is either blank or
-    contains only punctuation
-export spec TextLine -> bool
-def lineIsStopLine(line):
-    !/[a-zA-Z0-9]/.test(line.text)
-
-export spec TextLine -> bool
-def lineIsSignificant(line):
-    !lineIsStopLine(line)
-
-spec TextEditor, Position, common.Change, common.DirectionOrNearest -> ()
-def moveToChangeOfIndentation(editor, cursorPosition, change, direction):
-    if cursorPosition and editor.document:
-        mut line :: TextLine? = ()
-        def currentLine = editor.document.lineAt(cursorPosition.line)
-
-        direction
-        | case #nearest:
-            line = getNearestLineOfChangeOfIndentation(
-                editor.document,
-                editor.document.lineAt(cursorPosition.line),
-                change
-            )
-          case #backwards | #forwards:
-            line = lineUtils.getNextLineOfChangeOfIndentation(
-                change,
-                direction,
-                editor.document,
-                currentLine
-            )
-
-        if line:
-            editor.selection = new Selection(
-                line.range.start,
-                line.range.start
-            )
-
-spec Direction -> (number -> number)
-def directionToDelta
-    case #forwards: { x: x + 1 }
-    else: { x: x - 1 }
-
-export spec TextDocument, IterationOptions -> Source(TextLine)
-def iterLines(document, options):
-    def advance = directionToDelta(options.direction)
-    mut currentLineNumber = wordRangeToPosition(
-        options.startingPosition,
-        options.direction
-    ).line
-
-    def withinBounds = {
-        currentLineNumber >= 0 and
-        (!options.bounds || currentLineNumber >= options.bounds.start.line) and
-        (!options.bounds || currentLineNumber <= options.bounds.end.line) and
-        currentLineNumber < document.lineCount
-    }
-
-    seq {
-        while withinBounds():
-            def newLine = document.lineAt(currentLineNumber)
-
-            yield newLine
-
-            currentLineNumber = advance(currentLineNumber)
-    } | skip(if options.currentInclusive: 0 else: 1)
-
-spec TextDocument, TextLine, common.Change -> TextLine
-def getNearestLineOfChangeOfIndentation(document, currentLine, change):
-    def diff = changeToDiff(change)
-
-    for iterLinesOutwards(document, currentLine.lineNumber) as backwardsLine, forwardsLine:
-        if forwardsLine and
-           !forwardsLine.isEmptyOrWhitespace and
-           diff(
-                forwardsLine.firstNonWhitespaceCharacterIndex,
-                currentLine.firstNonWhitespaceCharacterIndex
-           ):
-            return forwardsLine
-
-        if backwardsLine and
-           !backwardsLine.isEmptyOrWhitespace and
-           diff(
-                backwardsLine.firstNonWhitespaceCharacterIndex,
-                currentLine.firstNonWhitespaceCharacterIndex
-           ):
-            return backwardsLine
-
-
-export spec TextDocument, number -> Source(LinePair)
-def iterLinesOutwards(document, currentLineNumber):
-    mut forwardsPointer = currentLineNumber + 1
-    mut backwardsPointer = currentLineNumber - 1    
-
-    def forwardsPointerInBounds():
-        forwardsPointer <= document.lineCount
-
-    def backwardsPointerInBounds():
-        backwardsPointer >= 0
-
-    seq {
-        while forwardsPointerInBounds() and backwardsPointerInBounds():
-            def backwardsLine = 
-                if backwardsPointerInBounds(): document.lineAt(backwardsPointer)
-                else: undefined
-
-            def forwardsLine =
-                if forwardsPointerInBounds(): document.lineAt(forwardsPointer)
-                else: undefined
-
-            yield backwardsLine, forwardsLine
-
-            forwardsPointer++
-            backwardsPointer--
-    }
-
-export spec list(QuickCommand), ?(label :: string, detail :: string) -> Promise(QuickCommand | string | ())
-def quickCommandPicker(commands, freeEntryOptions):
-    new Promise { resolve, reject:
-        type QuickPickItem = QuickPickItem & {
-            quickKey? common.Char
-            displayOnly? true
-        }
-
-        def quickPick = window.createQuickPick<QuickPickItem>()
-
-        def freeEntryItems = list {
-            if freeEntryOptions:
-                yield (
-                    label = ""
-                    kind = QuickPickItemKind.Separator
-                    displayOnly = true
-                )
-                yield (
-                    label = freeEntryOptions.label
-                    alwaysShow = true
-                    detail = freeEntryOptions.detail
-                    displayOnly = true
-                )
-        }
-
-        quickPick.items = commands
-            | map { e:
-                ( quickKey = e.quickKey
-                  label = `[${e.quickKey}]`
-                  description = e.label
-                  execute = e.execute )
-            }
-            | concat(freeEntryItems)
-
-        quickPick.onDidHide {
-            resolve()
-            quickPick.dispose()
-        }
-
-        quickPick.onDidChangeValue { s:
-            for commands as option:
-                if option.quickKey == s:
-                    resolve(option)
-                    quickPick.dispose()
-                    return
-
-            if !freeEntryOptions:
-                quickPick.value = ""
-
-            commands
-            | tryFind { quickKey == s }
-            | case #some, option:   
-                resolve(option)
-                quickPick.dispose()
-                return
-              case #none if !freeEntryOptions: 
-                quickPick.value = ""
-              case _: ()
-        }
-
-        quickPick.onDidAccept {
-            def selected = quickPick.selectedItems[0]
-
-            if selected.displayOnly:
-                if quickPick.value:
-                    resolve(quickPick.value)
-                else: return
-
-            for commands as option:
-                if option.quickKey === selected.quickKey:
-                    resolve(option)
-                    quickPick.dispose()
-                    return
-
-            quickPick.dispose()
-        }
-
-        quickPick.show()
-    }

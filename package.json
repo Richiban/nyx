@@ -1,0 +1,34 @@
+{
+  "name": "nyx",
+  "displayName": "Nyx",
+  "description": "A toy language called Nyx",
+  "version": "0.0.1",
+  "engines": {
+    "vscode": "^1.76.0"
+  },
+  "categories": [
+    "Programming Languages"
+  ],
+  "contributes": {
+    "languages": [
+      {
+        "id": "nyx",
+        "aliases": [
+          "Nyx",
+          "nyx"
+        ],
+        "extensions": [
+          ".nyx"
+        ],
+        "configuration": "./src/language-configuration.json"
+      }
+    ],
+    "grammars": [
+      {
+        "language": "nyx",
+        "scopeName": "source.nyx",
+        "path": "./src/syntaxes/nyx.tmLanguage.json"
+      }
+    ]
+  }
+}

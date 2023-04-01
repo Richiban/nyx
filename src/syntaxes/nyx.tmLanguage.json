@@ -1,0 +1,245 @@
+{
+  "$schema": "https://raw.githubusercontent.com/martinring/tmlanguage/master/tmlanguage.json",
+  "name": "Nyx",
+  "patterns": [
+    {
+      "include": "#comments"
+    },
+    {
+      "include": "#comments-block"
+    },
+    {
+      "include": "#class-identifier"
+    },
+    {
+      "include": "#constants-and-special-vars"
+    },
+    {
+      "include": "#keywords"
+    },
+    {
+      "include": "#keywords.control"
+    },
+    {
+      "include": "#definition-identifier"
+    },
+    {
+      "include": "#annotations"
+    },
+    {
+      "include": "#operators"
+    },
+    {
+      "include": "#string-interp"
+    },
+    {
+      "include": "#strings"
+    }
+  ],
+  "repository": {
+    "comments": {
+      "patterns": [
+        {
+          "name": "comment.line.nyx",
+          "begin": "(^[ \\t]+)?(?='').+",
+          "beginCaptures": {
+            "1": { "name": "punctuation.whitespace.comment.leading.nyx" }
+          },
+          "end": "(?!\\G)"
+        }
+      ]
+    },
+    "comments-block": {
+      "patterns": [
+        {
+          "name": "comment.block.nyx",
+          "begin": "^''$",
+          "end": "^''",
+          "patterns": [
+            {
+              "include": "#comments-block"
+            }
+          ]
+        }
+      ]
+    },
+    "constants-and-special-vars": {
+      "patterns": [
+        {
+          "name": "constant.language.nyx",
+          "match": "(?<!\\$)\\b(true|false|null)\\b(?!\\$)"
+        },
+        {
+          "name": "variable.language.nyx",
+          "match": "(?<!\\$)\\b(this|super)\\b(?!\\$)"
+        },
+        {
+          "name": "constant.numeric.nyx",
+          "match": "(?<!\\$)\\b((0(x|X)[0-9a-fA-F]*)|(([0-9]+\\.?[0-9]*)|(\\.[0-9]+))((e|E)(\\+|-)?[0-9]+)?)\\b(?!\\$)"
+        },
+        {
+          "include": "#class-identifier"
+        },
+        {
+          "include": "#function-identifier"
+        }
+      ]
+    },
+    "keywords": {
+      "patterns": [
+        {
+          "name": "keyword.nyx",
+          "match": "\\b(def|impl|type|trait|set|mut|where|constructor|spec|rec|as|try|await|using|export|import|module|or|and|is)\\b"
+        }
+      ]
+    },
+    "class-identifier": {
+      "patterns": [
+        {
+          "match": "(?<!\\$)\\b(bool|number|int|double|dynamic|string|list)\\b(?!\\$)",
+          "name": "support.class.nyx"
+        },
+        {
+          "name": "support.type.nyx",
+          "match": "#[a-zA-Z_]+"
+        },
+        {
+          "begin": "(?<![a-zA-Z0-9_$])([_$]*[A-Z][a-zA-Z0-9_$]*)\\b",
+          "end": "(?!<)",
+          "beginCaptures": {
+            "1": {
+              "name": "support.class.nyx"
+            }
+          },
+          "patterns": [
+            {
+              "include": "#type-args"
+            }
+          ]
+        }
+      ]
+    },
+    "keywords.control": {
+      "patterns": [
+        {
+          "name": "keyword.control.nyx",
+          "match": "\\b(if|while|for|return|case|else|join|where|do|yield)\\b"
+        }
+      ]
+    },
+    "definition-identifier": {
+      "patterns": [
+        {
+          "match": "([_$]*[a-z][a-zA-Z0-9_$]*)",
+          "captures": {
+            "1": {
+              "name": "entity.name.nyx"
+            }
+          }
+        }
+      ]
+    },
+    "annotations": {
+      "patterns": [
+        {
+          "name": "storage.type.annotation.nyx",
+          "match": "@[a-zA-Z]+"
+        }
+      ]
+    },
+    "operators": {
+      "patterns": [
+        {
+          "name": "keyword.operator.nyx",
+          "match": "(?<!\\$)\\b(is\\!?)\\b(?!\\$)"
+        },
+        {
+          "name": "keyword.operator.ternary.nyx",
+          "match": "\\?|:"
+        },
+        {
+          "name": "keyword.operator.bitwise.nyx",
+          "match": "(<<|>>>?|~|\\^|\\||&)"
+        },
+        {
+          "name": "keyword.operator.assignment.bitwise.nyx",
+          "match": "((&|\\^|\\||<<|>>>?)=)"
+        },
+        {
+          "name": "keyword.operator.closure.nyx",
+          "match": "(->|\\\\)"
+        },
+        {
+          "name": "keyword.operator.comparison.nyx",
+          "match": "(==|!=|<=?|>=?)"
+        },
+        {
+          "name": "keyword.operator.assignment.arithmetic.nyx",
+          "match": "(([+*/%-]|\\~)=)"
+        },
+        {
+          "name": "keyword.operator.assignment.nyx",
+          "match": "(=)"
+        },
+        {
+          "name": "keyword.operator.increment-decrement.nyx",
+          "match": "(\\-\\-|\\+\\+)"
+        },
+        {
+          "name": "keyword.operator.arithmetic.nyx",
+          "match": "(\\-|\\+|\\*|\\/|\\~\\/|%)"
+        },
+        {
+          "name": "keyword.operator.logical.nyx",
+          "match": "(!|&&|\\|\\|)"
+        }
+      ]
+    },
+    "string-interp": {
+      "patterns": [
+        {
+          "match": "\\$([a-zA-Z0-9_]+)",
+          "captures": {
+            "1": {
+              "name": "variable.parameter.nyx"
+            }
+          }
+        },
+        {
+          "name": "string.interpolated.expression.nyx",
+          "begin": "\\$\\{",
+          "end": "\\}",
+          "patterns": [
+            {
+              "include": "#constants-and-special-vars",
+              "name": "variable.parameter.nyx"
+            },
+            {
+              "include": "#strings"
+            },
+            {
+              "name": "variable.parameter.nyx",
+              "match": "[a-zA-Z0-9_]+"
+            }
+          ]
+        },
+        {
+          "name": "constant.character.escape.nyx",
+          "match": "\\\\."
+        }
+      ]
+    },
+    "strings": {
+      "name": "string.quoted.double.nyx",
+      "begin": "\"",
+      "end": "\"",
+      "patterns": [
+        {
+          "name": "constant.character.escape.nyx",
+          "match": "\\\\."
+        }
+      ]
+    }
+  },
+  "scopeName": "source.nyx"
+}

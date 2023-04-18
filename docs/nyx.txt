@@ -35,7 +35,7 @@ def name = "Fred"	''	string
 def factor = 1.5	''	double
 
 '' Tags
-def mode :: #read | #readwrite = #readwrite '' 
+def mode :: #read | #readwrite = #readwrite 
 
 ''	Ranges
 def range = 1..5
@@ -44,8 +44,7 @@ def from4ToEnd = 4..
 
 def arraySlice = data(1..100)
 def anotherSlice = data(1..)
-
-def first5Letters = str.subString ..4
+def first5Letters = str.subString(..4)
 
 ''	Tuples
 
@@ -59,9 +58,9 @@ def things = ("John", "Alexander", 5, Uri())
 
 for things as thing:
     thing
-    \	case s :: string:  	"We have a string: {s}"
-        case i :: int:  	"We have an integer: {i}"
-        case uri :: Uri:  	"We have a uri: {uri}"
+    \ case s :: string: "We have a string: {s}"
+      case i :: int:  	"We have an integer: {i}"
+      case uri :: Uri:  "We have a uri: {uri}"
     \ print
 
 ''	Other literals might not be found in other languages, such as object literals.
@@ -102,27 +101,27 @@ def x = #my_tag
 ''  And also types:
 def y :: Option(#my_second_tag) = #my_second_tag
 
-''  Tags are especially useful when combined with union types, such as for passing flags to functions:
+''  Tags are particularly useful when combined with union types, such as for passing flags to functions:
 def openFile(fileName :: string, mode :: #read | #readwrite): 
     ...
 
-
-''  Question: Should these be called "symbols" instead? And written `$my_symbol`?
-
+''  Tags are implemented with a lookup table, unique to each running application. As the application
+''  loads other libraries the tags from those libraries are added to the lookup table. This means that
+''  tags with the same compile-time name will always successfully compare by value, even though the name
+''  is not present at runtime.
 
 
 ''	------- Functions and maps ------- 
     Since Nyx contains many concepts from functional programming, it is useful to be able to easily
-    write a function literal.
+    write a function literal. This is done with braces:
 
 def print1 = { print "1" }
-''   which can also be written as:
+
+''   which ends up being the same as the normal definition form:
 def print1(): print "1"
 
-items.iter print
-
-''	<\ is the backwards pipe operator, also known as the apply operator. Same as `<|` in F# or `$` in Haskell
-def names = data.map <\ { item: item.name }
+''  The braces form creates a lamda, which facilitates higher-order functions. For example:
+def names = data \ map { item: item.name }
 
 Web.makeRequest (
     url = "http://some.api.com/"
@@ -130,15 +129,23 @@ Web.makeRequest (
         print "There was an error: "error". The response was "data )
 
 ''	This sumList example defines a function making use of a match expression. \ is the pipe operator in Nyx
-rec sumList(xs): xs
+rec sumList(xs):
+    xs
     \ case []             : 0
       case [head, ...tail]: head + sumList tail
 
 
 ''	Note that, as in the example above, if the entire function consists of a single match expression then
-    you can merge the function definition and case statements together, dropping the need to name an argument
+''  you can merge the function definition and case statements together, dropping the need to name an argument
 rec sumList case []             : 0
             case [head, ...tail]: head + sumList tail
+
+''  An equivalent form exists for lamdas consisting of a single case statement:
+def count = {
+    case 0: "zero"
+    case 1: "one"
+    case _: "many"
+}
 
 ''	Simple member access can be turned into a function as such:
 def namesAndAges =
@@ -157,7 +164,7 @@ def ages = namesAndAges \ map { age }
 def printMessage(?message): 		''	"message" is of type `string?` (short for `Option(string)`)
     message
     \ case #none     :  "You didn't say anything"
-      case #some, msg:  "You said: " msg
+      case #some, msg:  "You said: {msg}" 
     \ println
 
 ''	You can also make parameters optional by giving a default value. In this case the type of
@@ -209,15 +216,15 @@ def lastThree = reverse >> firstThree >> reverse
 
 
 ''	Functions have the signature `a -> b`, where `a` and `b` are the types
-     of the function's input and output, respectively.
-     All functions in Nyx take *one* value as input and product one value as output.
-     This doesn't sound very useful until you consider that tuples allow you to
-     pass multiple values as one and unit allows you to return no values.
+    of the function's input and output, respectively.
+    All functions in Nyx take *one* value as input and product one value as output.
+    This doesn't sound very useful until you consider that tuples allow you to
+    pass multiple values as one and unit allows you to return no values.
 
-     Functions are not the only objects that have this signature `a -> b`, however.
-     The type `a -> b` is called a `map`, and there are a number of maps in Nyx, not
-     just functions. Dictionaries are an example, as are strings. Any object of type
-     `map` is considered 'applicable', and can be 'called' just like a function
+    Functions are not the only objects that have this signature `a -> b`, however.
+    The type `a -> b` is called a `map`, and there are a number of maps in Nyx, not
+    just functions. Dictionaries are an example, as are strings. Any object of type
+    `map` is considered 'applicable', and can be 'called' just like a function
 
 spec int -> int
 def f(x): x * 2
@@ -236,7 +243,41 @@ greeting("John")		'' "Hello, John"
 ''  Note: there is no overloading in Nyx. With optional/named parameters and union types 
     there is so little need for overloading that it's not worth the considerable complication to the compiler
 
+''  Functions can be placed on types:
+type Person = (name :: string, age :: int)
+  def greet(this, other :: string):
+    "Hello, {other}! My name is {this.name} and I am {this.age} years old."
 
+''  This essentially creates a function alongside the type `Person`, called `Person.greet`
+''  With an instance of `Person` you can call it using the familiar dot operator:
+def sam = Person("Sam", 28)
+sam.greet("Alex")	'' "Hello, Alex! My name is Sam and I am 28 years old."
+
+''  You can also call it using the function syntax:
+Person.greet(sam, "Alex")	'' "Hello, Alex! My name is Sam and I am 28 years old."
+
+''  Or the pipe syntax:
+sam \ Person.greet("Alex")	'' "Hello, Alex! My name is Sam and I am 28 years old."
+
+''  Note that, when using the pipe syntax, if there are no ambiguities, the type name can be omitted
+''  from the function name, so the above becomes:
+sam \ greet("Alex")	'' "Hello, Alex! My name is Sam and I am 28 years old."
+
+''  The advantage of this is that 'instance method' calls, functions and match expressions
+''  can all be mixed together in a single pipeline
+def Counter(count :: int) =
+    ( count = count
+      def inc(this): Counter(this.count + 1)
+      def dec(this): Counter(this.count - 1) )
+
+def writeCounter(this): "Counter: {this.count}"
+
+Counter(0)
+\ inc()
+\ inc()
+\ dec()
+\ writeCounter()
+\ println()
 
 ''  ------- Strings -------
 
@@ -247,6 +288,15 @@ greeting("John")		'' "Hello, John"
     into the language. This allows you to use simply `string` instead, with no need to 
     explicitly import `nyx`.
 
+
+'' ------- Operators
+
+''	<\ is the backwards pipe operator, also known as the apply operator. Same as `<|` in F# or `$` in Haskell
+
+def f(x): x * 2
+f(3)
+'' or
+f <\ 3
 
 ''
     ------- If-statements and branching -------
@@ -344,7 +394,7 @@ def fizzbuzz(range :: seq(int)):
         \ case 0, 0: "fizzbuzz"
           case 0, _: "fizz"
           case _, 0: "buzz"
-          else: string(i)
+          else     : string(i)
     }
 
 
@@ -369,13 +419,14 @@ for data as item: println(item)
 
 ''	Foreach loop with index variable as well using zip-enumeration
 def data = ["one", "two", "three"]
-for data, 0.. as item, i: print "Item number {i} is {item}"
+for data, 0.. as item, i:
+    print "Item number {i} is {item}"
 
 ''	The above code is exactly equivalent to the following:
-data | iteri { item, i:  print "Item number {i} is {item}" }
+data \ iteri { item, i:  print "Item number {i} is {item}" }
 
 ''	Looping over a dictionary and getting both the key and value on each iteration:
-def data = ["one", "uno"; "two", "dos"; "three", "tres"]
+def data = map { "one" -> "uno"; "two" -> "dos"; "three" -> "tres" }
 for dict as key, value: print "{key} => {value}"
 
 ''	The above code is exactly equivalent to the following:
@@ -394,7 +445,7 @@ for dict as _, value:
 ''	Querying
 
 type Person = (name :: string, age :: int)
-    def sayHello(): "Hello, my name is {name} and I am {age}"
+    def sayHello(this): "Hello, my name is {this.name} and I am {this.age}"
 
 ''  Constructors can be referenced as if they're a method
 def people = ["John", "Adam", "Xavier"] \ select(Person)
@@ -433,7 +484,7 @@ do:
 
     A function can take an argument of type 'any'. This allows any object to be passed in.
 
-def f(a :: any) = string a
+def f(a :: any) = string(a)
 
 ''	A function with a type of 'undefined' will never return. Either it will loop forever or will always throw.
 
@@ -502,20 +553,20 @@ type MyTuple = (
 ''	In Nyx, tuple types can be thought of as abstract types, or interfaces. When thinking of interfaces think
 ''	of structural interfaces, meaning that they don't need to be explicitly implemented. Example below:
 
-type Named = (name :: string)
+type Named = ( name :: string )
 
-type Person = (name :: string)
+type Person = ( name :: string )
 
 def john :: Named = Person("John")	''	This is legal even though Person doesn't
                                     ''	explicitly derive from Named
 
 type Named = ( name :: string )
-    def sayHello(): "Hello, my name is {name}" 
+    def sayHello(this): "Hello, my name is {this.name}" 
 
 ''	Types can be extended via the mechanism of type intersections:
 type Person = Named & (age :: int)
 
-type Pet = (name :: string)
+type Pet = ( name :: string )
 
 def sayName(named :: Named): "Your name is {named.name}"
 
@@ -549,7 +600,6 @@ type Shape =
     | (#rectangle, width :: number, height :: number)
 
 ''  You can then pattern match on the tag to extract the values:
-
 spec Shape -> number
 def area case (#circle, radius)          : Math.pi * radius ** 2
          case (#rectangle, width, height): width * height
@@ -562,15 +612,15 @@ type ContactInfo =
 
 '' Usage: 
 
-def sendMessage(contactInfo :: ContactInfo):
-    contactInfo
-    \ case #none:
+spec ContactInfo -> ()
+def sendMessage
+    case #none:
         () '' Do nothing
-      case #telephone, telephone:
+    case #telephone, telephone:
         sendSMS(telephone)
-      case #email, email:
+    case #email, email:
         sendEmail(email)
-      case #email_and_telephone, email, telephone:
+    case #email_and_telephone, email, telephone:
         sendEmail(email)
         sendSMS(telephone)
 
@@ -591,6 +641,115 @@ type A = ( a :: string )
 type B = ( b :: string )
 
 def obj :: A & B = ( a = "a", b = "b" )
+
+
+''  ------- OO-style programming and classes -------
+
+''  Nyx doesn't have classes or inheritance, but there are easy ways to encapsulate state 
+''  and functions together.
+
+''  To begin with, let't not forget that if you want a type that is just a record but with
+''  extra functionality, Nyx records do support that:
+
+type Person = (name :: string, age :: int)
+    def greet(this): "Hello, my name is {this.name} and I am {this.age} years old"
+
+
+''  If a class is required because it has mutable state or private functions, you can
+''  write a constructor function on the type that returns a record with the necessary
+''  state or functions captured in the returned object
+
+''  Normally definitions are written with a lowercase starting character, and uppercase 
+''  characters are for types.  However, Nyx also has the feature where you can write a
+''  definition with an uppercase starting character, and a type will be generated for you,
+''  with the same name, for the return type of the definition.  
+
+''  For example, this definition is both a function and a type:
+def Counter(count :: int):
+    mut count = count
+
+    ( def increment(): count += 1
+      def decrement(): count -= 1
+      def count: count )
+
+''  If this definition had been written `def counter` then it would have had the type:
+''  `(count :: int) -> (increment :: () -> (); decrement :: () -> (); count :: int)`
+''  but, thanks to the uppercase first character, its type is now:
+''  `(count :: int) -> Counter`
+
+''  This is equivalent to:
+type Counter = (increment :: () -> (); decrement :: () -> (); count :: int)
+def counter(count :: int) :: Counter:
+    mut count = count
+
+    ( def increment(): count += 1
+      def decrement(): count -= 1
+      def count: count )
+
+''  or, more accurately:
+
+type Counter = (increment :: () -> (); decrement :: () -> (); count :: int)
+    def apply(count :: int) :: Counter:
+        mut count = count
+
+        ( def increment(): count += 1
+          def decrement(): count -= 1
+          def count: count )
+
+''  It's important to remember though that this form is still ultimately just a function definition,
+''  although it acts a lot like a constructor
+def ResourceController(repo :: ResourceRepository) :: MvcController:
+    ( def get(id): repo.get?(id) \ Option.map(toJson)
+      def post(data): repo.save(data) )
+
+    
+''  It's also possible to specify the list of "interfaces" that your type "implements"
+type Rule = (divisor :: int, word :: string)
+
+''  For example, this type implements the `Seq` "interface":
+def NumberGame(rules :: seq(Rule)) :: seq(Rule):
+    ( def getIterator(): rules.getIterator()
+      def apply(n): 
+        rules
+        \ collect { case rule if n % rule.divisor == 0: word }
+        \ String.join("")
+        \ case "": string(n)
+          case s : s )
+
+''  It's also possible to create a typed definition that is not a function, but a value.
+''  This is equivalent to an `object` definition from Scala or Kotlin
+def Config = (
+    host = "https://nyx-lang.org"
+    port = 80
+)
+
+''  If the above was written as `def config` then it would have the type `(host :: string, port :: int)`
+''  but, thanks to the uppercase starting character, it also generates a type `Config` with the same
+''  so that `def Config` has the type `Config`.
+
+
+''  ------- Naming conventions -------
+
+''  In Nyx, it is mandatory to use camelCase for functions and variables, and PascalCase for types.
+''  The exception to this is that function definitions can start with an uppercase character, in which
+''  case the definition generates both a variable/function _and_ a type with the same name.
+
+''  Generates a variable
+def message = "Hello world"
+
+''  Generates a function
+def sayHello(): println("Hello!")
+
+''  Generates a type
+type Greeter = ( greet: () -> ())
+
+''  Generates a type _and_ a function, both called 'Greeter'
+def Greeter():
+    ( def greet(): println("Hello!") )
+
+''  Tags are written in snake_case
+type Thing = #new_thing | #old_thing
+
 
 
 ''  -------	Specs -------
@@ -757,7 +916,7 @@ def result = except {
 
 
 
-'' -------	Generic types ------- 
+'' -------	Generics ------- 
 
 ''	What happens if there are no type annotations and the compiler doesn't have any uses with which
 ''	to guess the type? E.g.
@@ -777,38 +936,49 @@ spec Map(string, a) -> ()
 def printDict(values) =
     values \ iter(println)
 
+''  Return values are target-typed, meaning that, although it's not possible to explicitly provide type arguments,
+''  by using a type assertion on the result you can specify the type of the result. E.g.
 
+spec string -> a
+def fromJson(json): ...
 
+def p :: Person = fromJson("...")
 
-'' ------- Classes -------
+''  ------- Pattern matching -------
 
-''  Nyx doesn't have classes, but there are a number of ways in which you can simulate them. The first is to define
-''  the type, and then give it a constructor function that takes in the necessary parameters and creates an instance
-''  of the type. 
-''  For example, the following code creates a class-like structure for a `ResourceController`:
+''  Pattern matching is a powerful tool for working with data. It allows you to both test an expression to see if it contains
+''  certain data and, at the same, to extract other pieces of data from the expression.
 
-type ResourceController = (
-    get :: string -> Result(Resource, #not_found)
-    post :: Resource -> #ok | Error
-)
-    def apply(repo :: ResourceRepository) :: ResourceController: (
-        def get(id): repo.get(id) \ Option.map(toJson)
-        def post(data): repo.save(data)
-    )
+''  The syntax for pattern matching is to pipe an expression to a series of `case` arms, like so:
 
-''  Captures allow for private state, such as in the following counter class:
-type Counter = (
-    count :: int
-    inc :: () -> ()
-    dec :: () -> ()
-)
-    def apply() :: Counter: 
-        mut count = 0
-        ( def count: count
-          def inc(): set count = count + 1
-          def dec(): set count = count - 1 ) 
+def f(x) =
+    x \ case 1: "one"
+        case 2: "two"
+        case 3: "three"
+        case _: "other"
 
+''  Active patterns are functions that can be used in a case arm. They are written as a normal function, but with the
+''  name encased in brackets
 
+''  The simplest active pattern is a function that returns a boolean. If the function returns true, the case arm is executed.
+def (Even)(x) = x % 2 == 0
+
+def f(x) =
+    x \ case Even: "even"
+        case _: "odd"
+
+''  Active patterns can also return a value. This value is then bound to the name of the active pattern in the case arm.
+
+def (Regex)(pattern, x): 
+    if Regex.match(pattern, x) is [...matches]:
+        matches
+    else: 
+        #none
+
+def f(x): 
+    x \ case Regex("^[0-9]+$"): "a number"
+        case Regex("^[a-z]+$"): "a string"
+        case _: "something else"
 
 '' ------- Type narrowing -------
 

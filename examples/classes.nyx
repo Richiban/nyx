@@ -1,0 +1,57 @@
+''  While Nyx doesn't support OO programming or classes directly, it does
+''  have an easy way to encapsulate data and functions into a single object
+
+''  First, let's have a look at a regular function that returns a tuple:
+spec () -> (year :: int, month :: int, day :: int)
+def getDate():
+  ( year = 2012
+    month = 10
+    day = 31 )
+
+''  This is easy to understand because it's just a regular function and it
+''  just returns a tuple. But, a tuple is not an "object" in the OO sense.
+''  How can we have state and methods?
+
+''  Well, Nyx object can contain full definitions, not just fields, and those
+''  function definitions can close over other values. So, we can create an
+''  object that has a counter and methods to increment and decrement a counter,
+''  and we define that counter variable _outside_ of the object definition (because)
+''  we don't want it to be "public":
+spec int -> (increment :: () -> (), decrement :: () -> (), count :: int)
+def counter(count):
+  mut count = count
+
+  ( def increment(): count += 1
+    def decrement(): count -= 1
+    def count: count )
+
+''  You can see that the `counter` functions feels like an object-oriented constructor,
+''  with "private" fields defined inside and "public" methods being defined in the returned
+''  object expression.
+
+''  We can even use this methodology to create "private methods":
+spec (string, Date) -> (name :: string, dob :: Date, age :: int)
+def person(name, dob):
+  def age():
+    (year, month, day) = getDate()
+    year - dob.year
+
+  ( def name: name
+    def dob: dob
+    def age: age() )
+
+
+''  The only thing that's not satisfying about this is that we don't have a `type` called
+''  `Person`. We can create a type alias for it, but Nyx provides a quick way to do this:
+spec (string, Date) -> Person
+def Person(name, dob):
+  def age():
+    def (year, month, day) = getDate()
+    year - dob.year
+
+  ( name = name
+    dob = dob
+    def age: age() )
+
+''  Here you can see that by naming the function with an uppercase first letter, we've created
+''  _both_ a constructor function and a type alias. This is a common pattern in Nyx.

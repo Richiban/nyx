@@ -1,38 +1,38 @@
-type Iterator(a) = (moveNext :: () -> Option(a))
+type Iterator(a) = (moveNext :: () -> a?)
     
 type Seq(a) = (getIterator :: () -> Iterator(a))
 
 type Collection(a) = 
-    Seq(a) & 
-    (size :: () -> int)
+  Seq(a) & 
+  (size :: () -> int)
     
 type Set(a) = 
-    Collection(a) & 
-    (contains :: a -> bool)
+  Collection(a) & 
+  (contains :: a -> bool)
 
 type SortedSet(a) = 
-    Set(a) & 
-    ( min :: a; max :: a )
+  Set(a) & 
+  ( min :: a; max :: a )
 
 type NumericRange(a :: number) = 
-    ( min :: a, max :: a ) where min <= max
-    & SortedSet(a)
+  ( min :: a, max :: a ) where min <= max
+  & SortedSet(a)
 
 
 trait Monad(m :: type -> type):
-    spec lift :: a -> m(a)
-    spec bind :: (m(a), (a -> m(b))) -> m(b)
+  spec lift :: a -> m(a)
+  spec bind :: (m(a), (a -> m(b))) -> m(b)
 
 impl Monad(Option):
-    def bind(m, f): m
-        \ case #some, x: f(x)
-          case #none   : #none
+  def bind(m, f): m
+    \ case #some, x: f(x)
+      case #none   : #none
 
-    def lift(x): Some(x)
+  def lift(x): Some(x)
 
 
 spec [Monad(m)] () -> m(a)
 def f():
-    lift(1) \ bind { x: lift(x + 1)}
+  lift(1) \ bind { x: lift(x + 1)}
 
-f[Option]()
+f[Monad(Option)]()

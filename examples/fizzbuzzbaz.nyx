@@ -1,24 +1,21 @@
+''  ------- Fizzbuzzbaz -------
 
-''  ------- Examples -------
+''  	Fizzbuzzbaz is a variant of fizzbuzz, where the function should take a list of `rules` at runtime.
+''  	For example, 3 -> "fizz", 5 -> "buzz", 7 -> "baz", meaning that a multiple of 3 and 7 would be replaced
+''  	with "fizzbaz" etc.
 
-	Fizzbuzzbaz
-
-	Fizzbuzzbaz is a variant of fizzbuzz, where the function should take a list of `rules` at runtime.
-	For example, 3 -> "fizz", 5 -> "buzz", 7 -> "baz", meaning that a multiple of 3 and 7 would be replaced
-	with "fizzbaz" etc.
-
-
-type NumberGame = (rules :: Collection(int, string))
+''  OO style
+def NumberGame(ruleBuilder :: [MapBuilder]() -> Map(int, string)):
   spec int -> string
   def playNumber(i):
-    rules
-    | collect { divisor, word: if i % divisor == 0: word else #nil }
-    | mkString
-    | case "": i.toString()
+    ruleBuilder()
+    \ collect { divisor, word if i % divisor == 0: word else: #none }
+    \ String.join
+    \ case "": i.toString()
       case s: s
 
   spec (int, int) -> Source(string)
-  def apply(start: Int, end: Int) = start..end | map(playNumber)
+  def apply(start: Int, end: Int) = start..end \ map(playNumber)
 
 def main() =
   def fizzbuzz = NumberGame(
@@ -30,3 +27,23 @@ def main() =
   for fizzbuzz(1, 100) as r:
     println(r)
 
+''  FP style
+
+def playNumber(divisor, i):
+  if i % divisor == 0:
+    word
+  else:
+    #none
+
+def numberGame(Map(int, string)):
+  rules
+  \ collect(playNumber)
+  \ String.join
+  \ case "": i.toString()
+    case s: s 
+
+def fizzbuzz = numberGame <\ map {
+  3 -> "fizz"
+  5 -> "buzz"
+  7 -> "baz"
+}

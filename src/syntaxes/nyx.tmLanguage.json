@@ -89,7 +89,7 @@
       "patterns": [
         {
           "name": "keyword.nyx",
-          "match": "\\b(def|impl|type|trait|set|mut|where|constructor|spec|rec|as|try|await|using|export|import|module|or|and|is)\\b"
+          "match": "\\b(def|default|type|trait|set|mut|where|constructor|spec|rec|as|try|await|using|export|import|module|or|and|is)\\b"
         }
       ]
     },

@@ -1,3 +1,5 @@
+''  Some types are meant to be implemented directly
+''  This is an "is a" relationship
 type Iterator(a) = (moveNext :: () -> a?)
     
 type Seq(a) = (getIterator :: () -> Iterator(a))
@@ -12,27 +14,57 @@ type Set(a) =
 
 type SortedSet(a) = 
   Set(a) & 
-  ( min :: a; max :: a )
+  (min :: a; max :: a)
 
 type NumericRange(a :: number) = 
-  ( min :: a, max :: a ) where min <= max
-  & SortedSet(a)
+  SortedSet(a)
+  & (min :: a, max :: a) where min <= max
 
+''  Others are meant to be implemented via a separate instance
+''  This is a "can be a" relationship
+type Monad(m :: type -> type) = (
+  lift :: a -> m(a)
+  bind :: (m(a), (a -> m(b))) -> m(b)
+)
 
-trait Monad(m :: type -> type):
-  spec lift :: a -> m(a)
-  spec bind :: (m(a), (a -> m(b))) -> m(b)
-
-impl Monad(Option):
+impl Monad(Option) = (
   def bind(m, f): m
     \ case #some, x: f(x)
       case #none   : #none
 
-  def lift(x): Some(x)
+  def lift(x): (#some, x)
+)
 
+''  For example, there is a Monoid type, and int can be made into a monoid
+''  But, crucially, there are multiple ways to make a monoid out of int
+''  such as addition, multiplication, bitwise and, bitwise or, etc.
 
-spec [Monad(m)] () -> m(a)
-def f():
-  lift(1) \ bind { x: lift(x + 1)}
+type Monoid(m) = (
+  empty   :: m
+  combine :: (m, m) -> m
+)
 
-f[Monad(Option)]()
+def AdditiveMonoid :: Monoid(int) = (
+  empty = 0
+  def combine(x, y): x + y
+)
+
+def MultiplicativeMonoid :: Monoid(int) = (
+  empty = 1
+  def combine(x, y): x * y
+)
+
+def BitwiseAndMonoid :: Monoid(int) = (
+  empty = 0
+  def combine(x, y): x .& y
+)
+
+def BitwiseOrMonoid :: Monoid(int) = (
+  empty = 0
+  def combine(x, y): x .| y
+)
+
+def reduce[Monoid(a)](xs): a =
+  xs \ fold(empty, combine)
+
+def sum(xs) = reduce[MultiplicativeMonoid](xs)

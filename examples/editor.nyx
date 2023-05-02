@@ -2,7 +2,7 @@ module lines
 
 import:
     editor
-    Enumerable { Enumerable }
+    enumerable { Enumerable }
     utils/lines as lineUtils
     selectionsAndRanges 
     io/SubjectIOBase 
@@ -62,20 +62,18 @@ export def getNextLineOfChangeOfIndentation(change, direction, document, current
 spec(TextLine, TextLine) -> RelativeIndentation
 export def getRelativeIndentation(startingLine, targetLine):
     if targetLine.isEmptyOrWhitespace:
-        return #no_indentation
+        #no_indentation
+       startingLine.firstNonWhitespaceCharacterIndex > targetLine.firstNonWhitespaceCharacterIndex:
+        #less_indentation
+       startingLine.firstNonWhitespaceCharacterIndex < targetLine.firstNonWhitespaceCharacterIndex:
+        #more_indentation
+    else: 
+        #same_indentation
 
-    if startingLine.firstNonWhitespaceCharacterIndex > targetLine.firstNonWhitespaceCharacterIndex:
-        return #less_indentation
-
-    if startingLine.firstNonWhitespaceCharacterIndex < targetLine.firstNonWhitespaceCharacterIndex:
-        return #more_indentation
-
-    return #same_indentation
-
-spec TextDocument, IterationOptions -> Source(LinePair)
+spec (TextDocument, IterationOptions) -> Source(LinePair)
 export def iterLinePairs(document, options):
     iterLines(document, (...options, currentInclusive = true))
-    \ pairwise()
+    \ pairwise
     \ map {
         case a, b if options.direction == #forwards: (prev = a, current = b)
         case a, b: (prev = b, current = a)
@@ -85,27 +83,27 @@ spec TextDocument, Position, Direction -> TextLine | #none
 export def getNextSignificantLine(document, position, direction):
     def lines = iterLines(document, (
         startingPosition = position,
-        direction,
+        direction = direction,
         currentInclusive = false,
     ))
 
-    lines | tryFind(lineIsSignificant)
+    lines \ tryFind(lineIsSignificant)
 
 
 ''  A "stop line" is one that is either blank or
     contains only punctuation
 spec TextLine -> bool
 export def lineIsStopLine(line):
-    !/[a-zA-Z0-9]/.test(line.text)
+    !RegEx("[a-zA-Z0-9]").test(line.text)
 
 spec TextLine -> bool
 export def lineIsSignificant(line):
     !lineIsStopLine(line)
 
-spec TextEditor, Position, common.Change, common.DirectionOrNearest -> ()
+spec TextEditor, Position, common.Change, common.DirectionOrNearest -> #none
 def moveToChangeOfIndentation(editor, cursorPosition, change, direction):
     if cursorPosition and editor.document:
-        mut line :: TextLine? = ()
+        mut line :: TextLine? = #none
         def currentLine = editor.document.lineAt(cursorPosition.line)
 
         direction
@@ -124,7 +122,7 @@ def moveToChangeOfIndentation(editor, cursorPosition, change, direction):
             )
 
         if line:
-            editor.selection = new Selection(
+            editor.selection = Selection(
                 line.range.start,
                 line.range.start
             )
@@ -157,7 +155,7 @@ def iterLines(document, options):
             currentLineNumber = advance(currentLineNumber)
     } | skip(if options.currentInclusive: 0 else: 1)
 
-spec TextDocument, TextLine, common.Change -> TextLine
+spec (TextDocument, TextLine, common.Change) -> TextLine
 def getNearestLineOfChangeOfIndentation(document, currentLine, change):
     def diff = changeToDiff(change)
 
@@ -179,8 +177,8 @@ def getNearestLineOfChangeOfIndentation(document, currentLine, change):
             return backwardsLine
 
 
-export spec TextDocument, number -> Source(LinePair)
-def iterLinesOutwards(document, currentLineNumber):
+spec (TextDocument, number) -> Source(LinePair)
+export def iterLinesOutwards(document, currentLineNumber):
     mut forwardsPointer = currentLineNumber + 1
     mut backwardsPointer = currentLineNumber - 1    
 
@@ -234,7 +232,7 @@ def quickCommandPicker(commands, freeEntryOptions):
         quickPick.items = commands
             \ map { e:
                 ( quickKey = e.quickKey
-                  label = `[${e.quickKey}]`
+                  label = "[{e.quickKey}]"
                   description = e.label
                   execute = e.execute )
             }
@@ -254,7 +252,7 @@ def quickCommandPicker(commands, freeEntryOptions):
                 return
               case #none if !freeEntryOptions: 
                 set quickPick.value = ""
-              case #none: ()
+              case #none: #none
         }
 
         quickPick.onDidAccept {

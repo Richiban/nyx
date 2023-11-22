@@ -1,0 +1,223 @@
+---
+Functions
+=========
+
+An important difference between Nyx and many other languages is that all functions take exactly one argument
+and return exactly one result.
+This means that there is only one function signature in Nyx -> `a: b`, where `a` is the type of the input and `b`
+is the type of the output.
+
+This doesn't sound terribly useful until you consider that tuples allow you to pass multiple values as one
+value. In addition, destructuring syntax can be used in the function definition to extract the values from the 
+tuple, which feels like a function that takes multiple arguments:
+---
+
+def add(x, y) -> x + y -- `add` has the type `(int, int) -> int`; that is a funcion that takes a tuple of two ints
+  -- and returns an int
+
+--  What about functions that take no inputs, or return no output?
+--  The type `()` is the type of the value `()`, which is the only value of the type `()`. This is called the 
+--  "Unit type", and is essentially a tuple with no elements.
+--  In Nyx, if your function returns unit, you don't need to explicitly return it. This makes it feel like a `void`
+--  function from other languages:
+
+spec () -> ()
+def printHello() -> 
+println("Hello")  -- `printHello` has the type `() -> ()`. Notice that we don't need to write `return ()` in 
+  -- the function body
+
+--  Since Nyx contains many concepts from functional programming, it is useful to be able to easily
+--  write a function literal. This is done with braces:
+def print1 = { print("1") }
+
+--  which ends up being the same as the normal definition form:
+def print1() -> print("1")
+
+--  The braces form creates a lamda, which facilitates higher-order functions. For example:
+def names = data -map { item -> item.name }
+
+Web.makeRequest(
+url = "http ->//some.api.com/"
+def success(error?, response?, data?) ->
+println("There was an error -> {error}. The response was {data}")
+def failure(error) ->
+println("There was an error -> {error}")
+)
+
+--	This sumList example defines a function making use of a match expression.
+rec sumList(xs: list(int)) -> xs -match
+| []              -> 0
+| [head, ...tail] -> head + sumList tail
+
+
+--	Since a function that consists of a single match expression is so common in Nyx,
+--  you can merge the function definition and | statements together, dropping the need to name an argument
+rec sumList | []              -> 0
+| [head, ...tail] -> head + sumList(tail)
+
+--  If you feel that the function definition has suffered from the loss of the argument name, you can
+--  use a spec to reinstate it. Note: specs are always recommended for exported functions
+spec (xs: list(int)) -> int
+rec sumList | []              -> 0
+| [head, ...tail] -> head + sumList(tail)
+
+--  Also note that, since functions in Nyx are defined in tuple form, it's possible to pattern match immediately
+--  on multiple arguments:
+spec (x: int, y: int) -> int
+def divide | _, 0 -> #divide_by_zero
+| x, y -> x / y
+
+--  An equivalent form exists for lamdas consisting of a single | statement:
+def count = {
+| 0 -> "zero"
+| 1 -> "one"
+| _ -> "many"
+}
+
+--	Simple member access can be turned into a function as such ->
+def namesAndAges =
+[| name 		| age	|
+| "Felix" 		| 22	|
+| "Taylor" 	| 30	|
+| "Peter" 		| 28	|
+| "Sean" 		| 45	|]
+
+def ages = namesAndAges -map { age }
+
+--	If you want a parameter to be optional, prefix its name with a ?
+Note that any optional parameters will automatically be wrapped in an option type.
+The compiler handles optional parameters by inserting None at the callsite.
+
+def printMessage(?message) -> 		--	"message" is of type `string?` (short for `Option(string)`)
+message 
+-match
+| #nil       ->  "You didn't say anything"
+| #some, msg ->  "You said -> {msg}" 
+-println()
+
+--	You can also make parameters optional by giving a default value. In this | the type of
+the parameter is still `Option(t)` as far as any callers are concerned but the type is
+automatically unwrapped for you inside the method. If None was supplied at the callsite
+then it will be substituted for the default value you gave in the method declaration
+printResults(left = "left", middle, right = "right") ->
+print "{left}, {middle}, {right}"
+
+printResults("1", "2", "3")	--	legal
+printResults("1", "3")			--	legal
+printResults"1"				--	Not legal
+printResults()					--	Not legal
+printResults(middle = "2")		--	Legal. Instead of supplying each argument individually you can supply an
+              --	object with the same shape as the list of parameters. More examples ->
+
+--	Function arguments can be thought of as a single object with a number of properties.
+type Person = (name: string, age: string)
+
+def john = Person("John", 28)
+
+def f(name: string, age: int) -> "{name} is {age} years old."
+
+f(john.name, john.age)	--	Conventional method call
+f(john)					--	This is legal as the object 'john' has the right shape for the collection of
+      --	parameters for the function f.
+
+
+--	An incomplete expression (including operators, indexers and member calls) can be wrapped in
+--  parentheses to turn it into a function.
+double = (* 2)
+double 5 		--	=> 10
+
+def names = "John", "Adam", "Alexander"
+def backwards_names = names -map { reverse() }	--	=> ["nhoJ", "madA", "rednaxelA"]
+def first_letters = names -map { _[0] }			--	=> ["J", "A", "A"]
+def long_names = names -filter { length > 5 } 	--	=> ["Alexander"]
+
+
+--  Functions can be composed. Think of it as pre-preparing a pipe
+def firstThree(str: string) -> str.substring(0, 3)
+def reverse(str: string) -> str.reverse()
+
+def lastThree = reverse >> firstThree >> reverse
+
+--  The following two statements are equivalent
+"Hello".(reverse >> firstThree >> reverse)	--	=> "llo"
+"Hello".reverse.firstThree.reverse		--	=> "llo"
+
+
+--  Functions have the signature `a: b`, where `a` and `b` are the types
+--  of the function's input and output, respectively.
+--  All functions in Nyx take *one* value as input and product one value as output.
+--  This doesn't sound very useful until you consider that tuples allow you to
+--  pass multiple values as one and unit allows you to return no values.
+
+--  Functions are not the only objects that have this signature `a: b`, however.
+--  The type `a: b` is called a `map`, and there are a number of maps in Nyx, not
+--  just functions. Dictionaries are an example, as are strings. Any object of type
+--  `map` is considered 'applicable', and can be 'called' just like a function
+
+spec int -> int
+def f(x) -> x * 2
+
+f(2)					--  4
+
+spec string -> string
+def dict = map { "Hello" -> "Bonjour"; "Goodbye" -> "Au revoir" }
+
+dict("Hello")		-- "Bonjour"
+
+def greeting = "Hello, "
+
+greeting("John")		-- "Hello, John"
+
+--  Note: there is no overloading in Nyx. With optional/named parameters and union types 
+--  there is so little need for overloading that it's not worth the considerable complication to the compiler
+
+--  Functions can be placed on types:
+type Person = (name: string, age: int)
+def greet(this, other: string) ->
+"Hello, {other}! My name is {this.name} and I am {this.age} years old."
+
+--  This essentially creates a function alongside the type `Person`, called `Person.greet`
+--  With an instance of `Person` you can call it using the familiar dot operator:
+def sam = Person("Sam", 28)
+sam.greet("Alex")	-- "Hello, Alex! My name is Sam and I am 28 years old."
+
+--  You can also call it using the function syntax:
+Person.greet(sam, "Alex")	-- "Hello, Alex! My name is Sam and I am 28 years old."
+
+--  Or the pipe syntax:
+sam -Person.greet("Alex")	-- "Hello, Alex! My name is Sam and I am 28 years old."
+
+--  Note that, when using the pipe syntax, if there are no ambiguities, the type name can be omitted
+--  from the function name, so the above becomes:
+sam -greet("Alex")	-- "Hello, Alex! My name is Sam and I am 28 years old."
+
+--  The advantage of this is that 'instance method' calls, functions and match expressions
+--  can all be mixed together in a single pipeline
+def Counter(count: int) =
+( count = count
+def inc() -> Counter(this.count + 1)
+def dec() -> Counter(this.count - 1)
+)
+
+def writeCounter(counter: Counter) -> "Counter -> {counter.count}"
+
+Counter(0)
+-inc()
+-inc()
+-dec()
+-writeCounter()
+-println()
+
+--  Functions can be 'partial', meaning that they may or may not return a value. This is Nyx 
+--  nomenclature for a function whose return type includes the unit type `()`. 
+--  For example, the function `f` with type `int: int | ()` is "partial'
+
+--  Partial functions are necessary for higher-order functions such as `partialMap`, which is effectively 
+--  a map and a filter at the same time. 
+--  This is especially useful if you want to pattern match over each item in a collection, in 
+--  a way that would be awkward to write with separate calls to `map` and `filter`
+
+def f(items: seq(int | #some_tag)) ->
+items -partialMap {
+| i: int -> i * 2
+}

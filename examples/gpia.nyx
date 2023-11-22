@@ -1,0 +1,401 @@
+--  -------------------------------------------------------------------
+--  @doc
+--  Google Play Integrity is the replacement for SafetyNet, i.e. it allows us
+--  to request an attestation from the client which, in turn, requests an attestation
+--  generated and signed by Google, and forwards the response to our servers for validation
+  
+--  Further reading at https:..www.internalfb.com.code.whatsapp-common.doc.integrity.google_play_integrity_attestation.md
+--  @  @format
+--  -------------------------------------------------------------------
+
+@author("richard@gibson.cx")
+@owner("my_team")
+module whatsapp.google_play_integrity
+
+import
+  wa_logs/include/wa_log
+  wa_util/include/wa_time
+  wa/include/wa_platforms
+  wa/include/wa_stats
+  wa/include/wa_types
+
+def playIntegrityMaxPayloadSize = 8192
+
+-- One hour
+def googlePlayIntegrityNonceTimeout = 1(hour)
+
+-- Date.time from around when the Google Play Integrity module was written
+def minimumValidNonceTimestamp = 1676566464292477(microseconds)
+
+-- Current refresh interval: 2 weeks (1,209,600 seconds)
+def periodicRefreshInterval = 14(days)
+
+type PlayIntegrityAttestationContext =
+  | #unknown
+  | #test
+  | #play_integrity_attestation
+    
+type LastAttestation = (#undefined | TimePoint, bool) | #undefined
+
+type ParsedAttestation = jsone.JsonValue
+
+-- This function is invoked by chatd after every login and is used by `google_play_integrity` to decide
+-- whether to send an attestation request to the client. Currently these cases are supported ->
+--
+-- - First login after registration
+-- - Force attestation if not attested before
+-- - Repeat attestation every 2 weeks
+--
+-- Note: it is deliberate that the last_attestation used is that of the last _SafetyNet_ attestation
+-- because we want the two features to share the same timestamp
+spec (Wid, LastAttestation, chatx_types.StateMap) -> bool
+export def maybeSendAttestationRequest(wid, lastSafetyNetAttestation, stateMap) ->
+  checkSendAttestationRequirements(wid, lastSafetyNetAttestation)
+    | Err(failedRequirement) ->
+      countProduct(wid, ("google_play_integrity.periodic_refresh", failedRequirement))
+      return false
+  
+  countProduct(wid, "google_play_integrity.periodic_refresh.new")
+  #ok == sendPlayIntegrityRequest(wid, StateMap)    
+    
+    
+spec (Wid, LastAttestation) -> Result((), E) where
+  E =
+    | #module_disabled
+    | #knob_disabled_for_user
+    | #unsupported_platform
+    | #unsupported_version
+    | #recent_attestation_found
+    | #rate_limit_exceeded
+def checkSendAttestationRequirements(wid, lastSafetyNetAttestation) -> if
+  | not moduleIsEnabled() -> Err(#module_disabled)
+  | not knobIsEnabledForUser(wid) -> Err(#knob_disabled_for_user)
+  | not isWaGoogleMobilePlatform(wid.getPlatform(wid)) -> Err(#unsupported_platform)
+  | not clientHasFeature(wid) -> Err(#unsupported_version)
+  | not lastSafetynetAttestationSufficientlyOld(wid, lastSafetyNetAttestation) -> Err(#recent_attestation_found)
+  | not featureIsWithinRateLimit() -> Err(#rate_limit_exceeded)
+    
+spec (Wid) -> bool
+def clientHasFeature(wid) ->
+  wa_platforms.sasFeature(wid.setResource(wid), #google_play_integrity) == true
+    
+spec (Wid) -> bool
+def knobIsEnabledForUser(wid) ->
+  wa_knobs.enabled(chatd, "google_play_integrity_periodic_fetch_enabled", wid)
+    
+spec (Wid, LastAttestation) -> bool
+def lastSafetynetAttestationSufficientlyOld
+  | (wid, #undefined) ->
+    countProduct(wid, "google_play_integrity.periodic_refresh.new")
+    true    
+  | (wid, (#undefined, _)) ->
+    countProduct(wid, "google_play_integrity.periodic_refresh.new")
+    true    
+  | (_, (safetyNetAttestationTS, _)) ->
+    (wa_time.now_sec() - safetyNetAttestationTS) > periodicRefreshIntervalSeconds
+
+spec () -> bool
+def featureIsWithinRateLimit() ->
+  def partition = rand.uniform(100)
+  
+  wa_cam_client.check_limit(#chatd_send_google_play_integrity_attestation, partition)
+    | #overlimit ->
+      false
+    | _ ->
+      wa_cam_client.check_and_update_limit(#chatd_send_google_play_integrity_attestation, partition, 1)
+        | #overlimit ->
+          false
+        | _ ->
+          true
+                   
+def moduleIsEnabled() ->
+  wa_gates.is_allowed(#chatd, #google_play_integrity)
+    
+spec (Wid, chatx_types.StateMap) -> ()
+export def sendPlayIntegrityRequest(wid, stateMap) ->
+  if wa_gates.is_allowed(#chatd, #google_play_integrity) ->
+    doSendPlayIntegrityRequest(wid, stateMap)
+  else ->
+    countProduct(WID, "google_play_integrity.request_attestation.module_disabled")
+        
+spec (Wid, chatx_types.StateMap) -> ()
+def doSendPlayIntegrityRequest(wid, stateMap) ->
+  countProduct(wid, "google_play_integrity.request_attestation")
+  
+  def encryptedNonce = generateEncryptedNonce(wid)
+  def requestProps = [(#request, encryptedNonce)]
+  def serverTimestamp = wa_time.now()
+  
+  def envelope = envelope.ibCreate(wid.makeServer(), wid, (#gpia, requestProps))
+  chatd_router.localRoute(envelope)
+  sendIafRequestEvent(wid, encryptedNonce, serverTimestamp, stateMap)
+  countProduct(wid, "google_play_integrity.request_attestation.success")
+    
+    
+spec (Binary, chatx_types.StateMap, PlayIntegrityAttestationContext = #unknown) -> ()
+export def handlePlayIntegrityAttestation(payload, ["main" => ["wid" => wid]] as stateMap, _context) ->
+  doHandlePlayIntegrityAttestation(moduleIsEnabled(), stateMap, payload) match
+    | Err(#payload_too_large, _) ->
+      countProduct(wid, "google_play_integrity.payload_oversize")
+    | Err(#gpia_decryption_failed, _ as err) ->
+      logE("GPIA token decryption failed: ~0p", [err])
+      countProduct(wid, "google_play_integrity.gpia_decryption_failed")
+    | Err(#attestation_parsing_failed, _ as err) ->
+      logE("Payload parse failed: ~0p", [err])
+      countProduct(wid, "google_play_integrity.attestation_parsing_failed")
+    | Err(#nonce_not_found) ->
+      logE("Nonce freshness check failed: nonce not found in payload")
+      countProduct(wid, "google_play_integrity.nonce_not_found")
+    | Err(#nonce_decryption_failed, _ as err) ->
+      logE("Nonce decryption failed: ~0p", [err])
+      countProduct(wid, "google_play_integrity.nonce_decryption_failed")
+    | Err(#nonce_parse_failed, _ as err) ->
+      logE("Nonce parse failed: ~0p", [err])
+      countProduct(wid, "google_play_integrity.nonce_parse_failed")
+    | Err(#payload_json_decoding_failed, _ as err) ->
+      logE([(cfg, (#chatd, #google_play_integrity))], "{wid.print(wid)} Payload JSON decoding failed: {err}")
+      platformCount(wid, "google_play_integrity.payload_json_decoding_failed")
+    | Err(#payload_decryption_key_unknown_format) ->
+      logE("Unrecognised format for payload decryption key")
+      countProduct(wid, "google_play_integrity.payload_decryption_key_unknown_format")
+    | Err(#payload_token_and_errorcode_missing) ->
+      logE("Payload has neither `token` nor `errorCode`")
+      countProduct(wid, "google_play_integrity.payload_token_missing")
+    | Err(#payload_decryption_key_get_failed, err) ->
+      logE("Decryption key get failed: ~0p", [err])
+      countProduct(wid, "google_play_integrity.payload_decryption_key_get_failed")
+    | Err(err) ->
+      error(err)    
+        
+spec (bool, chatx_types.StateMap, Binary) -> ()
+def doHandlePlayIntegrityAttestation
+  | false, ["main" => ["wid" => wid]], _ ->
+    countProduct(wid, "google_play_integrity.handle_attestation.module_disabled")
+  | true, ["main" => ["wid" => wid]] & stateMap, payload ->
+    def startTime = startLat()
+    def result = decrypt_and_report(StateMap, Payload)
+    def latency = calcLat(StartTime)
+    gatherInfraLatencies("google_play_integrity.latency", Latency, [0.95, 0.99])
+    countProduct(wid, "google_play_integrity.handle_attestation.success")
+    
+spec (Binary) -> () | Err(#payload_too_large, payloadSize: Nat)
+def ensurePayloadIsntOversized(payload) ->
+  def payloadSize = byte_size(payload)
+
+  if not payloadSize =< playIntegrityMaxPayloadSize ->
+    Err(#payload_too_large, payloadSize = payloadSize)
+    
+spec (chatx_types.StateMap, Binary) -> ()
+def decryptAndReport(stateMap, payload) ->
+  ensurePayloadIsntOversized(payload)
+  
+  decryptAndUnpackPayload(wid, payload) 
+    | #successful_attestation, jObject, gpiaToken ->
+      def decryptedToken = decryptGpiaToken(gpiaToken)
+      def parsedAttestation = parseGpiaAttestation(decryptedToken)
+      checkNonce(wid, parsedAttestation)
+      sendIafResultEvent(parsedAttestation, jObject, stateMap)
+    | #failed_attestation, jObject ->
+      sendIafFailedResultEvent(jObject, stateMap)
+    
+spec (Binary) -> Binary | Err(#gpia_decryption_failed, joseJwe.Error)
+def decryptGpiaToken(token) ->
+    def rawDecryptionKey = keychainClient.fetch("google_play_integrity_decryption_key")
+    def rawVerificationKey = keychainClient.fetch("google_play_integrity_verification_key")
+    
+    handle {
+        def decryptionKey = try joseBase64.decode(rawDecryptionKey)
+        def verificationKey = try joseBase64.decode(rawVerificationKey)
+        
+        def verificationJwk = joseJwk.fromDer(verificationKey)
+        def decryptionJWK = joseJwk.fromOct(decryptionKey)
+        def (compactJws, _) = joseJwe.blockDecrypt(decryptionJWK, token)
+        
+        def payload = try joseJws.verifyStrict(verificationJwk, [#ES256], compactJws)
+        payload
+    } except Err(err) ->
+        return Err(#gpia_decryption_failed, err)
+        
+spec (Binary) -> ParsedAttestation | Err(#attestation_parsing_failed, joseJwe.Error)
+def parseGpiaAttestation(data) ->
+  jsone.tryDecode(data) match
+    | Ok(parsedAttestation, _) ->
+      parsedAttestation
+    | Err(err) ->
+      Err(#attestation_parsing_failed, err)
+        
+spec (Wid, ParsedAttestation) -> () | Err(#nonce_not_found)
+def checkNonce(wid, parsedAttestation) ->
+  def encryptedNonce = parsedAttestation("requestDetails")("nonce")
+    except Err(_) ->
+      return Err(#nonce_not_found)
+
+  def decryptedNonce = decryptNonce(encryptedNonce)
+  def uid, ts = parseDecryptedNonce(decryptedNonce)
+  def nonceAge = wa_time.now() - ts
+  
+  -- For the moment if the nonce is stale we will just log it and proceed
+  if not NonceAge =< googlePlayIntegrityNonceTimeoutMicroseconds ->
+    countProduct(WID, "google_play_integrity.check_nonce.stale")
+      
+  if not UID == wid.get_uid(WID) ->
+    countProduct(WID, "google_play_integrity.check_nonce.uid_mismatch")
+    
+spec (Binary) -> Binary | Err(#nonce_decryption_failed, any)
+def decryptNonce(encryptedNonce) ->
+  cryptoClient.decrypt("wa_google_play_integrity", encryptedNonce) match
+    | Ok(decrypted) -> decrypted
+    | Err(reason) -> Err(#nonce_decryption_failed, reason)
+        
+spec (Binary) -> (user: Binary, timestamp: number) | Err(#nonce_parse_failed, any)
+def parseDecryptedNonce(decryptedNonce) ->
+  binary.split(decryptedNonce, ".") match
+    | [user, _] if wid.dsValidUser(User) is (false, reason) ->
+        Err(#nonce_parse_failed, (#invalid_user, user, reason))
+    | [user, ts] ->
+      binary.decodeUnsigned(ts) match
+        | tsNumber when tsNumber > minimumValidNonceTimestamp ->
+          (user, tsNumber)
+        | _ ->
+          Err(#nonce_parse_failed, (#invalid_timestamp, ts))
+    | _ ->
+      Err(#nonce_parse_failed, (#unknown_format, decryptedNonce))
+    
+spec (jsone.JsonValue, chatxTypes.StateMap) -> ()
+def sendIafFailedResultEvent(jObject, ["main" => ["wid" => WID]] & stateMap) ->
+  def iafFeatures = mapPayloadPropertiesToIafFeatures(jObject) ++ ["target_system" => "iaf"]
+  
+  waSentryClient.notify(wid, stateMap, "whatsapp_google_play_integrity_result", iafFeatures)
+    
+spec ParsedAttestation -> waSentryClient.Props
+def mapAttestationPropertiesToIafFeatures(parsedAttestation) ->
+  def desiredProps = [
+      ("google_play_integrity_request_package_name", ("requestDetails", "requestPackageName"))
+      ("google_play_integrity_request_nonce", ("requestDetails", "nonce"))
+      ("google_play_integrity_request_timestamp_millis", ("requestDetails", "timestampMillis"))
+      ("google_play_integrity_app_recognition_verdict", ("appIntegrity", "appRecognitionVerdict"))
+      ("google_play_integrity_app_package_name", ("appIntegrity", "packageName"))
+      ("google_play_integrity_app_certificate_sha256digests", ("appIntegrity", "certificateSha256Digest"))
+      ("google_play_integrity_app_version_code", ("appIntegrity", "versionCode"))
+      ("google_play_integrity_device_recognition_verdicts", ("deviceIntegrity", "deviceRecognitionVerdict"))
+      ("google_play_integrity_app_licensing_verdict", ("accountDetails", "appLicensingVerdict"))
+  ]
+
+  desiredProps
+    --partialMap { iafName, (jsonParentName, jsonChildName) if parsedAttestation is (jsonParentName => (JsonChildName => val)) ->
+      (IafName, Val)
+    }
+    
+spec jsone.JsonValue -> list(atom, Binary)
+def mapPayloadPropertiesToIafFeatures(jObject) ->
+  def desiredProps = [
+      ("google_play_integrity_request_nonce", "nonce")
+      ("google_play_integrity_collected_package_sha256", "sha256")
+      ("google_play_integrity_collected_package_name", "packageName")
+      ("google_play_integrity_error_code", "code")
+  ]
+  
+  desiredProps
+    --partialMap { iafName, jsonName if jObject is [(= jsonName) => val] ->
+      (iafName, val)
+    }
+    ++ try_map_error_code_to_text(jObject)
+        
+spec jsone.JsonValue -> list(atom, Binary)
+def tryMapErrorCodeToText 
+  | ["code" => errorCode] if mapErrorCodeToName(errorCode) is Ok(errorName) ->
+    [("google_play_integrity_error_name", errorName)]
+  | _ ->
+    []
+    
+spec int -> Binary | Err(#undefined)
+def mapErrorCodeToName
+  | -1   -> "INTEGRITY_API_NOT_AVAILABLE"
+  | -2   -> "INTEGRITY_PLAY_STORE_NOT_FOUND"
+  | -3   -> "INTEGRITY_NETWORK_ERROR"
+  | -4   -> "INTEGRITY_PLAY_STORE_ACCOUNT_NOT_FOUND"
+  | -5   -> "INTEGRITY_APP_NOT_INSTALLED"
+  | -6   -> "INTEGRITY_PLAY_SERVICES_NOT_FOUND"
+  | -7   -> "INTEGRITY_APP_UID_MISMATCH"
+  | -8   -> "INTEGRITY_TOO_MANY_REQUESTS"
+  | -9   -> "INTEGRITY_CANNOT_BIND_TO_SERVICE"
+  | -10  -> "INTEGRITY_NONCE_TOO_SHORT"
+  | -11  -> "INTEGRITY_NONCE_TOO_LONG"
+  | -12  -> "INTEGRITY_GOOGLE_SERVER_UNAVAILABLE"
+  | -13  -> "INTEGRITY_NONCE_IS_NOT_BASE64"
+  | -14  -> "INTEGRITY_PLAY_STORE_VERSION_OUTDATED"
+  | -15  -> "INTEGRITY_PLAY_SERVICES_VERSION_OUTDATED"
+  | -16  -> "INTEGRITY_CLOUD_PROJECT_NUMBER_IS_INVALID"
+  | -100 -> "INTEGRITY_INTERNAL_ERROR"
+  | -101 -> "INTEGRITY_INITIALIZATION_NEEDED"
+  | -102 -> "INTEGRITY_INITIALIZATION_FAILED"
+  | -103 -> "INTEGRITY_INVALID_ARGUMENT"
+  | 408  -> "TIMEOUT_ERROR_CODE"
+  | 601  -> "JSON_CREATION_FAILURE"
+  | _    -> Err(#undefined)
+
+spec Wid -> Binary
+def generateEncryptedNonce(wid) ->
+  def uid = wid.getUid(wid)
+  def nowBin = binary.encodeUnsigned(wa_time.now())
+  def plainTextNonce = "{uid}.{nowBin}"
+  
+  cryptoClient.encrypt("wa_google_play_integrity", plainTextNonce)
+    
+spec () -> Map(keychainClient.Name, keychainClient.Spec)
+export def keychainSpec() ->
+  map {
+    "google_play_integrity_decryption_key" => map {
+      "fail_init_if_secret_fetch_fails" => true
+      "allow_insecure_callback" => true
+      "encoding" => #nil
+      "expected_secret_length" => #do_not_validate_length
+      "type" => {#group, "GOOGLE_PLAY_INTEGRITY_DECRYPTION_KEY", "WHATSAPP_INTEGRITY"}
+    }
+    "google_play_integrity_verification_key" => map {
+      "fail_init_if_secret_fetch_fails" => true
+      "allow_insecure_callback" => true
+      "encoding" => #nil
+      "expected_secret_length" => #do_not_validate_length
+      "type" => {#group, "GOOGLE_PLAY_INTEGRITY_VERIFICATION_KEY", "WHATSAPP_INTEGRITY"}
+    }
+  }
+    
+spec decryptAndUnpackPayload(Wid, Binary) -> Result(Succ, E) where
+  Succ =
+    | (#successful_attestation, parsedPayload: jsone.JsonValue, gpiaToken: Binary) 
+    | (#failed_attestation, parsedPayload: jsone.JsonValue)
+  E = 
+    #payload_token_and_errorcode_missing | (#payload_json_decoding_failed, jsone.Error)
+def decryptAndUnpackPayload(wid, payload) ->
+    def password = getPayloadDecryptionPassword(wid)
+    def iv, cipherText = splitBinary(base64.decode(payload), 16)
+    def key = crypto.hash(#sha256, password)
+    def content = crypto.cryptoOneTime(#aes_cbc, key, iv, ciphertext, something = false)
+    
+    jsone.tryDecode(content) match
+      | Ok(["token" => token] & jObject, _) if token /= "" ->
+          (#successful_attestation, jObject, token)
+      | Ok(["code" => _errorCode] = jObject, _) ->
+          (#failed_attestation, jObject)
+      | Ok(_) ->
+          Err(#payload_token_and_errorcode_missing)
+      | Err(err) ->
+          Err(#payload_json_decoding_failed, err)
+
+        
+spec Wid -> Binary | Err(#payload_decryption_key_unknown_format | (#payload_decryption_key_get_failed, any))
+def getPayloadDecryptionPassword(wid) ->
+  wa_accountd_client.point_get(wid, #auth_key, (callerId = wid, zippyConsistency = #eventual_read)) match
+    | Err(err) ->
+      Err(#payload_decryption_key_get_failed, err)
+    | loginInfo: Binary ->
+      wa_b64.encode(loginInfo)
+    | _ ->
+      Err(#payload_decryption_key_unknown_format)
+        
+-- Merges two lists of `key -> value` tuples. If two tuples share a key the second one is dropped
+spec list(name, value) -> list(name, value)
+def mergeIafFeatureLists(iafFeatures) ->
+    iafFeatures --uniqueBy { name, _ -> name }
+    

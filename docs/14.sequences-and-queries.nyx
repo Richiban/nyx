@@ -1,0 +1,37 @@
+---
+Sequences and series
+====================
+
+In terms of "enumerable" abstractions, Nyx has both the concept of a sequence and a series. 
+
+The main difference between the two is that a series is known not to be infinite, and so can safely be iterated.
+
+In short, a sequence might represent some kind of collection or it might represent a generator; a series always
+represents a collection or range
+---
+
+for 0.. | i -> println("Hello times {i}")	--  Compiler error: cannot iterate over a seq
+
+for 1..10 | i -> println("Hello times {i}")	--  OK
+
+--  Note that it *is* possible to iterate over an infinite range, but only if you use the `take` function to
+--  limit the number of items in the range:
+
+for 1.. -take(10) | i -> println("Hello times {i}")	--  OK, because the `take` function accepts a seq and returns a series
+
+--  It is also possible to iterate over a seq by zipping it with a series, because there is an enumerate method
+--  defined on tuples of the form (seq, series) and (series, seq):
+
+default def enumerate(seq(a), series(b)) = ...
+default def enumerate(series(a), seq(b)) = ...
+
+--  Which allows this common pattern to iterate over a collection with the index of each item:
+
+def items: series(string) = ...
+
+for items, 0.. | item, i -> println("Item {i} is {item}")
+
+--  Both seq and series have a `getIterator` method, which returns an iterator object that can be used to step through
+--  the contained items; the main difference between them is that the iterator returned from a seq has an impure `next`
+--  function, whereas for series it is pure. This illustrates the fact that series cannot be infinite, and will always
+--  return the same items when enumerated.

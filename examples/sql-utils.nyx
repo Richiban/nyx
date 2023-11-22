@@ -1,0 +1,39 @@
+module com.agilogy.arrow2.sql
+
+import
+  arrow/core/continuations/Raise
+  java/sql/Connection
+  java/sql/PreparedStatement
+  java/sql/SQLException
+  javax/sql/DataSource
+
+def DuplicateKey = ()
+
+type SqlPrimitive = #sql_int | #sql_string
+
+spec [Connection, Raise(Nothing)] (string, seq(SqlPrimitive)) -> Async(int)
+export def executeUpdate(query, args) -> async {
+  def ps = using prepareStatement(query)
+    for 0.., args | pos, arg -> ps -setArgument(pos, arg)
+    ps.executeUpdate()
+}
+
+spec [Connection, Raise(DuplicateKey)] (string, seq(SqlPrimitive)) -> Async(int)
+export def executeUpdateCatchDuplicateKey(query, args) -> async {
+  match executeUpdate(query, *args)
+    | Err(#SQLException, e) if isDuplicateKey(e) ->
+      raise(DuplicateKey)
+    | Err(#SQLException, e) -> 
+      return e
+}
+
+spec (PreparedStatement, int, SqlPrimitive) -> ()
+def setArgument | smt, pos, #sql_int -> smt -setInt(pos, arg.value)
+                | smt, pos, #sql_string -> smt -setString(pos, arg.value)
+                | _ -> ()
+
+spec [Raise(e)] (DataSource, [Raise(e), Connection] () -> a) -> a
+def withConnection(dataSource, f) ->
+  [getConnection()] {
+    [Raise]f(dataSource@Raise, dataSource)
+  }

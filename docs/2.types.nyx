@@ -1,0 +1,231 @@
+--  Nyx Type Hierarchy
+
+Any
+
+Tag, Object, Value etc
+
+None
+
+-- Any is the supertype of all types, also called the top type. It defines certain universal methods such as equals, hashCode, and toString. Any has two direct subclasses: AnyVal and AnyRef.
+--  
+--  AnyVal represents value types. There are nine predefined value types and they are non-nullable: Double, Float, Long, Int, Short, Byte, Char, Unit, and Boolean. Unit is a value type which carries no meaningful information. There is exactly one instance of Unit which can be declared literally like so: (). All functions must return something so sometimes Unit is a useful return type.
+--  
+--  AnyRef represents reference types. All non-value types are defined as reference types. Every user-defined type in Scala is a subtype of AnyRef. If Scala is used in the context of a Java runtime environment, AnyRef corresponds to java.lang.Object.
+--  
+--  Here is an example that demonstrates that strings, integers, characters, boolean values, and functions are all of type Any just like every other object:
+
+
+def items: list(Any) = list(
+  "a string",
+  732,  -- an integer
+  'c',  -- a character
+  true, -- a boolean value
+  {"an anonymous function returning a string"}
+)
+
+for items | element -> println(element)
+
+--  It defines a value list of type List[Any]. The list is initialized with elements of various types, but each is an instance of scala.Any, so you can add them to the list.
+
+--  Here is the output of the program:
+
+```
+a string
+732
+c
+true
+<function>
+```
+
+---
+# Nothing and Null
+
+`None` is a subtype of all types, also called the bottom type. There is no value that has type `None`.
+A common use is to signal non-termination such as a thrown exception, program exit, or an infinite loop
+(i.e., it is the type of an expression which does not evaluate to a value, or a method that does not return normally).
+
+Null is a subtype of all reference types (i.e. any subtype of AnyRef). It has a single value identified
+by the keyword literal null. Null is provided mostly for interoperability with other JVM languages and
+should almost never be used in Scala code. We’ll cover alternatives to null later in the tour.
+---
+
+--  Using the "mapped types" feature, you can make a new type that is a mutable copy of an existing type:
+
+  type Person = (name: string, age: int) --  Person is immutable
+  type MutPerson = Mut(Person) --  MutPerson == `(mut name: string, mut age: int)`
+  
+  def mutatePerson(p: Mut(Person)) ->
+    set p.name = "Fred"
+    set p.age = 21
+
+    
+---
+# Types: Type expressions 
+The powerful type inference means that type annotation are rarely
+necessary.
+
+Some basic types:
+
+Anything (alias: any. The top type for Nyx, or the set of all possible values. All types can be assigned to 'any')
+Null (alias -> (). The Unit type for Nyx. Has only one value: '()')
+Undefined (alias: {}. The bottom type for Nyx, or the set of no values. 'Undefined' can be assigned to all types.)
+
+A function can take an argument of type 'any'. This allows any object to be passed in.
+---
+
+def f(a: any) = string(a)
+
+--	A function with a type of 'undefined' will never return. Either it will loop forever or will always throw.
+
+def f(): undefined = throw NotImplementedException
+
+--  Set Operations
+--
+--  The type system in Nyx is based on set theory. When defining a value such as 'x: string'
+--  that can read as 'value x which is a member of the set of all strings'. This allows us to perform operations
+--  on the type system to create new types or type contraints using the type syntax. The available operations are:
+
+def x: string | int = ...	-- (|) is a set union. In this | 'x' is a member of the set which is a union of 
+                            --  strings and ints, meaning that in this | x is a string or an int  
+
+def x: (string, int) = ...	-- (,) gives the cartesian product of two (or more) sets, i.e. a tuple.
+
+def x: A & B = ...			-- (&) gives the intersection between two sets. So x is of type A *and* type B.
+
+--  There are some rules around set operations such as:
+--  Commutativity:
+
+A | B === B | A
+
+--	Associativity ->
+
+(A | B) | C === A | (B | C)
+
+--	Reduction ->
+
+A | A == A  
+
+--  Distributivity:
+
+A | (B & C) == (A | B) & (A | C)
+
+(A, B) | (A, C) == (A, B | C)
+
+--	The Unit type is so-called because it has exactly one member and can be thought of as '1' when it comes to set theory. 
+--	For example, for any value a => a * 1 === a. In the same way, for any type A, A * () === A.
+
+--	This theory extends to the idea of the Bottom type '{}' (the empty set) or 'undefined'. It can be thought of as '0' in set theory.
+--	For any value a => a * 0 === 0. In the same way, for any type A => A * {} === {}
+
+--   The empty list `[]` can be thought of as `List(undefined)` or `List({})`. This way the function `.head` on [] has type `undefined`.
+
+def x = head([]) --  x: undefined
+
+--	The above code will always fail and the compiler will highlight the fact that any code after this is unreachable. 
+
+
+
+--	--	Types -> Tuples --
+--	Tuples are a way of grouping values together. They are immutable (by default) and can contain any type of value. 
+--  Each tuple is optionally named; if you do not supply a name then the field is said to be 'positional' and its name
+--  will be the value of the index of the field. For example, the following tuple:
+
+  type MyTuple = (string, int, data: string)
+
+  --  Note that named fields must come last in the tuple (and therefore positional values must come first)
+  
+  --  Is equivalent to:
+  type MyTuple = (
+      0: string
+      1: int
+      data: string
+  )
+  
+  
+  --	In Nyx, tuple types can be thought of as abstract types, or interfaces. When thinking of interfaces think
+  --	of structural interfaces, meaning that they don't need to be explicitly implemented. Example below ->
+  
+  type Named = ( name: string )
+  
+  type Person = ( name: string )
+  
+  def john: Named = Person("John")	--	This is legal even though Person doesn't
+                                      --	explicitly derive from Named
+  
+  type Named = ( name: string )
+      def sayHello(this) -> "Hello, my name is {this.name}" 
+  
+  --	Types can be extended via the mechanism of type intersections ->
+  type Person = Named & (age: int)
+  
+  type Pet = ( name: string )
+  
+  def sayName(named: Named) -> "Your name is {named.name}"
+  
+  sayName(Person("John"))	--	Valid, as Person explicitly implements INamed
+  
+  sayName(Pet("Rex")) 		--	Also valid, as Pet has the right 'shape'
+                              --	for Named, even though it doesn't explicitly
+                              --	implement it
+  
+  --	Tuples can also have optional members.
+  
+  type Person1 = (name: string; petsName?: string)
+  
+  --  This could also be written as a type union, as seen below:
+  
+  type Person2 = 
+      | (name: string, petsName = #nil)
+      | (name: string, petsName: string)
+  
+  --  Note that, even though the type of 'petsName' has been declared as 'string', it ends up being `string?`
+  
+  --	Enums can be modelled through tag unions. Example ->
+  
+  type Colour = #red | #green | #blue
+  
+  --  Discriminated unions can be modelled through unions of tuples, where a tag in the first position is used 
+      as the discriminator. Example ->
+  
+  type Shape = 
+      | (#circle, radius: number)
+      | (#rectangle, width: number, height: number)
+  
+  --  You can then pattern match on the tag to extract the values:
+  spec Shape -> number
+  def area | (#circle, radius)           -> Math.pi * radius ** 2
+           | (#rectangle, width, height) -> width * height
+  
+  type ContactInfo = 
+      | #nil
+      | (#telephone, string)
+      | (#email, string)
+      | (#email_and_telephone, email: string, telephone: string)
+  
+  --  Usage: 
+  
+  spec ContactInfo -> ()
+  def sendMessage | #nil -> () --  Do nothing
+                  | #telephone, telephone -> sendSMS(telephone)
+                  | #email, email -> sendEmail(email)
+                  | #email_and_telephone, email, telephone ->
+                      sendEmail(email)
+                      sendSMS(telephone)
+  
+  --	There is no equivalent of 'void' from other languages; it is convention to use the tag '#nil' instead.
+  --  Note: you may ask why we don't use the empty tuple () instead of #nil. The reason is that, since tuples are
+  --  structurally typed, () is actually the top type of all tuples.
+  
+  spec string -> #nil
+  def writeToConsole(message) ->
+      ...
+  
+  --	Tuple types can be defined inline at the point of their use.
+  def calculateDistance (point: (x: int, y: int)) ->
+      Math.sqrt(point.x ^ 2 + point.y ^ 2)
+  
+  
+  type A = ( a: string )
+  type B = ( b: string )
+  
+  def obj: A & B = ( a = "a", b = "b" )

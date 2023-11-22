@@ -1,0 +1,65 @@
+module WebApp
+
+import 
+  shared
+  system/io
+  liteDb
+  liteDb/nyx
+  liteDb/nyx/extensions
+
+def toAsync(x) = async { return x }
+
+def createUsing(db: LiteDatabase) : ITodoProtocol ->
+
+   def todos = db.getCollection("todos"): list(Todo)
+
+   TodoProtocol(
+      def allTodos() ->
+        todos.findAll()
+          -List.ofSeq
+          -toAsync
+
+      def addTodo(text) ->
+        todos.insert(defaultTodo() with description = text)
+          -todos.tryFindById
+          -toAsync
+
+      def toggleCompleted(id) ->
+         def todoId = BsonValue(id)
+
+         match todos.TryFindById(todoId)
+         | #nil -> updateError(#todo_does_not_exist)
+         | some existingTodo ->
+            def updatedTodo = (existingTodo with completed = not existingTodo.completed)
+            if todos.update(todoId, updatedTodo) -> Updated 
+            else -> UpdateError(UpdateNotSuccesful)
+         -toAsync
+
+      def deleteTodo(id) -> 
+         def todoId = BsonValue(id)
+
+         match todos.tryFindById(todoId) 
+         | #nil -> DeleteError(#todo_does_not_exist)
+         | some _ ->
+            match todos.delete(todoId) 
+            | true -> #deleted
+            | false -> DeleteError(#delete_not_succesful)
+         -toAsync
+   )
+
+def createUsingInMemoryStorage() : ITodoProtocol -> 
+   --  In-memory collection
+   def memoryStream = MemoryStream()
+   def bsonMapper = NyxBsonMapper()
+   def inMemoryDatabase = LiteDatabase(memoryStream, bsonMapper)
+   createUsing(inMemoryDatabase)
+
+def seedIntitialData (todos: ITodoProtocol) -> 
+   list(
+     "Learn F#"
+     "Learn Fable"
+     "Build Awesome Apps!" )
+   -List.map (Description >> todos.addTodo)
+   -Async.parallel()
+   -Async.runSynchronously()
+   -ignore()

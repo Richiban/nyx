@@ -1,0 +1,256 @@
+--  It's also possible to create a typed definition that is not a function, but a value.
+--  This is equivalent to an `object` definition from Scala or Kotlin
+def Config = ( 
+  host = "https://nyx-lang.org"
+  port = 80
+)
+
+--  If the above was written as `def config` then it would have the type `(host: string, port: int)`
+--  but, thanks to the uppercase starting character, it also generates a type `Config` with the same
+--  so that `def Config` has the type `Config`.
+
+
+
+
+--  Existential types
+type DataFlow = (
+  type LocalState
+  next: LocalState -> ()
+  getCurrentDataFlowDiagnostics: list(string)
+)
+
+type Collection = (
+  type Item
+  mut count: int
+  apply: (index: Int) -> Item
+  append: (item: Item) -> ()
+)
+
+def UppercaseStringsCollection() ->
+  def container = MList(): _(string)
+
+  ( type Item = string
+    mut count = 0
+    def apply(index) -> container(index)
+    def append(item) -> container.append(item.toUpperCase())
+  )
+
+def myDataFlow = 
+  mut state = 0
+
+  DataFlow(
+    type LocalState = int
+    def next() -> state += 1
+    def getCurrentDataFlowDiagnostics() -> ["State is {state}"]
+  )
+
+
+--  --	Generics -- 
+
+--	What happens if there are no type annotations and the compiler doesn't have any uses with which
+--	to guess the type? E.g.
+def f(x) -> x
+
+--	This function takes in an object and then just returns it. What type is `a`? Any? No. If the compiler
+--	can't infer the type of the argument it will try to make your function generic.
+--	So, rewriting the above function in full ->
+spec a -> a
+def f(x) -> x		--	This way the function is still strongly-typed but will work on any type
+
+--  Note that there isn't a syntax for introducing a type parameter for a function; you just use a type variable (that
+--  must start with a lower| letter) and the function will be made generic
+
+
+spec Map(string, a) -> ()
+def printDict(values) ->
+  values -iter(println)
+
+--  Return values are target-typed, meaning that, although it's not possible to explicitly provide type arguments,
+--  by using a type assertion on the result you can specify the type of the result. E.g.
+
+spec string -> a
+def fromJson(json) -> ...
+
+def p: Person = fromJson("...")
+
+
+--  -- Type narrowing --
+
+-- 	Nullable / optional types
+--	There is no concept of `null` in nyx. If you want to represent a value that may be missing you
+--	must wrap the type in something like the option union
+def stringLength: Option(int) = #nil
+
+--	Option is a type alias, and is defined as follows ->
+type Option(t) = (#some, t) | #nil
+
+--	The type is generic, meaning that `t` can be any type. `Option` is equal to `t | ()`, meaning that any member of
+--	Note that the option type has a special shorthand syntax supported by the compiler. You can instead write ->
+def stringLength: int? = #nil
+
+--	You can't use an optional string as if it were a string. E.g. This is not allowed ->
+def input: string? = ""
+def stringLength = input.length
+
+--	If you want to access properties on the string object you must either ->
+--	1. Use a match expression
+def stringLength =
+  match input
+    | #nil       ->  0
+    | s: string  ->  s.length 	--  Note that the compiler can infer that s is a string in this case, since all other 
+                            --  cases have been exhausted by this point
+
+--  Note also that there are active patterns in the standard library to help match on option types:
+def inputLength = 
+  match input
+    | some s -> s.length
+    | #nil    -> 0
+
+--	3. Use the standard library's bang operator "!". This will cause a runntime error to be thrown if the value is 'nothing'
+def stringLength = input!.length
+print(input!)
+
+--	Note that the postfix bang operator "!" is actually compiler shorthand for .force()
+--	The above example could also be written as
+input.force() -println
+
+--	4. Use the map operator "*.". This means that if the value is null the entire expression will
+--	not be evaluated, and null will be returned. Note that in this example the type of stringLength is not
+--	`int`, but `int?`
+def stringLength = input?.length
+
+-- 	Note that the "?" operator is compiler shorthand for a call to the `.map` function, if it exists.
+--	The above example could also be written as ->
+def stringLength = input.map { length }
+
+--	Optional parameters
+--	Nullable types work together with optional parameters. In the following examples the external signature
+--	shows that the type of startIndex is `int?`, and the compiler will allow the function to be called without
+--	supplying that parameter. However, inside the function the type of startIndex appears to be `int`
+def slice(list, startIndex = 1) ->
+    list.slice startIndex
+
+
+--  Comparison operators can be used as patterns. For example:
+
+spec Nat -> string
+def f(x) = match x
+  | < 0 -> "negative"
+  | > 0 -> "positive"
+  | _   -> "zero"
+
+
+
+
+
+type UserId = UserId int
+type User = (id: UserId, firstName: string, surname: string)
+
+type UserRepository = (get: UserId -> User)
+
+def userRepository = UserRepository (
+  def get(this, userId) ->
+      User(id = userId, firstName = "Bob", surname = "Jones")
+)
+
+
+--  -- Abstractions --
+
+    Traits are supported.
+    where a type is an abstraction over objects, a trait is an abstraction over types.
+    
+    The Number trait (with the alias `number`) is defined in the standard library as such ->
+
+type Number(t) = (
+    `+`: (t, t) -> t 
+    `-`: (t, t) -> t 
+    `/`: (t, t) -> t 
+    `*`: (t, t) -> t 
+    `1`: t
+    `0`: t
+)
+
+--	Number essentially forms a type constraint. Int and float both conform and are therefore considered numbers
+
+--  Abstracting away property names
+
+--  The ~name syntax allows you to parameterize a type with the name of a property(s), in a way that different
+--  implementations appear as different types. This is useful for implementing typeclasses such as Monoid, where
+--  multiple implementations of the same typeclass are possible for the same type, but with different properties.
+type Monoid(a, ~combine, ~neutral) = (
+    ~neutral: a
+    ~combine: (a, a) -> a
+)
+
+--  For example, for the type `int` there are multiple possible monoids, such as one for addition and one for 
+--  multiplication. The fact that the `Monoid` type is parameterized by the name of the property means that
+--  this is possible. Note that the backticks allow identifiers that would normally not be legal.
+default Monoid(int, `+`, `0`) = (
+    `0` = 0
+    def `+`(x, y) -> x + y
+)
+
+spec [Monoid(a, `+`, `0`)] series(a) -> a
+def sum(xs) = xs.fold(`0`, `+`)
+
+spec [Monoid(a, `*`, `1`)] series(a) -> a
+def product(xs) -> xs.fold(`1`, `*`)
+
+--  Any `default` implementation that is in scope is automatically added to the context, so it doesn't need to 
+--  be explicitly passed in:
+
+type Point = (x: int, y: int)
+
+default Monoid(Point, `+`, `0`) = (
+    `0` = Point(0, 0)
+    def `+`(a, b) -> Point(a.x + b.x, a.y + b.y)
+)
+
+def sumPoints = Point[(1, 2)
+                      (3, 4)].sum --  Note that the default implementation of Monoid(Point, `+`, `0`) is automatically supplied
+
+
+--	Enables the Seq.sum function to be defined as ->
+
+module Seq ->
+    spec [Summable(a)] seq(a) -> a
+    def sum(xs) = Seq.fold(xs, (+), zero) -- `+` and `zero` come from `Summable(a)`
+
+--  If there is a default implementation of Summable for your type, and it is in scope at the callsite, then you can
+--  simply call this function and the implementation of Summable will be automatically supplied:
+
+module Impl ->
+    default Summable(int) = (
+        def `+`(x, y) -> x + y
+        def zero = 0
+    )
+
+import Impls
+
+def sum = [1, 2, 3] -Seq.sum --  The implementation of Summable(int) from default is automatically supplied
+
+--  If an default cannot be automatically supplied, then you can supply it explicitly:
+def sum2 = [1, 2, 3] -Seq.sum[Impls.Summable(int)] --  The implementation of Summable(int) from default is explicitly supplied
+
+--	An important concept in Nyx is that of a type with a default value. This allows the keyword `default` to be used
+type Default(a) = (default: a)
+
+--   This means that the reduce function on sequences does not need a seed value; the type itself can provide one
+
+spec [Default(a)] (list(a), (a, a) -> a) -> a
+rec reduce(xs, f) ->
+    match xs
+      | [] ->  default
+      | [head, ...tail] -> f(head, reduce(tail, f))
+
+
+--  Mapped types
+type Mut(a) = ( def ~p -> mut a.~p )
+
+type Person = (name: string, age: int)
+type MutPerson = Mut(Person) --  (mut name: string, mut age: int)
+
+
+
+
+

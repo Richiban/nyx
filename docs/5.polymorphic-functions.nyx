@@ -1,0 +1,22 @@
+--  In Nyx a polymorphic function is simply one whose return type depends on 
+--  the types of its argument(s)
+
+--  The simplest polymorphic function is probably the identity function, i.e.
+--  a function that does nothing other than return its input
+
+def id(x) -> x
+
+--  Thanks to type inference we don't have to write type annotations for this
+--  function or give it a specification, but if we wanted to it would look like
+--  this:
+
+spec (a) -> a
+def id(x) -> x
+
+--  The lowercase `a`, when used in a type position, is a type variable (equivalent
+--  to the concept of 'generics' in other languages). 
+
+
+spec (list(a)) -> a?
+def head | #nil     -> #nil
+         | (x :: _) -> x

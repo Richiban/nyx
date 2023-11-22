@@ -1,0 +1,44 @@
+
+
+--  --	Failing: exceptions and return values --
+
+--	There are two methods of failing in Nyx. There are Errors and Exceptions. These behave slightly differently from
+--  other languages in that: Exceptions can be thrown but not caught, and Errors are not 'thrown'
+--  they are simply returned. This works because, in Nyx, it is a compiler error to call a function
+--  that without either: 
+--      a) consuming the result in some way, e.g. `println(returnSomeData())`
+--      b) ignoring the result by passing it to the ignore function, e.g. `ignore(returnSomeData())`
+--      c) ignoring the result by assigning it to the wildcard variable '_', e.g. `_ = returnSomeData()`
+
+--  For cases that are well-known to possibly fail or have no value to return, you should instead return an `Error` instance
+spec CustomerId -> Customer | Err(#not_found | #database_unreachable)
+def getCustomer(id) -> ...
+
+--  Note that, due to the Distributivity law detailed above, it doesn't matter whether you write
+--  `Error(#not_found) | Error(#database_unreachable)` or `Error(#not_found | #database_unreachable)`
+
+--  You can then filter out the error cases manually (an `Ok` active pattern is in the standard library that filters out all `Error` cases):
+match getCustomer(someId)
+  | Ok(c) -> "We found the customer"
+  | Error(#not_found) -> "A customer with that ID was not found"
+  | Error(#database_unreachable) -> "We couldn't reach the database"
+  -println
+
+--  Or make use of the `except` builder, provided in the standard library, which has a custom keyword `try` for the `bind` construct.
+--  This allows us to use what feels like traditional exception handling where errors returned by an expression preceded by a `try` 
+--  are filtered out of the result expression and bubbled up to the `except` builder
+
+spec CustomerId -> Result(Customer, #customer_not_found)
+def getCustomer(id) ->   ...
+
+spec Customer -> Result(Order, #no_orders)
+def getLatestOrder(customer) -> ...
+
+def result = except {
+  def customer = try getCustomer("someid")
+  def latestOrder = try getLatestOrder(customer)
+
+  return latestOrder.total
+}
+--  `result` has inferred type of `int | Err(#customer_not_found | #no_orders)`
+

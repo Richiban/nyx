@@ -3,25 +3,25 @@ module eightQueens
 def boardSize = 8
 
 spec list(_) -> Result((), #invalid)
-def validate(queens):
+def validate(queens) ->
     def left, right, col = queens(-1), queens(-1), queens(-1)
 
-    for reversed(queens[:-1]) as r:
+    for reversed(queens[:-1]) | r ->
         set left, right = left - 1, right + 1
 
-        if r in (left, col, right):
+        if r in (left, col, right) ->
             return (#err, #invalid)
 
-def addQueen(queens):
-    for 0..BOARD_SIZE as i:
+def addQueen(queens) ->
+    for 0..BOARD_SIZE | i ->
         def testQueens = queens + [i]
 
         except {
             try validate(testQueens)
 
-            if testQueens.length == BOARD_SIZE:
+            if testQueens.length == BOARD_SIZE ->
                 return testQueens
-            else:
+            else ->
                 return addQueen(testQueens)
         }
 

@@ -1,0 +1,74 @@
+spec string -> list(string)
+def splitWords(input):
+  input
+  -split(RegEx("(?=[A-Z])|_|-|\s"))
+
+export type Casing =
+  | #camel 
+  | #pascal 
+  | #kebab 
+  | #snake 
+  | #title 
+  | #sentence 
+  | #mid 
+  | #mid_sentence
+
+spec (list(string), Casing) -> string
+export def rejoin(words, casing) ->
+  match casing
+    | #kebab ->
+      words -map { toLowerCase() } -String.join('-')
+    | #snake ->
+      words -map { toLowerCase() } -String.join('_')
+    | #pascal ->
+      words 
+        -map { replace(RegEx("(^\w|\s\w)(\S*)", #global), { _, m1, m2 -> m1.toUpperCase() + m2.toLowerCase() }) } 
+        -String.join()
+    | #camel ->
+      mut first = true
+      def newWords = MutList[]
+
+      for words 
+      | word if first ->
+        set newWords += word.toLowerCase()
+        set first = false
+      | word ->
+        set newWords += word.replace(RegEx("(^\w|\s\w)(\S*)", #global), { _, m1, m2: m1.toUpperCase() + m2.toLowerCase() })
+
+      newWords.join("")
+    | case #title:
+      words 
+        -map { 
+          replace( RegEx("(^\w|\s\w)(\S*)", #global), { _, m1, m2: m1.toUpperCase() + m2.toLowerCase() } ) 
+        } 
+        -String.join(" ")
+    | #sentence:
+      mut first = true
+      def newWords = MutList[]
+
+      for words 
+        | word if first ->
+            set newWords += word.replace(
+              RegEx("(^\w|\s\w)(\S*)", #global), 
+              { _, m1, m2: m1.toUpperCase() + m2.toLowerCase() }
+            )
+            set first = false
+        | word ->
+          newWords += word.toLowerCase()
+
+      newWords -String.join(' ')
+    case #mid_sentence ->
+      words -map { toLowerCase() } -String.join(' ')
+
+def tests = [
+  "oneTwoThree"
+  "one_two_three"
+  "one-two-three"
+  "one two three"
+]
+
+for tests | test ->
+  def words = splitWords(test)
+  def rejoined = rejoin(words, #mid_sentence)
+
+  println(rejoined)

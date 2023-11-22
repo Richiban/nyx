@@ -1,0 +1,75 @@
+module richiban/semanticVersion/parser
+
+type SemanticVersion =
+  ( major: int
+    minor: int 
+    patch: int
+    tag: string?
+    buildMetadata: string?
+  )
+
+spec (string?, FormatProvider?) -> SemanticVersion | Err(#invalid_version_number)
+export def tryParse(value, formatProvider) ->
+  if value is #nil | "" ->
+    return Err(#invalid_version_number)
+
+  mut major = 0
+  mut minor = 0
+  mut patch = 0
+  mut tag : string? = #nil
+  mut buildMetadata : string? = #nil
+
+  mut index = 0
+
+  -- Parse Major
+  mut startIndex = index
+
+  while index < value.Length and value[index] /= '.' ->
+      index++
+
+  set major = tryParse(value.substring(startIndex, index - startIndex), formatProvider)
+    except Err -> return Err(#invalid_version_number)
+
+  set index++ -- Move past the '.'
+
+  -- Parse Minor
+  set startIndex = index
+  
+  while index < value.Length and value[index] /= '.' ->
+    set index++
+
+  set minor = tryParse(value.substring(startIndex, index - startIndex), formatProvider)
+    except Err -> return Err(#invalid_version_number)
+
+  set index++ -- Move past the '.'
+
+  -- Parse Patch
+  set startIndex = index
+
+  while index < value.Length and value[index] /= '-' and value[index] /= '+' ->
+    set index++
+
+  set patch = tryParse(value.substring(startIndex, index - startIndex), formatProvider)
+    except Err -> return Err(#invalid_version_number)
+
+  -- Parse Tag (if present)
+  if index < value.Length and value[index] == '-' ->
+    set index++ -- Move past the '-'
+    set startIndex = index
+    
+    while index < value.Length and value[index] /= '+' ->
+      set index++
+
+    set tag = value.substring(startIndex, index - startIndex)
+
+  -- Parse Build Metadata (if present)
+  if index < value.Length and value[index] == '+' ->
+    set index++ -- Move past the '+'
+    set startIndex = index
+
+    while index < value.Length ->
+      set index++
+    
+    set buildMetadata = value.substring(startIndex, index - startIndex)
+
+  return SemanticVersion(major, minor, patch, tag, buildMetadata)

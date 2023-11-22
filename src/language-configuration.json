@@ -1,7 +1,7 @@
 {
   "comments": {
-    // symbol used for single line comment. Remove this entry if your language does not support line comments
-    "lineComment": "'' "
+    "lineComment": "--\\w",
+    "blockComment": ["---", "---"]
   },
   // symbols used as brackets
   "brackets": [
@@ -27,7 +27,6 @@
   ],
   "wordPattern": "(-?\\d*\\.\\d\\w*)|([^\\`\\~\\!\\@\\#\\%\\^\\&\\*\\(\\)\\-\\=\\+\\[\\{\\]\\}\\\\\\|\\;\\:\\'\\\"\\,\\.\\<\\>\\/\\?\\s]+)",
   "indentationRules": {
-    "increaseIndentPattern": ":$",
-    "decreaseIndentPattern": "^((?!.*?\\/\\*).*\\*/)?\\s*[\\)\\}\\]].*$"
+    "increaseIndentPattern": "(->)|(\\{)",
   }
 }

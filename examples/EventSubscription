@@ -1,0 +1,42 @@
+export type HighstormEvent = (
+  time?: number
+  event: string
+  content?: string
+  metadata?: Lookup(string, string | number | bool | #nil)
+)
+
+export type HighstormOptions = (
+  baseUrl?: string
+  token: string
+)
+
+export type def Highstorm(opts: HighstormOptions) ->
+  def token = opts.token
+  def baseUrl = opts.baseUrl ?? "https://highstorm.app"
+
+  (
+    baseUrl = baseUrl
+
+    spec (string, HighstormEvent, (throwOnError?: bool)?) -> Async(id: string?) ->
+    def ingest(channel, event, opts?) -> async {
+      handle {
+        def res = await fetch("{this.baseUrl}/api/v1/events/{channel}", (
+          method = "POST"
+          headers = [
+            "Content-Type" => "application/json"
+            "Authorization" => "Bearer $(this.token)"
+          ],
+          body = toJson(event)
+        ))
+
+        if !res.ok ->
+          return Err("Unable to ingest event: {await res.text()}")
+        
+        return await res.json()
+      } except Err(err) ->
+        console.error(err)
+
+        if opts?.throwOnError == true -> Err(err)
+        else -> (id = null)     
+    } 
+  ) 

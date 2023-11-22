@@ -1,49 +1,49 @@
-''  ------- Fizzbuzzbaz -------
+--  ------- Fizzbuzzbaz -------
 
-''  	Fizzbuzzbaz is a variant of fizzbuzz, where the function should take a list of `rules` at runtime.
-''  	For example, 3 -> "fizz", 5 -> "buzz", 7 -> "baz", meaning that a multiple of 3 and 7 would be replaced
-''  	with "fizzbaz" etc.
+--  	Fizzbuzzbaz is a variant of fizzbuzz, where the function should take a list of `rules` at runtime.
+--  	For example, 3 -> "fizz", 5 -> "buzz", 7 -> "baz", meaning that a multiple of 3 and 7 would be replaced
+--  	with "fizzbaz" etc.
 
-''  OO style
-def NumberGame(ruleBuilder :: [MapBuilder]() -> Map(int, string)):
+--  OO style
+def NumberGame(ruleBuilder: [MapBuilder]() -> Map(int, string)) ->
   spec int -> string
-  def playNumber(i):
+  def playNumber(i) ->
     ruleBuilder()
-    \ collect { divisor, word if i % divisor == 0: word else: #none }
-    \ String.join
-    \ case "": i.toString()
-      case s: s
+      -partialMap { divisor, word if i % divisor == 0 -> word }
+      -String.join
+      -match 
+        | "" -> i.toString()
+        | s -> s
 
-  spec (int, int) -> Source(string)
-  def apply(start: Int, end: Int) = start..end \ map(playNumber)
+  spec (int, int) -> Seq(string)
+  def apply(start: Int, end: Int) = (start..end) map(playNumber)
 
 def main() =
-  def fizzbuzz = NumberGame(
-    3 -> "fizz"
-    5 -> "buzz"
-    7 -> "baz"
-  )
+  def fizzbuzz = NumberGame {
+    3 => "fizz"
+    5 => "buzz"
+    7 => "baz"
+  }
 
-  for fizzbuzz(1, 100) as r:
+  for fizzbuzz(1, 100) | r ->
     println(r)
 
-''  FP style
+--  FP style
 
-def playNumber(divisor, i):
-  if i % divisor == 0:
+partial def playNumber(divisor, i) ->
+  if i % divisor == 0 ->
     word
-  else:
-    #none
-
-def numberGame(Map(int, string)):
+    
+def numberGame(Map(int, string)) ->
   rules
-  \ collect(playNumber)
-  \ String.join
-  \ case "": i.toString()
-    case s: s 
+    -partialMap(playNumber)
+    -String.join
+    -match
+      | "" -> i.toString()
+      | s -> s 
 
-def fizzbuzz = numberGame <\ map {
-  3 -> "fizz"
-  5 -> "buzz"
-  7 -> "baz"
-}
+def fizzbuzz = numberGame(map {
+  3 => "fizz"
+  5 => "buzz"
+  7 => "baz"
+})

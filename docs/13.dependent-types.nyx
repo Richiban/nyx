@@ -1,0 +1,39 @@
+--	-- Dependent types and provability --
+
+-- 	Types can be refined to allow only certain values
+
+--  They can be used in type aliases:
+  type Nat = n: int where n >= 0
+
+  --  Or in function signatures:
+  spec (n: int) -> int where n >= 0
+  rec factorial | 0 -> 1
+                | n -> n * factorial (n - 1)
+  
+  spec (n: nat) -> y: int where x >= 0, y >= 1
+  rec factorial2(n) ->
+      if n = 0 -> 1
+      else -> n * factorial2 (n - 1)
+  
+  
+  def x = -1
+  
+  println(factorial(x)) 	--	Compiler error -> "Type restriction failure -> `int x` has not been shown to satisfy `x >= 0`"
+  
+  type Nat = x: int where x >= 0
+  
+  spec a: number -> type
+  type OrderedPair(a) = (x: a, y: a) where x < y
+  
+  spec (int, lower: int, upper: int) -> ret: int where lower <= ret <= upper
+  def clamp(x, lower, upper) -> 
+      if | x < `lower` -> lower
+         | x > `upper` -> upper
+         | else -> x
+  
+  
+  spec (x: int, y: int) -> z: int where (z == x or z == y) and (z >= x and z >= y)
+  def max(x, y) -> if x > y -> x else -> y
+  
+  
+  

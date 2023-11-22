@@ -1,0 +1,230 @@
+---
+Basics
+---
+
+
+---
+# Trying Nyx
+---
+
+println("Hello World")
+
+---
+# Expressions
+
+Expressions are computable statement that result in a value
+---
+
+---
+# Definitions
+---
+
+def message = "Hello world"
+
+---
+# Mutable definitions (variables)
+---
+
+mut counter = 0
+
+set counter++
+
+---
+# Blocks
+
+Blocks in Nyx use indentation. Default to two spaces
+---
+
+def message = 
+  def preamble = "Hello"
+  def audience = "World"
+
+  "{preamble} {audience}"
+
+  
+
+
+---
+# Comments
+
+Single-line comments are started with two single quotes together `--`.
+
+Multi-line comments start and end with a line containing only `---`.
+
+It is common practice to write doc comments in Markdown format within a multi-line comment.
+---
+
+
+---
+# Variables
+  
+Variables are defined using the 'def' keyword.
+---
+def name = "Fred"
+
+---
+Variables are, by default, immutable. If you need a value you can mutate you
+can create a reference cell using the function `ref`
+---
+def age = Ref(21)
+
+---
+# Mutability
+
+Mutable variables are specified with the `mut` keyword instead of `def`
+---
+
+def immutable = "Hello world"
+mut mutable = "Hello world"
+
+---
+Note that immutability is a property of the variable, not the value. This means that the `mut` keyword
+does not control whether the properties or contents of a value can be changed, but rather whether the 
+variable can be reassigned.
+
+`mut` can also be used in a type definition to make mutable properties
+---
+
+type Ref(a) = (mut value: a)
+
+def myRef = Ref(1)
+set myRef.value = 2
+
+---
+# Functions
+---
+
+
+
+---
+# Literals
+
+There are a few types of literal in Nyx. Some you will be used to, such as ints, strings and
+bits.
+---
+def age = 21		--	int
+def name = "Fred"	--	string
+def factor = 1.5	--	double
+
+--  Tags
+def mode: #read | #readwrite = #readwrite 
+
+--	Ranges
+def range = 1..5
+def fromBeginningTo5 = ..5
+def from4ToEnd = 4..
+
+def arraySlice = data(1..100)
+def anotherSlice = data(1..)
+def first5Letters = str.subString(..4)
+
+--	Tuples
+
+--	A comma joins two or more values together into a tuple. each member of the tuple can be
+--  of any type
+def things = ("John", "Alexander", 5, Uri())
+
+---
+Because Nyx supports union types a tuple can be enumerated. In the above example the
+tuple "things" is of type (string, string, int, Uri), and can be used as a Sequence
+of the following type -> Sequence(string|int|Uri).
+---
+
+for things
+  | s: string -> println("We have a string -> {s}")
+  | i: int ->  	println("We have an integer -> {i}")
+  | uri: Uri ->  println("We have a uri -> {uri}")
+
+--	Other literals might not be found in other languages, such as object literals.
+def coordinates = ( x = 1, y = 2 )
+
+--	Target-typed collection literals, defaults to List
+def numbers = [1, 2, 3]
+
+---
+# Table literals
+This is shorthand for writing a list of objects that have the same structure but
+differing contents. Example:
+---
+
+def namesAndAges =
+  [| name 		| age	|
+   | "Felix" 	| 22	|
+   | "Taylor" | 30	|
+   | "Peter" 	| 28	|
+   | "Sean" 	| 45	|]
+
+--	This is equivalent to:
+def namesAndAges = [
+( name = "Felix", 	age = 22 )
+( name = "Taylor",	age = 30 )
+( name = "Peter",   age = 28 )
+( name = "Sean", 	  age = 45 )
+]
+
+
+--  -- If-statements and branching --
+
+--  If-statements
+
+if cond ->
+    some_code()
+else ->
+    some_other_code()
+
+
+--  If-statements can have many branches, obviating the need for `else if` or `elif` chains
+if | cond1 ->
+        some_code()
+   | cond2 -> 
+        some_other_code()
+   | else ->
+        yet_more_code()
+        
+
+---
+# Strings
+
+Strings are one of the fundamental building blocks of a program. In Nyx there are two
+main types you will be using: `nyx/String` and `nyx/StringBuffer`.
+
+Note: `nyx/String`, like `nyx/Int32` is so common that it has a keyword for it built 
+into the language. This allows you to use simply `string` instead, with no need to 
+explicitly import `nyx`.
+---
+
+
+--  -- Operators --
+
+Operator overloading -> while Nyx doesn't allow you to create your own operators, it has a list of operators that
+are considered valid that you can choose from. Some of them are considered "spare", in that they have no pre-defined
+meaning in Nyx, leaving you free to give them your own.
+
+Primary example -> `->`
+
+---
+# Custom operators
+
+You can define an operator in the same way as a regular function, but where the name of the function is the operator
+you wish to overload wrapped in brackets. E.g.
+---
+
+def `=>`(a, b) -> ...
+
+
+---
+# Unimplemented code
+
+You can use `...` to make code compile without supplying a body. 
+It's a bit like `throw NotImplementedException` but will give a compiler warning.
+---
+
+def myFunction() -> ...
+
+---
+# Tuple unwrapping
+
+Since there's no overloading in Nyx, tuples and tuple types get automatically unwrapped for you.
+For example, `list((string, int))` can just be written as `list(string, int)`. In other languages
+this would be ambiguous but in Nyx it's not.
+---

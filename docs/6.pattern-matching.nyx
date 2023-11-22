@@ -1,0 +1,275 @@
+---
+Pattern matching
+================
+
+Pattern matching is a fundamental concept in Nyx.
+
+Some patterns are total, meaning that they will always match. For example:
+---
+
+def tuple = (4, 5)
+
+def (x, y) = tuple -- This pattern can be used in a definition because it is total; i.e. it will always match
+
+def (4, y) = tuple -- This pattern is partial, not total, so this is a compiler error. What will happen 
+                   -- to the program if the first element of the tuple is not 4? Use a match expression instead
+
+---
+# Match expressions
+
+A match expression is the most common way of pattern matching in Nyx. It uses the keyword `match` and a series of `|` arms:
+---
+
+def oddOrEven(n) ->
+  match n % 2
+  | 0     -> "even"
+  | else  -> "odd"
+
+
+---
+# Patterns in if-statements
+---
+
+--	A pattern is something that can be assigned to (in a variable
+--  assignment or parameter declaration) or tested against (in a
+--  match expression). Here are some examples:
+def names = ["Joey", "Elizabeth", "Samantha"]
+
+--	Array destructuring
+--  Note that, since this pattern may fail, you must use an if-statement and the `is` keyword instead of `def`
+if names is [first, second, third, ...] ->
+    println(first) 		--	=> "Joey"
+    println(second) 	--	=> "Elizabeth"
+    println(third) 		--	=> "Samantha"
+
+--	Splats can be used in list destructuring. Patterns can be used when declaring
+--  parameters to a function
+def results = ["Jamie", "Alex", "Robin", "Sam", "Jo", "Ashley"]
+def printResults [firstPlace, secondPlace, thirdPlace, ...rest] =
+    firstPlace 					--	=> "Jamie"
+    secondPlace 				--	=> "Alex"
+    thirdPlace 					--	=> "Robin"
+    rest 						--	=> ["Sam", "Jo", "Ashley"]
+  
+--	Destructuring can be arbitrarily nested. Labels can be used
+--  when destructuring so that you still have
+--  a variable holding the value that has been destructured.
+--  Especially useful with nested destructuring:
+def [[x, ...xs] list1, [y, ...ys] list2] = [ [1,2,3], [4,5,6] ]
+x     	 -- => 1
+xs    	 -- => [2,3]
+list1 	 -- => [1,2,3]
+y     	 -- => 4
+ys    	 -- => [5,6]
+list2 	 -- => [4,5,6]
+
+
+--	Object and array destructuring can be combined. Also, splats can be used
+--  alone to ignore the results of it.
+def text = "Hello world"
+def (length = length, letters = [firstLetter, ..., lastLetter]) = text
+
+spec int -> string
+def classifyNumber = { 
+    | 0     -> "zero"
+    | 1..10 -> "small"
+    | > 10  -> "really big!"
+    | else  -> "unknown"
+}
+
+---
+# Patterns: Type patterns
+---
+
+def f(x: string | number) ->
+  match x
+  | string s -> s.length
+  | number n -> n
+
+
+type Point = (x: number, y: number)
+
+def f(p: Point?) -> match p
+  | Point(x, y) -> x + y
+  | #nil -> 0
+
+---
+#  Patterns: Object patterns
+---
+
+--	Object destructuring by position
+def john = Person("John", 28)
+def name, age = john
+name							--	=> "John"
+age								--	=> 28
+
+--	Object destructuring by member name
+def (name = name2, age = age2) = john
+name2							--	=> "John"
+age2							--	=> 28
+
+
+---
+#  Patterns: Custom patterns
+
+Nyx allows the user to extend pattern matching by defining their own patterns. Patterns look a lot like standard definitions,
+but making use of the `pattern` keyword instead of `def`:
+---
+
+pattern MyPattern = ...
+
+--  or
+
+pattern MyPattern(x) -> ...
+
+---
+Imagine a function that returns a Colour
+---
+
+type Colour = (red: byte, green: byte, blue: byte)
+
+-- This type natively supports destructuring:
+
+spec Colour -> string
+def colourToString(Colour(r, g, b)) -> "rgb({r}, {g}, {b})"
+
+-- We can add a custom pattern that allows us to destructure a Colour by HSL values:
+
+pattern HSL(colour: Colour) -> (
+  hue = colour -getHue()
+  saturation = colour -getSaturation()
+  lightness = colour -getLightness()
+)
+
+-- We can now use our custom pattern in a definition:
+
+spec Colour -> string
+def colourToString(HSL(h, s, l)) -> "hsl({h}, {s}, {l})"
+
+
+
+--  Consider the following function, that may or may not return a Customer:
+def getCustomer(): Customer? -> ...
+
+
+--  We can call the function and match on its result, like so:
+
+match getCustomer()
+| Customer() customer -> println("Hello, {customer.name}")
+| #nil -> println("No customer found")
+
+--  But having to repeat the type name `Customer` is a bit anti-DRY.
+--  We can instead match against anything _except_ `#nil` using the `not` modifier to the pattern:
+
+match getCustomer()
+| (not #nil) customer -> println("Hello, {customer.name}")
+| #nil -> println("No customer found")
+
+--  But this feels a bit laborious. Nyx has the concept of custom patterns, which we can use to
+--  introduce a `some` pattern that matches anything _except_ `#nil`:
+
+pattern Some? = not #nil
+--  This feels much better, and the standard library of Nyx includes such a pattern
+
+--  Note that the above is a simple pattern alias; it could have been written as 
+
+pattern Some?(s) -> match s
+  | (not #nil) s -> (true, s)
+  | _ -> false
+
+--  It can then be used like this:
+match someFunction()
+| Some data -> data
+| #nil -> "no data"
+
+
+--  ## Custom patterns with outputs
+
+--  Some patterns can have both inputs and outputs; e.g. this regex pattern:
+
+pattern Regex(r: string, s: string) ->
+  if Regex(r).match(s) ->
+    s
+  else ->
+    #nil
+
+
+def fizzbuzz(range: seq(int)) ->
+  range -map { i ->
+    match i % 3, i % 5
+      | 0, 0 -> "fizzbuzz"
+      | 0, _ -> "fizz"
+      | _, 0 -> "buzz"
+      else   -> string(i)
+  }
+
+-- Using a custom pattern, we can reduce the Fizzbuzz example above to:
+
+pattern DivisibleBy?(divisor, x) ->
+  if x div divisor == 0 -> true
+  else -> false
+
+def fizzbuzz(range: seq(int)) ->
+  range -map {
+    | DivisibleBy(3) and DivisibleBy(5) -> "fizzbuzz"
+    | DivisibleBy(3) -> "fizz"
+    | DivisibleBy(5) -> "buzz"
+    | else -> "{i}"
+  }
+
+--  There is also an `except` keyword, which works like `match` except that it does
+--  not necessarily need to match all cases; any unmatched values are simply returned
+
+def f(x: #a | #b | #c | #d) ->
+  x except 
+    | #a -> "a"
+    | #b -> "b" -- Since we've only matched #a and #b, #c and #d will be returned as-is
+                -- The whole function now has a return value of `string | #c | #d`
+
+
+--  The `except` keyword is especially useful for handling errors. For example, given the function
+def getCustomer(id: string): Customer | #not_found -> 
+  if ... -> #not_found
+  else -> Customer(...)
+
+--  we can use `except` to handle the error case in a more functional way:
+def f() ->
+  def customer = getCustomer("some_id") except
+    | #not_found -> return #customer_does_not_exist
+
+  ... -- Do something with `customer`
+
+
+--  Pattern matching is a powerful tool for working with data. It allows you to both test an expression to see if it contains
+--  certain data and, at the same, to extract other pieces of data from the expression.
+
+--  The syntax for pattern matching is to pipe an expression to a series of `case` arms, like so:
+
+def f(x) = x -match
+  | 1 -> "one"
+  | 2 -> "two"
+  | 3 -> "three"
+  | _ -> "lots"
+
+--  Active patterns are functions that can be used in a | arm. They are written as a normal function, but with the
+--  name encased in brackets
+
+--  The simplest active pattern is a function that returns a boolean. If the function returns true, the match arm is executed.
+pattern Even(x) = x % 2 == 0
+
+pattern (Even | Odd)(x) = if x % 2 == 0 -> Even else -> Odd
+
+def f(x) = match x
+  | even -> "even"
+  | odd  -> "odd" -- This pattern is known to be complete, so we don't need a catch-all arm
+
+--  Active patterns can also return a value. This value is then bound to the name of the active pattern in the match arm.
+--  This pattern is also `partial` (indicated by the `?`), meaning that it might not match
+pattern Regex?(r, x) ->
+  if Regex.match(r, x) is [y, ...] ->
+    (true, y)
+  else -> false
+
+def f | Regex("^[0-9]+$", d) -> "a number -> {d}"
+      | Regex("^[a-z]+$", s) -> "a string -> {s}"
+      | _                    -> "something else"

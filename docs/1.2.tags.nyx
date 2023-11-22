@@ -1,0 +1,28 @@
+---
+Tags
+====
+
+A foundational feature of Nyx, Tags are a special type of literal. A tag's name is also its value,
+which is also its type.
+
+Tags are similar to symbols in Ruby, atoms in Erlang, or Typescript's string literal types.
+---
+
+--  Tags can be used as values:
+def x = #my_tag
+
+--  And also types:
+def y: Option(#my_second_tag) = #my_second_tag
+  
+--  Tags are particularly useful when used in type unions, such as for passing flags to functions:
+def openFile(fileName: string, mode: #read | #readwrite) -> 
+    ...
+
+openFile("file.txt", #readwrite)
+
+---
+Tags are implemented with a lookup table, unique to each running application. As the application
+loads other libraries the tags from those libraries are added to the lookup table. This means that
+tags with the same compile-time name will always successfully compare by value, even though the name
+is not present at runtime.
+---

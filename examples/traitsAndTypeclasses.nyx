@@ -1,7 +1,7 @@
-''  Some types are meant to be implemented directly
-''  This is an "is a" relationship
-type Iterator(a) = (moveNext :: () -> a?)
-    
+--  Some types are meant to be implemented directly
+--  This is an ".. is a .." relationship
+type Iterator(a) = (moveNext :: () -> a | #done)
+
 type Seq(a) = (getIterator :: () -> Iterator(a))
 
 type Collection(a) = 
@@ -20,8 +20,8 @@ type NumericRange(a :: number) =
   SortedSet(a)
   & (min :: a, max :: a) where min <= max
 
-''  Others are meant to be implemented via a separate instance
-''  This is a "can be a" relationship
+--  Others are meant to be implemented via a separate instance
+--  This is a "there exists a .. for .." relationship
 type Monad(m :: type -> type) = (
   lift :: a -> m(a)
   bind :: (m(a), (a -> m(b))) -> m(b)
@@ -29,15 +29,15 @@ type Monad(m :: type -> type) = (
 
 impl Monad(Option) = (
   def bind(m, f): m
-    \ case #some, x: f(x)
-      case #none   : #none
+    case #some, x: f(x)
+    case #nil   : #nil
 
   def lift(x): (#some, x)
 )
 
-''  For example, there is a Monoid type, and int can be made into a monoid
-''  But, crucially, there are multiple ways to make a monoid out of int
-''  such as addition, multiplication, bitwise and, bitwise or, etc.
+--  For example, there is a Monoid type, and int can be made into a monoid
+--  But, crucially, there are multiple ways to make a monoid out of int
+--  such as addition, multiplication, bitwise and, bitwise or, etc.
 
 type Monoid(m) = (
   empty   :: m
@@ -68,3 +68,36 @@ def reduce[Monoid(a)](xs): a =
   xs \ fold(empty, combine)
 
 def sum(xs) = reduce[MultiplicativeMonoid](xs)
+
+type Point = (x: int, y: int)
+
+def points = Point[
+  (x: 1, y: 2)
+  (x: 3, y: 4)
+  (x: 5, y: 6)
+]
+
+def Point.+(a, b) = Point(x: a.x + b.x, y: a.y + b.y)
+
+def Point.`0` = Point(x: 0, y: 0)
+
+type Summable(a) =
+  ( zero: a
+    `+`: (a, a) -> a
+  )
+
+--  We could explicitly define the Summable typeclass instance for Point, but
+--  we don't need to; one can be synthesized from the `+` and `0` methods that
+--  are defined on Point.
+--  These methods are in the global context, so narrower contexts can be automatically
+--  synthesized from them.
+default Summable(Point) = 
+  ( zero = Point(x: 0, y: 0)
+    `+`(a, b) = Point(x: a.x + b.x, y: a.y + b.y)
+  )
+
+spec [Summable(Point)](list(Point)) -> Point
+def sum(items) ->
+  items.fold(zero) { acc, item -> acc + item }
+
+def r = points --sum()

@@ -1,0 +1,126 @@
+module RecordIndexerGenerator
+
+import
+  nyx/collections/immutable
+  nyx/linq
+  nyx/text
+  nyx/threading
+  nyx/codeAnalysis
+  nyx/codeAnalysis/cSharp
+  nyx/codeAnalysis/cSharp/syntax
+  nyx/codeAnalysis/text
+
+
+spec (GeneratorSyntaxContext, CancellationToken) -> PartialRecordSyntax
+def transform(context, token) ->
+  def node =  context.node: RecordDeclarationSyntax
+  def symbol = context.semanticModel.getDeclaredSymbol(node)!
+
+  def properties = query {
+    def member = from symbol.getMembers()
+    where member is (declaredAccessibility = #public, kind = #property) 
+    def property = member: IPropertySymbol
+    where property.isIndexer is false
+    yield Property(property.name, property.type.toString(), property.getMethod is not null, property.setMethod?.isInitOnly is false)
+  } -toArray()
+
+  PartialRecordSyntax(
+      node.identifier.toString()
+      "{node.keyword} {node.classOrStructKeyword} {node.identifier}"
+      symbol.containingNamespace?.toString()
+      properties
+  )
+
+def execute(context: SourceProductionContext, record: PartialRecordSyntax) ->
+  def source = generateSource(record)
+  context.addSource($"{record.Identifier}.Indexer.g.cs", SourceText.from(source, #utf8))
+
+
+spec (PartialRecordSyntax) -> string
+def generateSource(record) ->
+  def switchExpr = query {
+      def property = from record.properties
+      where property.isGettable
+      def name = property.name
+      yield $"""
+                      "{name}" => {name},
+          """
+  } -String.join("\r\n")
+
+  def switchStmt = query {
+    def property = from record.Properties
+    where property.IsSettable
+    def name = property.Name
+    select $"""
+                    case "{name}":
+                        {name} = ({property.Type}) value
+                        break
+    """
+  } -String.join("\r\n")
+
+  def indexer = $$"""
+          public object this[string name]
+          {
+              get => name switch {
+      {{switchExpr}}
+                  _ => throw new IndexOutOfRangeException(name)
+              }
+              set
+              {
+                  switch (name)
+                  {
+      {{switchStmt}}
+                      default:
+                          throw new IndexOutOfRangeException(name)
+                  }
+              }
+          }
+      """
+
+  -- Create the class
+  def @class = $$"""
+      partial {{record.Declaration}}
+      {
+      {{indexer}}
+      }
+      """
+
+  def usings = "using System\n"
+
+  def @namespace = usings + (record.Namespace is not null
+          ? $"""
+          namespace {record.Namespace}
+
+          {@class}
+          """
+          : @class
+      )
+
+  return @namespace
+    
+
+type PartialRecordSyntax = (
+  identifier:   string 
+  declaration:  string 
+  namespace:    string? 
+  properties:   ImmutableArray<Property> 
+)
+
+type Property = (
+  name:       string 
+  type:       string 
+  isGettable: bool 
+  isSettable: bool 
+)
+
+@Generator
+def IndexerGenerator() : IIncrementalGenerator -> (
+    def initialize(context: IncrementalGeneratorInitializationContext)
+    {
+        def provider = context.SyntaxProvider.CreateSyntaxProvider(
+            { syntax, _ -> syntax is RecordDeclarationSyntax record and record.Modifiers.Any(SyntaxKind.PartialKeyword)}
+            Transform
+        )
+        context.RegisterSourceOutput(provider, Execute)
+    }
+)

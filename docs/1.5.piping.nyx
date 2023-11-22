@@ -1,0 +1,34 @@
+---
+Piping
+======
+
+Normally functions are called using the familiar brackets: `f(x)`
+
+You can 'pipe' the argument to the function using a special character,
+with the function first: `x -f()`. Writing function calls in this way
+has the following benefits:
+* it allows for convenient function chains, where each function takes 
+  the output of the previous function as its first argument
+* it can sometimes aid in readability
+* it allows for greater discoverability, where as soon as the piping 
+  character is typed the editor can suggest all functions taking the 
+  correct type as the first parameter
+  
+For example:
+---
+
+def getStreamFromInput(input: Request): Stream(bytes) -> ...
+def getBytesFromStream(stream: Stream(Byte)): String -> ...
+def serialisePerson(input: String): Person -> ...
+
+def personObj = request
+  -getStreamFromInput()
+  -getBytesFromStream()
+  -serialisePerson()
+
+--  For functions that take more than one argument, the pipe will only apply to the first argument.
+
+def add(x, y) -> x + y
+def result = 1
+  -add(2)
+  -add(3)

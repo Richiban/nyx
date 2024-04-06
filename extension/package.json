@@ -2,6 +2,7 @@
   "name": "nyx",
   "displayName": "Nyx",
   "description": "A toy language called Nyx",
+  "publisher": "Richibansoft",
   "repository": {
     "type": "git",
     "url": "https://github.com/richiban/nyx"

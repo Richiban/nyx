@@ -7,6 +7,7 @@ i.e. if the compilation root is in `/src/myproject/` then the file `/src/myproje
 implicit module name of `function/mod_a`.
 
 The module name can be overridden with a module declaration at the top of the file
+
 ---
 
 module myModuleName
@@ -44,7 +45,7 @@ module Functions -> --  Full name is MyModule/Functions
 type Point = (x: number, y: number)
 
 def origin(Point) = Point (x = 0, y = 0)
-def length -> this this.sqrt(.x ** 2 + this.y ** 2)
+def Point.length -> sqrt(this.x ** 2 + this.y ** 2)
 
 
 default Default(Point) = (
@@ -63,7 +64,7 @@ import math
 import io
 
 --  But an import block is preferred
-import ->
+import
     math
     io
 

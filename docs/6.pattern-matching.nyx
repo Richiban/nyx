@@ -1,3 +1,5 @@
+def a = 1 -- test
+
 ---
 Pattern matching
 ================
@@ -5,6 +7,7 @@ Pattern matching
 Pattern matching is a fundamental concept in Nyx.
 
 Some patterns are total, meaning that they will always match. For example:
+
 ---
 
 def tuple = (4, 5)
@@ -18,6 +21,7 @@ def (4, y) = tuple -- This pattern is partial, not total, so this is a compiler 
 # Match expressions
 
 A match expression is the most common way of pattern matching in Nyx. It uses the keyword `match` and a series of `|` arms:
+
 ---
 
 def oddOrEven(n) ->
@@ -28,11 +32,12 @@ def oddOrEven(n) ->
 
 ---
 # Patterns in if-statements
----
 
 --	A pattern is something that can be assigned to (in a variable
 --  assignment or parameter declaration) or tested against (in a
 --  match expression). Here are some examples:
+
+---
 def names = ["Joey", "Elizabeth", "Samantha"]
 
 --	Array destructuring
@@ -114,6 +119,7 @@ age2							--	=> 28
 
 Nyx allows the user to extend pattern matching by defining their own patterns. Patterns look a lot like standard definitions,
 but making use of the `pattern` keyword instead of `def`:
+
 ---
 
 pattern MyPattern = ...
@@ -124,6 +130,7 @@ pattern MyPattern(x) -> ...
 
 ---
 Imagine a function that returns a Colour
+
 ---
 
 type Colour = (red: byte, green: byte, blue: byte)
@@ -168,12 +175,12 @@ match getCustomer()
 --  But this feels a bit laborious. Nyx has the concept of custom patterns, which we can use to
 --  introduce a `some` pattern that matches anything _except_ `#nil`:
 
-pattern Some? = not #nil
+pattern Some = not #nil
 --  This feels much better, and the standard library of Nyx includes such a pattern
 
 --  Note that the above is a simple pattern alias; it could have been written as 
 
-pattern Some?(s) -> match s
+pattern Some(s) -> match s
   | (not #nil) s -> (true, s)
   | _ -> false
 
@@ -260,8 +267,8 @@ pattern Even(x) = x % 2 == 0
 pattern (Even | Odd)(x) = if x % 2 == 0 -> Even else -> Odd
 
 def f(x) = match x
-  | even -> "even"
-  | odd  -> "odd" -- This pattern is known to be complete, so we don't need a catch-all arm
+  | Even -> "even"
+  | Odd  -> "odd" -- This pattern is known to be complete, so we don't need a catch-all arm
 
 --  Active patterns can also return a value. This value is then bound to the name of the active pattern in the match arm.
 --  This pattern is also `partial` (indicated by the `?`), meaning that it might not match

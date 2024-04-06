@@ -1,12 +1,11 @@
---  -------------------------------------------------------------------
---  @doc
---  Google Play Integrity is the replacement for SafetyNet, i.e. it allows us
---  to request an attestation from the client which, in turn, requests an attestation
---  generated and signed by Google, and forwards the response to our servers for validation
+---
+ Google Play Integrity is the replacement for SafetyNet, i.e. it allows us
+ to request an attestation from the client which, in turn, requests an attestation
+ generated and signed by Google, and forwards the response to our servers for validation
   
---  Further reading at https:..www.internalfb.com.code.whatsapp-common.doc.integrity.google_play_integrity_attestation.md
---  @  @format
---  -------------------------------------------------------------------
+ Further reading at https:..www.internalfb.com.code.whatsapp-common.doc.integrity.google_play_integrity_attestation.md
+
+---
 
 @author("richard@gibson.cx")
 @owner("my_team")
@@ -35,23 +34,22 @@ type PlayIntegrityAttestationContext =
   | #test
   | #play_integrity_attestation
     
-type LastAttestation = (#undefined | TimePoint, bool) | #undefined
+type LastAttestation = (TimePoint?, bool) | #undefined
 
 type ParsedAttestation = jsone.JsonValue
 
 -- This function is invoked by chatd after every login and is used by `google_play_integrity` to decide
--- whether to send an attestation request to the client. Currently these cases are supported ->
---
+-- whether to send an attestation request to the client. Currently these cases are supported:
 -- - First login after registration
 -- - Force attestation if not attested before
 -- - Repeat attestation every 2 weeks
---
+-- .
 -- Note: it is deliberate that the last_attestation used is that of the last _SafetyNet_ attestation
 -- because we want the two features to share the same timestamp
-spec (Wid, LastAttestation, chatx_types.StateMap) -> bool
-export def maybeSendAttestationRequest(wid, lastSafetyNetAttestation, stateMap) ->
+export spec (Wid, LastAttestation, chatxTypes.StateMap) -> bool
+def maybeSendAttestationRequest(wid, lastSafetyNetAttestation, stateMap) ->
   checkSendAttestationRequirements(wid, lastSafetyNetAttestation)
-    | Err(failedRequirement) ->
+    except Err(failedRequirement) ->
       countProduct(wid, ("google_play_integrity.periodic_refresh", failedRequirement))
       return false
   
@@ -74,6 +72,7 @@ def checkSendAttestationRequirements(wid, lastSafetyNetAttestation) -> if
   | not clientHasFeature(wid) -> Err(#unsupported_version)
   | not lastSafetynetAttestationSufficientlyOld(wid, lastSafetyNetAttestation) -> Err(#recent_attestation_found)
   | not featureIsWithinRateLimit() -> Err(#rate_limit_exceeded)
+  | _ -> Ok()
     
 spec (Wid) -> bool
 def clientHasFeature(wid) ->
@@ -98,21 +97,19 @@ spec () -> bool
 def featureIsWithinRateLimit() ->
   def partition = rand.uniform(100)
   
-  wa_cam_client.check_limit(#chatd_send_google_play_integrity_attestation, partition)
+  match wa_cam_client.check_limit(#chatd_send_google_play_integrity_attestation, partition)
     | #overlimit ->
       false
     | _ ->
-      wa_cam_client.check_and_update_limit(#chatd_send_google_play_integrity_attestation, partition, 1)
-        | #overlimit ->
-          false
-        | _ ->
-          true
+      match wa_cam_client.check_and_update_limit(#chatd_send_google_play_integrity_attestation, partition, 1)
+        | #overlimit -> false
+        | _ -> true
                    
 def moduleIsEnabled() ->
   wa_gates.is_allowed(#chatd, #google_play_integrity)
     
-spec (Wid, chatx_types.StateMap) -> ()
-export def sendPlayIntegrityRequest(wid, stateMap) ->
+export spec (Wid, chatx_types.StateMap) -> ()
+def sendPlayIntegrityRequest(wid, stateMap) ->
   if wa_gates.is_allowed(#chatd, #google_play_integrity) ->
     doSendPlayIntegrityRequest(wid, stateMap)
   else ->
@@ -132,9 +129,9 @@ def doSendPlayIntegrityRequest(wid, stateMap) ->
   countProduct(wid, "google_play_integrity.request_attestation.success")
     
     
-spec (Binary, chatx_types.StateMap, PlayIntegrityAttestationContext = #unknown) -> ()
-export def handlePlayIntegrityAttestation(payload, ["main" => ["wid" => wid]] as stateMap, _context) ->
-  doHandlePlayIntegrityAttestation(moduleIsEnabled(), stateMap, payload) match
+export spec (Binary, chatx_types.StateMap, PlayIntegrityAttestationContext = #unknown) -> ()
+def handlePlayIntegrityAttestation(payload, ["main" => ["wid" => wid]] & stateMap, _context) ->
+  match doHandlePlayIntegrityAttestation(moduleIsEnabled(), stateMap, payload)
     | Err(#payload_too_large, _) ->
       countProduct(wid, "google_play_integrity.payload_oversize")
     | Err(#gpia_decryption_failed, _ as err) ->
@@ -189,7 +186,7 @@ spec (chatx_types.StateMap, Binary) -> ()
 def decryptAndReport(stateMap, payload) ->
   ensurePayloadIsntOversized(payload)
   
-  decryptAndUnpackPayload(wid, payload) 
+  match decryptAndUnpackPayload(wid, payload) 
     | #successful_attestation, jObject, gpiaToken ->
       def decryptedToken = decryptGpiaToken(gpiaToken)
       def parsedAttestation = parseGpiaAttestation(decryptedToken)
@@ -218,7 +215,7 @@ def decryptGpiaToken(token) ->
         
 spec (Binary) -> ParsedAttestation | Err(#attestation_parsing_failed, joseJwe.Error)
 def parseGpiaAttestation(data) ->
-  jsone.tryDecode(data) match
+  match jsone.tryDecode(data)
     | Ok(parsedAttestation, _) ->
       parsedAttestation
     | Err(err) ->
@@ -243,17 +240,17 @@ def checkNonce(wid, parsedAttestation) ->
     
 spec (Binary) -> Binary | Err(#nonce_decryption_failed, any)
 def decryptNonce(encryptedNonce) ->
-  cryptoClient.decrypt("wa_google_play_integrity", encryptedNonce) match
+  match cryptoClient.decrypt("wa_google_play_integrity", encryptedNonce)
     | Ok(decrypted) -> decrypted
     | Err(reason) -> Err(#nonce_decryption_failed, reason)
         
 spec (Binary) -> (user: Binary, timestamp: number) | Err(#nonce_parse_failed, any)
 def parseDecryptedNonce(decryptedNonce) ->
-  binary.split(decryptedNonce, ".") match
+  match binary.split(decryptedNonce, ".")
     | [user, _] if wid.dsValidUser(User) is (false, reason) ->
         Err(#nonce_parse_failed, (#invalid_user, user, reason))
     | [user, ts] ->
-      binary.decodeUnsigned(ts) match
+      match binary.decodeUnsigned(ts)
         | tsNumber when tsNumber > minimumValidNonceTimestamp ->
           (user, tsNumber)
         | _ ->
@@ -282,7 +279,7 @@ def mapAttestationPropertiesToIafFeatures(parsedAttestation) ->
   ]
 
   desiredProps
-    --partialMap { iafName, (jsonParentName, jsonChildName) if parsedAttestation is (jsonParentName => (JsonChildName => val)) ->
+    ~partialMap { iafName, (jsonParentName, jsonChildName) if parsedAttestation is (jsonParentName => (JsonChildName => val)) ->
       (IafName, Val)
     }
     
@@ -296,7 +293,7 @@ def mapPayloadPropertiesToIafFeatures(jObject) ->
   ]
   
   desiredProps
-    --partialMap { iafName, jsonName if jObject is [(= jsonName) => val] ->
+    ~partialMap { iafName, jsonName if jObject is [(= jsonName) => val] ->
       (iafName, val)
     }
     ++ try_map_error_code_to_text(jObject)
@@ -342,8 +339,8 @@ def generateEncryptedNonce(wid) ->
   
   cryptoClient.encrypt("wa_google_play_integrity", plainTextNonce)
     
-spec () -> Map(keychainClient.Name, keychainClient.Spec)
-export def keychainSpec() ->
+export spec () -> Map(keychainClient.Name, keychainClient.Spec)
+def keychainSpec() ->
   map {
     "google_play_integrity_decryption_key" => map {
       "fail_init_if_secret_fetch_fails" => true
@@ -373,7 +370,7 @@ def decryptAndUnpackPayload(wid, payload) ->
     def key = crypto.hash(#sha256, password)
     def content = crypto.cryptoOneTime(#aes_cbc, key, iv, ciphertext, something = false)
     
-    jsone.tryDecode(content) match
+    match jsone.tryDecode(content)
       | Ok(["token" => token] & jObject, _) if token /= "" ->
           (#successful_attestation, jObject, token)
       | Ok(["code" => _errorCode] = jObject, _) ->
@@ -386,7 +383,7 @@ def decryptAndUnpackPayload(wid, payload) ->
         
 spec Wid -> Binary | Err(#payload_decryption_key_unknown_format | (#payload_decryption_key_get_failed, any))
 def getPayloadDecryptionPassword(wid) ->
-  wa_accountd_client.point_get(wid, #auth_key, (callerId = wid, zippyConsistency = #eventual_read)) match
+  match wa_accountd_client.point_get(wid, #auth_key, (callerId = wid, zippyConsistency = #eventual_read))
     | Err(err) ->
       Err(#payload_decryption_key_get_failed, err)
     | loginInfo: Binary ->
@@ -397,5 +394,5 @@ def getPayloadDecryptionPassword(wid) ->
 -- Merges two lists of `key -> value` tuples. If two tuples share a key the second one is dropped
 spec list(name, value) -> list(name, value)
 def mergeIafFeatureLists(iafFeatures) ->
-    iafFeatures --uniqueBy { name, _ -> name }
+    iafFeatures ~uniqueBy { name, _ -> name }
     

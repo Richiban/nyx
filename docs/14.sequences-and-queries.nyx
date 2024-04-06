@@ -8,6 +8,7 @@ The main difference between the two is that a series is known not to be infinite
 
 In short, a sequence might represent some kind of collection or it might represent a generator; a series always
 represents a collection or range
+
 ---
 
 for 0.. | i -> println("Hello times {i}")	--  Compiler error: cannot iterate over a seq

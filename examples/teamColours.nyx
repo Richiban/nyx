@@ -1,0 +1,64 @@
+-- Official championship's colors
+type TeamColor = #yellow | #black
+
+module TeamColor =
+  def create
+    | "yellow" -> Ok Yellow
+    | "black" -> Ok Black
+    | _ -> Error "Invalid footballers color; acceptable values are: yellow, black"
+
+  def value
+    | Yellow -> "yellow"
+    | Black -> "black"
+
+module Game =
+
+  type GameId = bigint
+
+  type Errors = #teams_must_be_unique
+  type Rules = ( MaxSetPoints: byte; MaxSets: byte )
+  type TeamId = NotEmptyString
+  type Score = ( By: TeamId * TeamColor; At: DateTime )
+  type SetScores = ( Number: byte; Scores: Score list )
+  type OpenGame =
+    ( id: GameId
+      teams: TeamId * TeamId
+      startedAt: DateTime
+      rules: Rules
+      score: Score list list )
+  type FinishedGame =
+    ( id: GameId
+      teams: TeamId * TeamId
+      startedAt: DateTime
+      finishedAt: DateTime
+      rules: Rules
+      score: Score list list )
+
+  type Game =
+    | (#open_game, OpenGame)
+    | (#finished_game, FinishedGame)
+
+  def recordScore(game: OpenGame, scoringTeam: (TeamId, TeamColor), scoredAt: Game) ->
+      def finishedSets = game.Score.[..^1]
+      def currentSetWithNewPoint = [(game.Score -List.last) @ [( By = scoringTeam; At = scoredAt )]]
+
+      match game, scoringTeam
+      -- You can find active pattern matching implementation on GitHub. Let's skip it here to have better focus.
+      | SetInPlay -> ( game with Score = finishedSets @ currentSetWithNewPoint ) -Game.OpenGame
+      | SetWon -> ( game with Score = finishedSets @ currentSetWithNewPoint @ [[]] ) -Game.OpenGame
+      | GameWon -> ( Id = game.Id
+                     StartedAt = game.StartedAt
+                     Rules = game.Rules
+                     Teams = game.Teams
+                     FinishedAt = scoredAt
+                     Score = finishedSets @ currentSetWithNewPoint
+                   ) -Game.FinishedGame
+
+  def openGame(rules, teams, startedAt, gameId) ->
+    match teams
+    | (t1, t2) if t1 = t2 -> Errors.TeamsMustBeUnique -Error
+    | _ -> ( Id = gameId
+             StartedAt = startedAt
+             Teams = teams
+             Rules = rules
+             Score = [ [] ] ) -Ok

@@ -28,10 +28,10 @@ export def getNearestSignificantLine(document, position) ->
     def lines = lineUtils.iterLinesOutwards(document, position.line)
 
     for lines | backwardsLine, forwardsLine ->
-      if backwardsLine is Some(line) and !line.isEmptyOrWhitespace ->
+      if backwardsLine is Some line and not line.isEmptyOrWhitespace ->
         return backwardsLine
 
-      if forwardsLine is Some(line) and !line.isEmptyOrWhitespace ->
+      if forwardsLine is Some line and not line.isEmptyOrWhitespace ->
         return forwardsLine
 
   currentLine
@@ -47,16 +47,16 @@ export def rangeWithoutIndentation(line) ->
 spec (Change, Direction, TextDocument, TextLine) -> TextLine | #nil
 export def getNextLineOfChangeOfIndentation(change, direction, document, currentLine) ->
   def diff = changeToDiff(change)
-  def lines = iterLines(document, (
+  def lines = document ~iterLines(
     startingPosition = currentLine.range.start
     direction
     currentInclusive = false
-  ))
+  )
 
   lines
-    -filter { !isEmptyOrWhitespace }
-    -filter { diff(firstNonWhitespaceCharacterIndex, currentLine.firstNonWhitespaceCharacterIndex) /= 0 }
-    -tryHead
+    ~filter { !isEmptyOrWhitespace }
+    ~filter { diff(firstNonWhitespaceCharacterIndex, currentLine.firstNonWhitespaceCharacterIndex) /= 0 }
+    ~tryHead
 
 
 spec(TextLine, TextLine) -> RelativeIndentation
@@ -73,27 +73,27 @@ export def getRelativeIndentation(startingLine, targetLine) -> if
 spec (TextDocument, IterationOptions) -> Source(LinePair)
 export def iterLinePairs(document, options) ->
   iterLines(document, (options with currentInclusive = true))
-    -pairwise
-    -map {
-      | a, b if options.direction == #forwards -> (prev = a, current = b)
+    ~pairwise
+    ~map {
+      | a, b where options.direction == #forwards -> (prev = a, current = b)
       | a, b -> (prev = b, current = a)
     }
 
 spec TextDocument, Position, Direction -> TextLine | #nil
 export def getNextSignificantLine(document, position, direction) ->
-  def lines = iterLines(document, (
+  def lines = document ~iterLines(
     startingPosition = position
     direction = direction
     currentInclusive = false
-  ))
+  )
 
-  lines -tryFind(lineIsSignificant)
+  lines ~tryFind(lineIsSignificant)
 
 
 --  A "stop line" is one that is either blank or contains only punctuation
 spec TextLine -> bool
 export def lineIsStopLine(line) ->
-  !RegEx("[a-zA-Z0-9]").test(line.text)
+  not RegEx("[a~zA~Z0~9]").test(line.text)
 
 spec TextLine -> bool
 export def lineIsSignificant(line) ->
@@ -105,7 +105,7 @@ def moveToChangeOfIndentation(editor, cursorPosition, change, direction) ->
     mut line: TextLine? = #nil
     def currentLine = editor.document.lineAt(cursorPosition.line)
 
-    direction match
+    match direction
       | #nearest ->
         set line = getNearestLineOfChangeOfIndentation(
           editor.document,
@@ -120,7 +120,7 @@ def moveToChangeOfIndentation(editor, cursorPosition, change, direction) ->
           currentLine
         )
 
-    if line is Some(line) ->
+    if line is Some line ->
       editor.selection = Selection(
         line.range.start
         line.range.start
@@ -151,7 +151,7 @@ def iterLines(document, options) ->
       yield newLine
 
       currentLineNumber = advance(currentLineNumber)
-  } -skip(if options.currentInclusive -> 0 else -> 1)
+  } ~skip(if options.currentInclusive -> 0 else -> 1)
 
 spec (TextDocument, TextLine, common.Change) -> TextLine
 def getNearestLineOfChangeOfIndentation(document, currentLine, change) ->
@@ -227,13 +227,13 @@ def quickCommandPicker(commands, freeEntryOptions) -> async { resolve, reject ->
   }
 
   set quickPick.items = commands
-    -map { e ->
+    ~map { e ->
       ( quickKey = e.quickKey
         label = "[{e.quickKey}]"
         description = e.label
         execute = e.execute )
       }
-    -concat(freeEntryItems)
+    ~concat(freeEntryItems)
 
   quickPick.onDidHide {
     resolve()
@@ -241,12 +241,12 @@ def quickCommandPicker(commands, freeEntryOptions) -> async { resolve, reject ->
   }
 
   quickPick.onDidChangeValue { s ->
-    commands -tryFind { quickKey == s } match
+    commands ~tryFind { quickKey == s } match
       | #some, option ->
         resolve(option)
         quickPick.dispose()
         return
-      | #nil if !freeEntryOptions -> 
+      | #nil where !freeEntryOptions -> 
         set quickPick.value = ""
       | #nil ->
         #nil
@@ -260,13 +260,15 @@ def quickCommandPicker(commands, freeEntryOptions) -> async { resolve, reject ->
         resolve(quickPick.value)
       else return
     
-    commands -tryFind { quickKey == selected.quickKey } match
-      | #some, option ->
-        resolve(option)
-        quickPick.dispose()
-        return
-      | #nil -> en.,
-        quickPick.dispose()
+    commands 
+      ~tryFind { quickKey == selected.quickKey } 
+      ~match
+        | Some option ->
+          resolve(option)
+          quickPick.dispose()
+          return
+        | #nil -> 
+          quickPick.dispose()
   }
 
   quickPick.show()

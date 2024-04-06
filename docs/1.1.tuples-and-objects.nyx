@@ -3,12 +3,14 @@ Objects
 =======
 
 Nyx has strong support for objects
+
 ---
 
 def point = (x = 1, y = 2)
 
 ---
 The comma isn't necessary if the properties are on separate lines
+
 ---
 
 def point = (
@@ -27,6 +29,7 @@ or "non-destructive mutation". Nyx has two special syntactical forms for this:
 The important difference between these two forms is that the `with` keyword creates a new object
 that is always the same type as the input object, while the spread operator can be used on any number
 of input objects and the resulting object may be of any type
+
 ---
 
 def x = (a = 1, b = 2)

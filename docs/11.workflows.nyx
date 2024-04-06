@@ -14,6 +14,7 @@ Workflows can be used for, among other things:
   * Linq-style queries
 
 A builder is used by applying a builder value with a lambda, similar to any other higher-order function:
+
 ---
 
 someBuilder {
@@ -26,6 +27,7 @@ to use inside the lambda, if the builder supports them.
 
 For example, `seq` is in the standard library and is an instance of the SequenceBuilder type.
 `SequenceBuilder` has implemented support for `yield`, so this becomes valid:
+
 ---
 
 seq {
@@ -107,6 +109,7 @@ def asyncCustomerName = async {
 # Async
 
 The AsyncWorkflow context type provides an `await` keyword
+
 ---
 
 type Movie = (name: string, yearOfRelease: int)
@@ -123,6 +126,7 @@ def result = async {
 
 The ErrorWorkflow context type provides a `try` keyword that causes the rest of the function to 
 be skipped if the expression under the keyword returns an error
+
 ---
 
 def getCustomer(customerID: int): Result(Customer, #customer_not_found) -> ...
@@ -244,3 +248,48 @@ def result = html {
       }
   }
 }
+
+---
+
+Another kind of workflow keyword is one that takes two higher-order functions, the first usually representing some kind of 
+condition and the second representing the continuation
+
+---
+
+def process() ->
+	contract {
+		mut count = 0
+
+		ensures count >= 0	
+
+    -- do stuff
+	}
+
+-- desugars to:
+
+def process() ->
+  contract.apply({ builder ->
+    mut count = 0
+
+    builder.ensures({ count >= 0 }, {
+      -- do stuff
+    })
+  })
+
+-- The same construct can be used in query building:
+
+def usersWithLongNames = query {
+  def user = from users
+  where user.name.length > 10
+  select user
+}
+
+-- desugars to:
+
+def usersWithLongNames = query({ queryBuilder ->
+  queryBuilder.from(users, { user ->
+    queryBuilder.where(user.name.length > 10, {
+      queryBuilder.select(user)
+    })
+  })
+})

@@ -2,10 +2,12 @@
 Tags
 ====
 
-A foundational feature of Nyx, Tags are a special type of literal. A tag's name is also its value,
-which is also its type.
+Tags are a foundational, and rather unusual, feature of Nyx. Tags are a special type of 
+literal; a tag's name is also its value, which is also its type.
 
-Tags are similar to symbols in Ruby, atoms in Erlang, or Typescript's string literal types.
+Tags are similar to symbols in Ruby or atoms in Erlang. They also have some similarities
+with Typescript's string literal types, although tags are not strings.
+
 ---
 
 --  Tags can be used as values:
@@ -25,4 +27,13 @@ Tags are implemented with a lookup table, unique to each running application. As
 loads other libraries the tags from those libraries are added to the lookup table. This means that
 tags with the same compile-time name will always successfully compare by value, even though the name
 is not present at runtime.
+
 ---
+
+-- Tags can be used in type unions to emulate enums:
+
+type Color = #red | #green | #blue
+
+-- To emulate a discriminated union, use a tag as the first field in a tuple:
+
+type Color = #red | #green | #blue | (#custom, string)

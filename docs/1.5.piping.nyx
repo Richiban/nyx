@@ -15,6 +15,7 @@ has the following benefits:
   correct type as the first parameter
   
 For example:
+
 ---
 
 def getStreamFromInput(input: Request): Stream(bytes) -> ...
@@ -32,3 +33,15 @@ def add(x, y) -> x + y
 def result = 1
   -add(2)
   -add(3)
+
+
+--  Some functions are namespaced, such as List.map
+
+def result = [1, 2, 3]
+  -List.map { x -> x + 1 }
+
+--  If the namespace is the same as the type name, you don't need to write the namespace 
+--  when calling the function:
+
+def result = [1, 2, 3]
+  -map { x -> x + 1 }

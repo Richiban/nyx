@@ -3,6 +3,7 @@ Type inference and specs
 ==============
 
 Type inference is an important part of Nyx.
+
 ---
 
 def message = "Hello world" -- This is implicitly a String
@@ -11,10 +12,9 @@ def message: string = "Hello world" -- This is explicitly a String
 
 ---
 Note that the type is inferred from the value; that does not mean that the type is dynamic.
----
 
----
 Arguments to functions can also be inferred.
+
 ---
 
 def add(a, b) = a + b -- `add` is inferred to have the type `(Nat, Nat)-> Nat`
@@ -22,12 +22,14 @@ def add(a, b) = a + b -- `add` is inferred to have the type `(Nat, Nat)-> Nat`
 ---
 While leaving the compile to infer types is convenient, it is recommended that types be specified
 explicitly for values and functions that are exported from a module.
+
 ---
 
 export def add(a, b) = a + b -- Compiler warning: `add` has no type annotation
 
 ---
 It's possible to specify the type of a value or function inline, using a type annotation:
+
 ---
 
 export def add(a: Nat, b: Nat): Nat = a + b
@@ -35,6 +37,7 @@ export def add(a: Nat, b: Nat): Nat = a + b
 ---
 But this can quickly become unwieldy, so Nyx provides a `spec` language construct to attach a type
 annotation to a value or function:
+
 ---
 
 spec (Nat, Nat) -> Nat
@@ -44,6 +47,7 @@ export def add(a, b) = a + b
 For functions with many arguments, or those with arguments that have complicated types, even this
 becomes unwieldy, so Nyx provides a `where` construct to specify types using placeholders, in much 
 the same way the `where` construct is used for values:
+
 ---
 
 spec (MapA, MapB) -> MapC where
@@ -56,23 +60,26 @@ def merge(mapA, mapB) ->
 ---
 This form is recommended in some cases, but is actually required where the function needs to specify
 that type parameters relate to one another:
+
 ---
 
 spec (a) -> a where
   a: (name: string)
 
 ---
-If you wish, you may also specify the function name in the `spec`, although this is rarely recommended
+If you wish, you may also specify the function name in the `spec`, although this is not usually necessary
+
 ---
 spec add(Nat, Nat) -> Nat
 export def add(a, b) = a + b
 
 ---
-Target typing
+Target-typing
 
 Target-typing refers to type inference based on how a value is used, rather than how it is assigned.
 
 For example, given the following function `parse` and the value `:
+
 ---
 
 spec (string) -> a
@@ -109,45 +116,48 @@ def myLookup = Lookup[1 => "one", 1 => "uno", 2 => "two", 2 => "dos"] --  This f
 --  --	Specs --
 --  Specs are a syntax for writing the type of a definition separately. They are optional but are recommended for exported functions
 
---  Types can be specified inline in Nyx with the `::` syntax, for example:
+--  Types can be specified inline in Nyx with the `:` syntax, for example:
 
-  def x: string = "Hello world"
+def x: string = "Hello world"
 
-  --  For some definitions, such as functions or definitions involving generics or contexts, inline types annotations can quickly make 
-  --  the definitions long and unwieldy. Nyx allows
-  --  types to be written on a separate line above the definition, in a spec:
-  
-  spec string
-  def x = "Hello world"
-  
-  spec (string, CustomerId, Logger) -> Customer
-  def getCustomer(connectionString, customerId, logger) -> ...
-  
+--  For some definitions, such as functions or definitions involving generics or contexts, inline types annotations can quickly make 
+--  the definitions long and unwieldy. Nyx allows
+--  types to be written on a separate line above the definition, in a spec:
+
+spec string
+def x = "Hello world"
+
+spec (string, CustomerId, Logger) -> Customer
+def getCustomer(connectionString, customerId, logger) -> ...
+
+spec string -> string
+def greet(name) -> "Hello, {name}!"
+
+--  A rule of thumb is that if a definition contains more than one type annotation, it should be written in a spec.
+--  Example:
+
+def f(x: int) -> x + 1 --  Can stay as is
+
+def g(x: int, y: int): int -> x + y --  Should be written with a spec `spec (int, int) -> int`
+
+--  Specs can also be used for generic functions or values
+spec a -> a
+def self(x) -> x 
+
+---
+Exported functions should be given a spec; you'll get a compiler warning if you don't.
+
+Specs can optionally specify the name of the definition they apply to. This would normally be ommitted
+on definitions (where the definition immediately follows the spec) but is required on specs present in 
+a trait where there is no definition attached
+
+For example:
+
+---
+
+trait MyTrait ->
+  spec aMethod: (string -> string) --  Spec name required (no definition is attached)
+
   spec string -> string
-  def greet(name) -> "Hello, {name}!"
-  
-  --  A rule of thumb is that if a definition contains more than one type annotation, it should be written in a spec.
-  --  Example:
-  
-  def f(x: int) -> x + 1 --  Can stay as is
-  
-  def g(x: int, y: int): int -> x + y --  Should be written with a spec `spec (int, int): int`
-  
-  --  Specs can also be used for generic functions or values
-  spec a -> a
-  def self(x) -> x 
-  
-  --  Exported functions should be given a spec; you'll get a compiler warning if you don't.
-  
-      Specs can optionally specify the name of the definition they apply to. This would normally be ommitted
-      on definitions (where the definition immediately follows the spec) but is required on specs present in 
-      a trait where there is no definition attached
-  
-      For example:
-  
-  trait MyTrait ->
-    spec aMethod: (string -> string) --  Spec name required (no definition is attached)
-  
-    spec string -> string
-    def anotherMethod(x) -> x --  Spec name can be omitted because it is attached to a definition
+  def anotherMethod(x) -> x --  Spec name can be omitted because it is attached to a definition
   

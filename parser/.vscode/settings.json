@@ -1,0 +1,10 @@
+{
+    "dotnet.defaultSolution": "SampleApp/SampleApp.sln",
+    "cSpell.words": [
+        "pchar",
+        "pexpression",
+        "pstatement",
+        "pstring",
+        "punit"
+    ]
+}

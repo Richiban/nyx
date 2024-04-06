@@ -2,6 +2,11 @@
   "name": "nyx",
   "displayName": "Nyx",
   "description": "A toy language called Nyx",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/richiban/nyx"
+  },
+  "license": "MIT",
   "version": "0.0.1",
   "engines": {
     "vscode": "^1.76.0"

@@ -1,6 +1,7 @@
 ---
 Ranges
 ======
+
 ---
 
 --  Ranges in Nyx use the x..y syntax, which we have already seen in the section on for-loops:
@@ -28,7 +29,7 @@ type Point = (x: int, y: int)
 
 def Point.succ(p: Point) -> Point(p.x + 1, p.y + 1)
 def Point.magnitude(p: Point) -> Math.sqrt(p.x ^ 2 + p.y ^ 2)
-def Point.`<=`(p1: Point, p2: Point) -> magnitude(p1) >= magnitude(p2)
+def Point.`<=`(p1: Point, p2: Point) -> magnitude(p1) <= magnitude(p2)
 
 def p1 = Point(1, 1)
 def p2 = Point(8, 8)
@@ -39,7 +40,7 @@ def points = p1..p2	--  This is now legal `points: series(Point)`
 
 spec [(succ: (a) -> a, `<=`: (a, a) -> bool)] (start: a, end: a) -> series(a)
 def range 
-  | start, end if end < start ->
+  | start, end where end < start ->
     series {}
   | (start, end) ->
     mut current = start
@@ -49,3 +50,48 @@ def range
         yield current
         set current = succ(current)
     }
+
+---
+In the standard library you might find these types defined:
+
+---
+
+type ClosedRange(n) = (leftLimit: n, rightLimit: n)
+type LeftOpenRange(n) = (rightLimit: n)
+type RightOpenRange(n) = (leftLimit: n)
+type OpenRange(n) = ()
+
+type Range[Comp(n)](n) = ClosedRange(n) | LeftOpenRange(n) | RightOpenRange(n) | OpenRange(n)
+
+type StepRange[Comp(n), Succ(n)] = ClosedRange(n) | RightOpenRange(n)
+
+spec [Comp(n), Succ(n)](StepRange(n)) -> Iter(n)
+def iterate(r) ->
+  def left, right = 
+    match r
+    | (l, r) -> (l, Some(r))
+    | (l)    -> (l, #nil)
+
+  seq {
+    mut current = left
+
+    while current < right ->
+      yield current
+
+      set current = succ(current)
+  }
+
+spec [Comp(n)](n, Range(n)) -> bool
+def Range.contains(testVal, range) ->
+  match range
+  | (leftLimit, rightLimit)   -> testVal <= rightLimit and testVal >= leftLimit
+  | (rightLimit = rightLimit) -> testVal <= rightLimit
+  | (leftLimit = leftLimit)   -> testVal <= leftLimit
+  | ()                        -> true
+
+-- There's syntax support for ranges using the .. operator
+
+def getLogs(timespan: Range(Moment)) ->
+  logs ~filter { log -> timespan ~contains(log.timestamp) }
+
+def myLogs = getLogs((Moment.today)..)

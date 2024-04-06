@@ -5,6 +5,7 @@ Naming conventions
 In Nyx, it is mandatory to use camelcase for functions and variables, and Pascalcase for types.
 The exception to this is that function definitions can start with an uppercase character, in which
 case the definition generates both a variable/function _and_ a type with the same name.
+
 ---
 
 --  Generates a variable

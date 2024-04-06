@@ -1,13 +1,17 @@
 ---
-# Contexts
+Contexts
+========
+
 Another crucial feature of Nyx that isn't found in many languages is that of a 'context'
 
-A context is, in a way, an implicit parameter to a function
+A context is, in a way, an implicit parameter to a function; 
+when a function specifies a context that it runs in, all the members of that context are available to it.
 
 A context can be used for effect-oriented programming
 
 A function without any contexts is known to be total (i.e. has no side effects and is referentially transparent)
-because stateful mutations or IO require a context
+because stateful mutations or IO require a context.
+
 ---
 
 def f() ->
@@ -35,6 +39,7 @@ context MyState ->
 ---
 The `main` method of any program automatically runs in the `Console` context, giving it access to 
 functions such as `println` and `readLine`
+
 ---
 
 
@@ -42,31 +47,35 @@ functions such as `println` and `readLine`
 # Using contexts for typeclasses
 
 Imagine we have a list of points that we wish to sum:
+
 ---
 
 type Point = (x: int, y: int)
 
-def points = Point[
-  (x: 1, y: 2)
-  (x: 3, y: 4)
-  (x: 5, y: 6)
-]
+def points = Point
+ [| x | y |
+  | 1 | 2 |
+  | 3 | 4 |
+  | 5 | 6 |]
 
 ---
 We can define a typeclass for types that can be summed; i.e. any type for which there is a zero value and a + method
+
 ---
-type Summable(a) =
-  ( zero: a
-    `+`: (a, a) -> a
-  )
+
+type Summable(a) = (
+  zero: a
+  `+`: (a, a) -> a
+)
 
 ---
 And then use this function that uses the Summable context to sum a list of items without
 having to explicitly pass in the zero and + functions
+
 ---
+
 spec [Summable(a)](list(a)) -> a
-def sum(items) ->
-  items -fold(`0`) { acc, item -> acc + item }
+def sum(items) -> items -fold(`0`) { + }
 
 ---
 We could explicitly define an instance of the Summable typeclass for Point:
@@ -79,6 +88,7 @@ We could explicitly define an instance of the Summable typeclass for Point:
 but we don't need to; by defining `+` and `0` on Point itself, they are defined in the 
 global context and therefore an instance of Summable(Point) can automatically 
 by synthesized.
+
 ---
 
 def Point.+(a, b) = Point(x: a.x + b.x, y: a.y + b.y)
@@ -87,12 +97,15 @@ def Point.`0` = Point(x: 0, y: 0)
 
 ---
 Now the following method call just works
+
 ---
+
 def r = points -sum()
 
 ---
 If we want to supply custom behaviour, we can define an instance of Summable(Point) 
 and use it explicitly
+
 ---
 
 def PointSum = Summable(Point)(
@@ -103,58 +116,51 @@ def PointSum = Summable(Point)(
 def r = points -sum[PointSum]()
 
 
-
---  --	Contexts --
-
-Contexts are a way of controlling access to stuff.
-Contexts appear as a sort of extra parameter on a function;
-when a function specifies a context that it runs in, all the members of that context are available to it. For example ->
-
 spec [CurrencyConversionTable] (Pounds, Dollars) -> Dollars
 def addPoundsAndDollars(p, d) ->
-convert(p, #dollars) + d -- `convert` is a function on the `CurrencyConversionTable` context
+  convert(p, #dollars) + d -- `convert` is a function on the `CurrencyConversionTable` context
 
 --  This is how effect control is done in Nyx
 
 --  All console programs implicitly run in ConsoleContext, giving access to things like `print` and `readline`
 def main() ->
-sayHello()
+  sayHello()
 
 --  Functions can be annotated with a context. The functions on that context are now available to call within that function, and functions
 --  that in turn require that context can be called
 spec [ConsoleContext] () -> ()
 def sayHello() ->
-println("Hello world!")
+  println("Hello world!")
 
 
 --  Contexts can be combined. For example, the following function requires a context that has both `ConsoleContext` and `FileSystemContext`:
-spec [ConsoleContext, FileSystemContext] () -> ()
+spec [ConsoleContext, FileSystemContext] (string) -> ()
 def readAndPrintFile(filename) ->
-def contents = file.open(filename).contents
+  def contents = openFile(filename).contents
 
-print(contents)
+  print(contents)
 
 
 
 --  Contexts also allow for Haskell-style typeclasses. For example, the following context allows any type to be converted to a string:
 
 type Writeable(a) = (
-write: a -> string
+  write: a -> string
 )
 
 type Person = (
-name: string
-age: int
+  name: string
+  age: int
 )
 
 default Writeable(Person) ->
---  Note that the spec is inferred from the trait and doesn't need to be written again
-def write(p) -> "{p.name} is {p.age} years old"
+  --  Note that the spec is inferred from the trait and doesn't need to be written again
+  def write(p) -> "{p.name} is {p.age} years old"
 
 
 spec [Writeable(a), ConsoleContext] a -> string
 def someFunction(x) ->
-println(write(x)) --  Since we're in the context of Writeable(a), the function `write` is in scope
+  println(write(x)) --  Since we're in the context of Writeable(a), the function `write` is in scope
 
 
 --  When in a function body, in order to call another function that requires a context, you have two options (let's say you're
@@ -164,7 +170,7 @@ println(write(x)) --  Since we're in the context of Writeable(a), the function `
 --      c) import an `impl` that gives you the context that you need
 
 type MyContext = (
-m: string -> ()
+  m: string -> ()
 )
 
 def g[MyContext]() -> 
@@ -172,16 +178,16 @@ m("Hello world") -- `m` is in scope from context `MyContext`
 
 
 def f() ->
-g() --  Error: `g` requires `MyContext` in the context
+  g() --  Error: `g` requires `MyContext` in the context
 
 def f[MyContext]() -> 
-g() --  This works because we have added the context to `f`'s signature, passing the need to create a context on to our caller
+  g() --  This works because we have added the context to `f`'s signature, passing the need to create a context on to our caller
 
 def f() ->
 def c: MyContext = ( def m(s) -> println(s) )
 
 context(c) ->
-g() --  This works because we have created an instance of the necessary context and started a context block
+  g() --  This works because we have created an instance of the necessary context and started a context block
 
 def f() ->
 import aModule/containingAnImplOf/MyContext --  This works because we have imported an default that gives us the context we need

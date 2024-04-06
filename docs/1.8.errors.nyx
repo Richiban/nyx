@@ -1,14 +1,17 @@
+---
 
+Failing: exceptions and return values
+=====================================
 
---  --	Failing: exceptions and return values --
+There are two methods of failing in Nyx. There are Errors and Exceptions. These behave slightly differently from
+other languages in that: Exceptions can be thrown but not caught, and Errors are not 'thrown'
+they are simply returned. This works because, in Nyx, it is a compiler error to call a function
+that without either: 
+    a) consuming the result in some way, e.g. `println(returnSomeData())`
+    b) ignoring the result by passing it to the ignore function, e.g. `ignore(returnSomeData())`
+    c) ignoring the result by assigning it to the wildcard variable '_', e.g. `_ = returnSomeData()`
 
---	There are two methods of failing in Nyx. There are Errors and Exceptions. These behave slightly differently from
---  other languages in that: Exceptions can be thrown but not caught, and Errors are not 'thrown'
---  they are simply returned. This works because, in Nyx, it is a compiler error to call a function
---  that without either: 
---      a) consuming the result in some way, e.g. `println(returnSomeData())`
---      b) ignoring the result by passing it to the ignore function, e.g. `ignore(returnSomeData())`
---      c) ignoring the result by assigning it to the wildcard variable '_', e.g. `_ = returnSomeData()`
+---
 
 --  For cases that are well-known to possibly fail or have no value to return, you should instead return an `Error` instance
 spec CustomerId -> Customer | Err(#not_found | #database_unreachable)
@@ -34,7 +37,7 @@ def getCustomer(id) ->   ...
 spec Customer -> Result(Order, #no_orders)
 def getLatestOrder(customer) -> ...
 
-def result = except {
+def result = handle {
   def customer = try getCustomer("someid")
   def latestOrder = try getLatestOrder(customer)
 
@@ -42,3 +45,40 @@ def result = except {
 }
 --  `result` has inferred type of `int | Err(#customer_not_found | #no_orders)`
 
+---
+
+The `except` keyword
+====================
+
+Nyx has a special keyword `except` that is very similar to `match`, but is different in that it doesn't require the
+matching to be exhaustive.
+
+For example, if a function returns `#a | #b | #c`, but only want to handle `#a` and `#b`, match will result in a compiler error:
+
+---
+
+def f() : #a | #b | #c -> ...
+
+match f()
+  | #a -> ...
+  | #b -> ... -- Compiler error: #c is not handled
+
+---
+`except` is a bit different, in that it doesn't require all cases to be handled. It's still type-safe, however, since 
+unhandled values are _returned_ as a value. This is particularly useful for handling errors, where certain values can
+be "stripped off" and handled individually, with all others being returned, as you can see in the following:
+
+---
+
+def g() ->
+  -- where f() returns `int | Err(#not_found)`
+  def result = f() except Err(#not_found) -> return ()
+
+  -- result is has type `int`
+  ...
+
+
+---
+In this way, `except` works exactly the same way as `match` with an implicit `| x -> x` at the end of the block.
+
+---

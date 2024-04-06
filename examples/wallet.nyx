@@ -95,7 +95,7 @@ export def performAddressAliasReplacement(walletInfo, address) ->
   | walletInfo.imported && walletInfo.imported(address) is Some(x) -> x.address
   | else -> address
   
-  addressToReturn match
+  match addressToReturn
     | #nil -> addressToReturn
     | Some(address) -> detectAddressTypeToScripthash(address)
 
@@ -244,7 +244,7 @@ export def detectAddressTypeToScripthash2(address, network) ->
 
   def addressType = getAddressType(address)
 
-  addressType match
+  match addressType
     | #p2pkh ->
       def p2pkh = addressToP2PKH(address)
       def p2pkhBuf = Buffer.from(p2pkh, #hex)

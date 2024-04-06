@@ -10,6 +10,7 @@ is the type of the output.
 This doesn't sound terribly useful until you consider that tuples allow you to pass multiple values as one
 value. In addition, destructuring syntax can be used in the function definition to extract the values from the 
 tuple, which feels like a function that takes multiple arguments:
+
 ---
 
 def add(x, y) -> x + y -- `add` has the type `(int, int) -> int`; that is a funcion that takes a tuple of two ints
@@ -37,68 +38,74 @@ def print1() -> print("1")
 def names = data -map { item -> item.name }
 
 Web.makeRequest(
-url = "http ->//some.api.com/"
-def success(error?, response?, data?) ->
-println("There was an error -> {error}. The response was {data}")
-def failure(error) ->
-println("There was an error -> {error}")
+  url = "http ->//some.api.com/"
+  def success(error?, response?, data?) ->
+    println("There was an error -> {error}. The response was {data}")
+  def failure(error) ->
+    println("There was an error -> {error}")
 )
 
 --	This sumList example defines a function making use of a match expression.
 rec sumList(xs: list(int)) -> xs -match
-| []              -> 0
-| [head, ...tail] -> head + sumList tail
+  | []              -> 0
+  | [head, ...tail] -> head + sumList tail
 
 
 --	Since a function that consists of a single match expression is so common in Nyx,
 --  you can merge the function definition and | statements together, dropping the need to name an argument
 rec sumList | []              -> 0
-| [head, ...tail] -> head + sumList(tail)
+            | [head, ...tail] -> head + sumList(tail)
 
 --  If you feel that the function definition has suffered from the loss of the argument name, you can
 --  use a spec to reinstate it. Note: specs are always recommended for exported functions
 spec (xs: list(int)) -> int
 rec sumList | []              -> 0
-| [head, ...tail] -> head + sumList(tail)
+            | [head, ...tail] -> head + sumList(tail)
 
 --  Also note that, since functions in Nyx are defined in tuple form, it's possible to pattern match immediately
 --  on multiple arguments:
-spec (x: int, y: int) -> int
-def divide | _, 0 -> #divide_by_zero
-| x, y -> x / y
+spec (x: int, y: int) -> int | Err(#divide_by_zero)
+def divide | _, 0 -> Err(#divide_by_zero)
+           | x, y -> x / y
 
---  An equivalent form exists for lamdas consisting of a single | statement:
+--  An equivalent form exists for lamdas consisting solely of a single pattern match:
 def count = {
-| 0 -> "zero"
-| 1 -> "one"
-| _ -> "many"
+  | 0 -> "zero"
+  | 1 -> "one"
+  | _ -> "many"
 }
 
 --	Simple member access can be turned into a function as such ->
 def namesAndAges =
-[| name 		| age	|
-| "Felix" 		| 22	|
-| "Taylor" 	| 30	|
-| "Peter" 		| 28	|
-| "Sean" 		| 45	|]
+  [| name 		  | age	|
+   | "Felix" 		| 22	|
+   | "Taylor"   | 30	|
+   | "Peter" 		| 28	|
+   | "Sean" 	  | 45	|]
 
 def ages = namesAndAges -map { age }
 
---	If you want a parameter to be optional, prefix its name with a ?
+---
+If you want a parameter to be optional, prefix its name with a ?
 Note that any optional parameters will automatically be wrapped in an option type.
 The compiler handles optional parameters by inserting None at the callsite.
 
-def printMessage(?message) -> 		--	"message" is of type `string?` (short for `Option(string)`)
-message 
--match
-| #nil       ->  "You didn't say anything"
-| #some, msg ->  "You said -> {msg}" 
--println()
+---
 
---	You can also make parameters optional by giving a default value. In this | the type of
+def printMessage(?message) -> 		--	"message" is of type `string?` (short for `Option(string)`)
+  message 
+  -match
+    | #nil       ->  "You didn't say anything"
+    | #some, msg ->  "You said -> {msg}" 
+  -println()
+
+---
+You can also make parameters optional by giving a default value. In this | the type of
 the parameter is still `Option(t)` as far as any callers are concerned but the type is
 automatically unwrapped for you inside the method. If None was supplied at the callsite
 then it will be substituted for the default value you gave in the method declaration
+
+---
 printResults(left = "left", middle, right = "right") ->
 print "{left}, {middle}, {right}"
 
@@ -160,7 +167,7 @@ def f(x) -> x * 2
 f(2)					--  4
 
 spec string -> string
-def dict = map { "Hello" -> "Bonjour"; "Goodbye" -> "Au revoir" }
+def dict = ["Hello" => "Bonjour"; "Goodbye" => "Au revoir" ]
 
 dict("Hello")		-- "Bonjour"
 
@@ -174,7 +181,7 @@ greeting("John")		-- "Hello, John"
 --  Functions can be placed on types:
 type Person = (name: string, age: int)
 def greet(this, other: string) ->
-"Hello, {other}! My name is {this.name} and I am {this.age} years old."
+  "Hello, {other}! My name is {this.name} and I am {this.age} years old."
 
 --  This essentially creates a function alongside the type `Person`, called `Person.greet`
 --  With an instance of `Person` you can call it using the familiar dot operator:
@@ -194,19 +201,19 @@ sam -greet("Alex")	-- "Hello, Alex! My name is Sam and I am 28 years old."
 --  The advantage of this is that 'instance method' calls, functions and match expressions
 --  can all be mixed together in a single pipeline
 def Counter(count: int) =
-( count = count
-def inc() -> Counter(this.count + 1)
-def dec() -> Counter(this.count - 1)
-)
+  ( count = count
+    def inc() -> Counter(count + 1)
+    def dec() -> Counter(count - 1)
+  )
 
 def writeCounter(counter: Counter) -> "Counter -> {counter.count}"
 
 Counter(0)
--inc()
--inc()
--dec()
--writeCounter()
--println()
+  -inc()
+  -inc()
+  -dec()
+  -writeCounter()
+  -println()
 
 --  Functions can be 'partial', meaning that they may or may not return a value. This is Nyx 
 --  nomenclature for a function whose return type includes the unit type `()`. 
@@ -218,6 +225,7 @@ Counter(0)
 --  a way that would be awkward to write with separate calls to `map` and `filter`
 
 def f(items: seq(int | #some_tag)) ->
-items -partialMap {
-| i: int -> i * 2
-}
+  items -partialMap {
+    | i: int -> (true, i * 2)
+    | _ -> false
+  }

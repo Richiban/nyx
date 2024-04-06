@@ -1,8 +1,9 @@
-
---	-- Standard library -- 
-
 ---
-Main abstractions (traits)
+Standard library 
+======
+
+# Main abstractions (traits)
+
 Seq(t) 					    --  Equivalent to .NET's IEnumerable<T>. May or may not be infinite, may or may not be in memory
 └ Collection(t) 			--  An in-memory collection of `t`s. Finite in size
   ├ List(t)					--  A collection of `t`s that supports random access by index
@@ -12,9 +13,9 @@ Seq(t) 					    --  Equivalent to .NET's IEnumerable<T>. May or may not be infin
   ├ Map(k, v) 				--  A collection of `v` values stored against a key `k`. Each `k` has a single value `v`
   │ └ BiMap(a, b) 		    --  A collection of `(a, b)` value pairs that supports lookup in both directions
   └ Lookup(k, v) 			--  A collection of `v` values stored against a key `k`. Multiple values may exist for each `k`
----
 
---  Async collections
+# Async collections
+
 Stream
 ├ ASYNCGENERATOR(t)	
 └ AsyncCollection(t) 			
@@ -56,38 +57,39 @@ type Map(key, value) =
 type List(a) =
   Map(int, a) & Collection(a)
 
-
+---
 --	Implementations
 type LinkedList(a) =
   () | (a, LinkedList(a))
-  & Sequence(a) 
-  def getEnumerator(this) ->
-    seq { 
-      mut current = this
+  & Sequence(a)
 
-      while this is (head, tail) ->
-        yield head
-        set current = tail
-    }
+def LinkedList(a).getEnumerator() ->
+  seq { 
+    mut current = this
+
+    while this is (head, tail) ->
+      yield head
+      set current = tail
+  }
 
 type NonEmptyLinkedList(a) =
   a | (a, NonEmptyLinkedList(a))
   & NonEmptySequence(a)
 
-  def head(this) = this | (head, _) | head ->  head
-  def getEnumerator() ->
-          seq {
-              mut current = this
+def NonEmptyLinkedList(a).head
+  | (head, _) | head -> head
 
-          loop ->
-              yield current.head
+def getEnumerator() -> seq {
+  mut current = this
 
-              if (current is (head, tail)) ->
-                  set current = tail
-              else ->
-                  return
-          } 
-          
+  for .. ->
+    yield current.head
+
+    if current is (head, tail) ->
+      set current = tail
+    else ->
+      return
+} 
 
 
 --	Most of the collection types, as well as sequence, provide a non-empty variant. This is because

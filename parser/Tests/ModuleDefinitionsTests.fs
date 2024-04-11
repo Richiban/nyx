@@ -1,10 +1,10 @@
-module NyxParser.Tests.ModuleDefinitions
+module Nyx.Parser.Tests.ModuleDefinitions
 
 open NUnit.Framework
 
-open NyxParser.Modules
-open NyxParser.Types
-open NyxParser.Tests.Utils
+open Nyx.Parser.Modules
+open Nyx.Parser.AST
+open Nyx.Parser.Tests.Utils
 
 
 [<SetUp>]

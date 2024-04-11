@@ -1,10 +1,10 @@
-module NyxParser.Tests.FunctionDefinitions
+module Nyx.Parser.Tests.FunctionDefinitions
 
 open NUnit.Framework
 
-open NyxParser.Statements
-open NyxParser.Types
-open NyxParser.Tests.Utils
+open Nyx.Parser.Statements
+open Nyx.Parser.AST
+open Nyx.Parser.Tests.Utils
 
 [<Test>]
 let ``Test a``() =

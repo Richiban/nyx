@@ -1,9 +1,10 @@
-module NyxParser.Modules
+module Nyx.Parser.Modules
 
 open FParsec
-open NyxParser.Statements
-open NyxParser.Common
-open NyxParser.Types
+open Nyx.Parser.Statements
+open Nyx.Parser.Common
+open Nyx.Parser.AST
+open Nyx.Parser.ParserTypes
 
 let isBlank = fun c -> c = ' ' || c = '\t'
 //let ws1 = skipMany1SatisfyL isBlank "whitespace"
@@ -21,19 +22,6 @@ let importTargetParser =
 
 let importSectionParser = 
     spaces >>. keyword "import" >>. wsBeforeEOL >>. (indentedMany1 importTargetParser "import target") |>> ImportSection
-    
-
-
-// Should parse:
-// import
-//     "test1"
-//     "test2"
-
-// as:
-// ImportSection [
-//     ImportTarget "test1"
-//     ImportTarget "test2"
-// ]
 
 let moduleDefinition =
     pipe3

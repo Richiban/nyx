@@ -7,11 +7,12 @@
   </PropertyGroup>
   <ItemGroup>
     <Compile Include="Utils.fs" />
-    <Compile Include="FunctionDefinitions.fs" />
-    <Compile Include="ModuleDefinitions.fs" />
-    <Compile Include="TypeExpressions.fs" />
-    <Compile Include="ImportSections.fs" />
-    <Compile Include="TypeDefinitions.fs" />
+    <Compile Include="ExpressionsTests.fs" />
+    <Compile Include="FunctionDefinitionsTests.fs" />
+    <Compile Include="ModuleDefinitionsTests.fs" />
+    <Compile Include="TypeExpressionsTests.fs" />
+    <Compile Include="ImportSectionsTests.fs" />
+    <Compile Include="TypeDefinitionsTests.fs" />
   </ItemGroup>
   <ItemGroup>
     <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.6.0" />
@@ -21,6 +22,6 @@
     <PackageReference Include="coverlet.collector" Version="6.0.0" />
   </ItemGroup>
   <ItemGroup>
-    <ProjectReference Include="..\Parser\dotnet-codespaces.fsproj" />
+    <ProjectReference Include="..\Parser\Nyx.Parser.fsproj" />
   </ItemGroup>
 </Project>

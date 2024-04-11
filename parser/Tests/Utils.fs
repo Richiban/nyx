@@ -1,6 +1,6 @@
-module NyxParser.Tests.Utils
+module Nyx.Parser.Tests.Utils
 open FParsec
-open NyxParser.Types
+open Nyx.Parser.ParserTypes
 
 let runParser p s = 
     match runParserOnString (p .>> spaces .>> eof) (ParserState.Create()) "" s with

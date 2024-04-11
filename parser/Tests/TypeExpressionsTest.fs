@@ -1,10 +1,10 @@
-module NyxParser.Tests.Types
+module Nyx.Parser.Tests.Types
 
 open NUnit.Framework
 
-open NyxParser.Types
-open NyxParser.TypeExpressions
-open NyxParser.Tests.Utils
+open Nyx.Parser.AST
+open Nyx.Parser.TypeExpressions
+open Nyx.Parser.Tests.Utils
 
 [<Test>]
 let ``Test a type call in a function``() =

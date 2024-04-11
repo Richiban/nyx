@@ -1,10 +1,10 @@
-module NyxParser.Tests.ImportSections
+module Nyx.Parser.Tests.ImportSections
 
 open NUnit.Framework
 
-open NyxParser.Modules
-open NyxParser.Types
-open NyxParser.Tests.Utils
+open Nyx.Parser.Modules
+open Nyx.Parser.AST
+open Nyx.Parser.Tests.Utils
 
 [<Test>]
 let ``Test imports``() =

@@ -1,14 +1,14 @@
-module NyxParser.Tests.TypeExpressions
+module Nyx.Parser.Tests.TypeExpressions
 
 open NUnit.Framework
 
 open FParsec
-open NyxParser.Types
-open NyxParser.Common
-open NyxParser.TypeExpressions
-open NyxParser.Modules 
-open NyxParser.Statements
-open NyxParser.Tests.Utils
+open Nyx.Parser.AST
+open Nyx.Parser.Common
+open Nyx.Parser.TypeExpressions
+open Nyx.Parser.Modules 
+open Nyx.Parser.Statements
+open Nyx.Parser.Tests.Utils
 
 [<SetUp>]
 let Setup () =

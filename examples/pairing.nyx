@@ -60,24 +60,24 @@ export spec (Element, Context) -> Result | Err(#extraction_failed) where
 def extractPairDevicePayload 
   | el, #companion_registration ->
     handle {
-      def pubKey = el ~myXml.getSubtagCdata("#pub~key")
-      def ref = el ~myXml.getSubtagCdataBinary("#ref")
+      def pubKey = el \myXml.getSubtagCdata("#pub\key")
+      def ref = el \myXml.getSubtagCdataBinary("#ref")
 
-      match el ~myXml.getSubtag("#device~identity")
+      match el \myXml.getSubtag("#device\identity")
       | false ->
           (pubKey = PubKey, ref = Ref)
       | _ ->
-        def deviceIdentity = el ~myXml.getSubtagCdata("#device~identity")
-        def keyIndexList = el ~myXml.getSubtagCdataBinary("#key~index~list")
-        def keyIndexListTag  = el ~myXml.getSubtag("#key~index~list")
+        def deviceIdentity = el \myXml.getSubtagCdata("#device\identity")
+        def keyIndexList = el \myXml.getSubtagCdataBinary("#key\index\list")
+        def keyIndexListTag  = el \myXml.getSubtag("#key\index\list")
 
         def keyIndexListTS =
           keyIndexListTag 
-          ~myXml.getTagAttr("#ts")  
-          ~convert.toInteger()
+          \myXml.getTagAttr("#ts")  
+          \convert.toInteger()
 
         --  refcert only present for capi pairing request
-        match el ~myXml.getSubtag("#ref~cert")
+        match el \myXml.getSubtag("#ref\cert")
         | false ->
           ( pubKey = PubKey
             ref = Ref
@@ -86,7 +86,7 @@ def extractPairDevicePayload
             keyIndexListTs = keyIndexListTS
           )
         | _ ->
-          def refCert = myXml.getSubtagCdataBinary(el, "#ref~cert")
+          def refCert = myXml.getSubtagCdataBinary(el, "#ref\cert")
           ( pubKey = PubKey
             ref = Ref
             deviceIdentity = deviceIdentity
@@ -99,14 +99,14 @@ def extractPairDevicePayload
 
   | el, #trust_circle_onboarding ->
     handle {
-      def appId = el ~convert.toInteger(myXml.getSubtagCdataBinary("#app_id"))
-      def authKey = el ~myXml.getSubtagCdata("#auth_key")
-      def deviceIdentity = el ~myXml.getSubtagCdata("#device_identity")
-      def famDeviceId = el ~myXml.getSubtagCdataBinary("#fam_device_id")
-      def keyIndexList = el ~myXml.getSubtagCdataBinary("#key_index_list")
-      def keyIndexListTag = el ~myXml.getSubtag("#key_index_list")
-      def keyIndexListTS = keyIndexListTag ~myXml.getTagAttr("#ts") ~convert.toInteger()
-      def ref = el ~myXml.getSubtagCdataBinary("#ref")
+      def appId = el \convert.toInteger(myXml.getSubtagCdataBinary("#app_id"))
+      def authKey = el \myXml.getSubtagCdata("#auth_key")
+      def deviceIdentity = el \myXml.getSubtagCdata("#device_identity")
+      def famDeviceId = el \myXml.getSubtagCdataBinary("#fam_device_id")
+      def keyIndexList = el \myXml.getSubtagCdataBinary("#key_index_list")
+      def keyIndexListTag = el \myXml.getSubtag("#key_index_list")
+      def keyIndexListTS = keyIndexListTag \myXml.getTagAttr("#ts") \convert.toInteger()
+      def ref = el \myXml.getSubtagCdataBinary("#ref")
 
       ( appId = appId
         authKey = authKey
@@ -117,7 +117,7 @@ def extractPairDevicePayload
         ref = ref
       )
     } except C.Tr.S ->
-      ?LOG_W([(rate_limit, (3, 60))], "extract_pair_device_payload for trust circle onboarding failed: ~0p", [(C, Tr, S)])
+      ?LOG_W([(rate_limit, (3, 60))], "extract_pair_device_payload for trust circle onboarding failed: \0p", [(C, Tr, S)])
       Err(#extraction_failed)
 
 
@@ -128,7 +128,7 @@ def getKeyIndexList(wid, envelope) ->
       countProduct(wid, "device_pairing_utilsget_key_index_listerror500advd_failed")
       logW(
           [(#rate_limit, (3, 60))]
-          "[~s] device_pairing_utils internal_error, failed to get advd data reason: ~p, Env: ~0p"
+          "[\s] device_pairing_utils internal_error, failed to get advd data reason: \p, Env: \0p"
           [wid.format(WID), Reason, Envelope]
       )
       Err(envelope.iqError(errInternalServerError, envelope))
@@ -141,7 +141,7 @@ export spec
 rec createQrCodeRefIq
   | Wid regWID -> createQrCodeRefIq(regWID, wid.getPlatform(regWID))
   | regWID, (#msgra | #msgri | #msgrw | #bluew) -> createQrCodeRefIq_impl(RegWID, "#pair_device", ?NS_TC)
-  | RegWID, _ -> createQrCodeRefIq_impl(RegWID, "#pair~device", ?NS_MD)
+  | RegWID, _ -> createQrCodeRefIq_impl(RegWID, "#pair\device", ?NS_MD)
 
     
 spec (Wid, string, stanza.XmlNamespace) -> Envelope
@@ -199,13 +199,13 @@ def finishCompanionReg(regWID, userAgent, devicePairingData, () = devicePairingP
         
       def subEls2 = deviceIdentity match
         | #nil -> SubEls1
-        | DI -> [Element(name = "#device~identity", els = [XmlCData(cdata = convert.toBinary(DI))]) | subEls1]
+        | DI -> [Element(name = "#device\identity", els = [XmlCData(cdata = convert.toBinary(DI))]) | subEls1]
 
       def subEls3 = primaryPlatform match
         | #nil -> SubEls2
         | PP -> [Element(name = "#platform", attrs = [("#name", convert.toString(PP))]) | subEls2]
         
-      def el = Element(name = "#pair~success", els = SubEls3)
+      def el = Element(name = "#pair\success", els = SubEls3)
       def from = wid.makeServer()
       def env1 = envelope.iqRequest(From, RegWID, ?NS_MD, el, ?IQ_SET)
       def wABAID = maps.get(mybaId, DevicePairingPayload, #nil)
@@ -268,12 +268,12 @@ def finishTrustCircleOnboarding(regWID, devicePairingData0, devicePairingPayload
 
 spec (Wid, myProps.Props) -> #ok | Err(#invalid_skey | #keyd_set_failed | #keyd_unavailable)
 def setE2eProps(deviceWID, devicePairingData) ->
-  def regId = devicePairingData ~myProps.get("e_reg_id")
-  def keyType = devicePairingData ~myProps.get("e_keytype")
-  def identity = devicePairingData ~myProps.get("e_ident")
-  def sKeyId = devicePairingData ~myProps.get("e_skey_id")
-  def sKeyVal = devicePairingData ~myProps.get("e_skey_val")
-  def sKeySig = devicePairingData ~myProps.get("e_skey_sig")
+  def regId = devicePairingData \myProps.get("e_reg_id")
+  def keyType = devicePairingData \myProps.get("e_keytype")
+  def identity = devicePairingData \myProps.get("e_ident")
+  def sKeyId = devicePairingData \myProps.get("e_skey_id")
+  def sKeyVal = devicePairingData \myProps.get("e_skey_val")
+  def sKeySig = devicePairingData \myProps.get("e_skey_sig")
   def sKey = (sKeyId, sKeyVal, sKeySig)
 
   match mykeyclient.validate(identity, sKey, keyType)
@@ -304,8 +304,8 @@ def setE2eProps(deviceWID, devicePairingData) ->
 spec (Wid) -> [Element]
 def createQrCodeRefsSubels(regWid) ->
     myCompanionRegRef.genQrCodeRefs(regWid)
-    ~partialMap { ref where isBinary(ref) -> Element(name = "#ref", children = [XmlCData(ref)]) }
-    ~toList()
+    \partialMap { ref where isBinary(ref) -> Element(name = "#ref", children = [XmlCData(ref)]) }
+    \toList()
 
 spec (primaryWid: Wid, regWid: Wid) -> (Element, ref: Binary)
 def createLinkCodeRefSubel(primaryWID, regWID) ->
@@ -316,14 +316,14 @@ def createLinkCodeRefSubel(primaryWID, regWID) ->
 export spec (Wid, El) -> #ok | Err(#failed_extraction)
 def setDeviceIdentity(deviceWID, el) ->
   handle {
-    def deviceIdentityTag = el ~myXml.getSubtag("#device~identity") 
+    def deviceIdentityTag = el \myXml.getSubtag("#device\identity") 
       except #not_found -> return Err(#missing_device_identity_subtag)
 
     def keyIndex = deviceIdentityTag 
-      ~myXml.getTagAttr("#key~index", defaultValue = 0) 
-      ~convert.toInteger()
+      \myXml.getTagAttr("#key\index", defaultValue = 0) 
+      \convert.toInteger()
 
-    def deviceIdentity = el ~myXml.getSubtagCdataBinary("#device~identity")
+    def deviceIdentity = el \myXml.getSubtagCdataBinary("#device\identity")
     def deviceProps = ["keyIndex" => keyIndex, "deviceIdentity" => deviceIdentity]
     myAdvClient.setDeviceIdentity(deviceWID, deviceProps)
   } except Err -> Err(#failed_extraction)

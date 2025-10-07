@@ -1,0 +1,9 @@
+module Test
+
+def message = "Hello world"
+
+def sayHello = {
+    println(message)
+}
+
+sayHello()

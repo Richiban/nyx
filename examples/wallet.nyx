@@ -10,16 +10,18 @@ import
   create-key-pair (toXOnly)
   bitcoinjs-lib (Network)
 
-spec (string) -> (output: string, scripthash: string, address: string)
-export def detectAddressTypeToScripthash(address) ->
+
+export def detectAddressTypeToScriptHash
+  : string -> (output: string, scriptHash: string, address: string)
+  ={ address ->
   -- Detect legacy address
   handle {
     try bitcoin.address.fromBase58Check(address, #network)
     def p2pkh = try addressToP2PKH(address)
-    def p2pkhBuf = p2pkh -Buffer.from(#hex)
+    def p2pkhBuf = p2pkh \Buffer.from(#hex)
 
     ( output = p2pkh
-      scripthash = Buffer.from(sha256(p2pkhBuf), #hex) -reverse() -toString(#hex)
+      scriptHash = Buffer.from(sha256(p2pkhBuf), #hex) \reverse \toString(#hex)
       address
     )
   } except Err -> () 
@@ -29,122 +31,130 @@ export def detectAddressTypeToScripthash(address) ->
       def output = bitcoin.address.toOutputScript(address, #network)
 
       ( output
-        scripthash = sha256(output) -Buffer.from(#hex) -reverse() -toString(#hex)
-        address
-      )
+        scriptHash = sha256(output) \Buffer.from(#hex) \reverse \toString(#hex)
+        address )
      | address.indexOf("bc1") == 0 ->
       def output = bitcoin.address.toOutputScript(address, #network)
 
       ( output
-        scripthash = sha256(output) -Buffer.from(#hex) -reverse() -toString(#hex)
-        address
-      )
+        scriptHash = sha256(output) \Buffer.from(#hex) \reverse \toString(#hex)
+        address )
      | address.indexOf("tb1") == 0 ->
       def output = bitcoin.address.toOutputScript(address, #network)
 
       ( output
-        scripthash = sha256(output) -Buffer.from(#hex) -reverse() -toString(#hex)
-        address
-      )
-     | else -> Err(#unrecognized_address)
+        scriptHash = sha256(output) \Buffer.from(#hex) \reverse \toString(#hex)
+        address )
+     | else -> #err(#unrecognizedAddress)
+}
 
 
-spec (script: string) -> string
-export def detectScriptToAddressType(script) ->
-  script
-    -Buffer.from(#hex)
-    -bitcoin.address.fromOutputScript(#network)
+export def detectScriptToAddressType: (script: string) -> string
+  = { script ->
+    script
+      \Buffer.from(#hex)
+      \bitcoin.address.fromOutputScript(#network)
+  }
 
-spec (string) -> string
-export def addressToScripthash(address) ->
-  address 
-    -addressToP2PKH 
-    -Buffer.from(#hex)
-    -sha256()
-    -Buffer.from(#hex) 
-    -reverse() 
-    -toString(#hex)
-
-
-spec (string) -> string
-export def addressToP2PKH(address) ->
-  def addressDecodedSub = address -bs58check.decode() -toString() -substring(2)
-  "76a914(addressDecodedSub)88ac"
+export def addressToScripthash: string -> string
+  = { address ->
+    address 
+      \addressToP2PKH 
+      \Buffer.from(#hex)
+      \sha256
+      \Buffer.from(#hex) 
+      \reverse
+      \toString(#hex)
+  }
 
 
-spec (string) -> string
-export def addressToHash160(address) ->
-  def addressDecoded = bs58check.decode(address)
-  addressDecoded -toString() -substring(2)
+export def addressToP2PKH: string -> string
+  = { address ->
+    def addressDecodedSub = address \bs58check.decode \toString \substring(2)
+
+    "76a914{addressDecodedSub}88ac"
+  }
+
+export def addressToHash160: string -> string = 
+  { address ->
+    def addressDecoded = bs58check.decode(address)
+    addressDecoded \toString \substring(2)
+  }
   
 
-spec (Buffer) -> string
-export def hash160BufToAddress(hash160) ->
-  bs58check.encode(hash160)
-  
+export def hash160BufToAddress: Buffer -> string 
+  = { hash160 ->
+    bs58check.encode(hash160)
+  }
 
-export def hash160HexToAddress(hash160: string) ->
-  hash160 -Buffer.from(#hex) -bs58check.encode()
+export def hash160HexToAddress: string -> string
+  = { hash160 ->
+    hash160 \Buffer.from(#hex) \bs58check.encode
+  }
   
-
-spec (IValidatedWalletInfo, string) -> ???
-export def performAddressAliasReplacement(walletInfo, address) ->
-  def addressToReturn = if
-  | address == "primary" -> walletInfo.primary.address
-  | address == "funding" -> walletInfo.funding.address
-  | walletInfo.imported && walletInfo.imported(address) is Some(x) -> x.address
-  | else -> address
+export def performAddressAliasReplacement: IValidatedWalletInfo, string -> ???
+  = { walletInfo, address ->
+    def addressToReturn = if
+      | address == "primary" -> walletInfo.primary.address
+      | address == "funding" -> walletInfo.funding.address
+      | walletInfo.imported && walletInfo.imported(address) is #some(x) -> x.address
+      | else -> address
   
-  match addressToReturn
-    | #nil -> addressToReturn
-    | Some(address) -> detectAddressTypeToScripthash(address)
+    match addressToReturn
+      | #nil -> addressToReturn
+      | #some(address) -> detectAddressTypeToScripthash(address)
+  }
 
 
 --  Whether the atomical for the mint is owned by the provided wallet or not
 --  @param ownerRecord The proposed wallet that owns the atomical
 --  @param atomical 
 --  @returns 
-spec <ConsoleContext>(string, AtomicalStatus) -> IInputUtxoPartial? | Err(#location_info_not_found)
-export def isAtomicalOwnedByWalletRecord(address, atomical) ->
-  if not atomical.location_info_obj is Some ->
-    println(atomical)
-    return Err(#location_info_obj)
-  
-  def locationInfo = atomical.location_info_obj
-  def currentLocation = locationInfo.locations(0) ?? ()
-  getUtxoPartialFromLocation(address, currentLocation, throwOnMismatch = false)
-
-
-spec (string, Location, bool): IInputUtxoPartial? | Error where 
-  Error = | Err(#location_not_found)
-          | Err(#invalid_script_address)
-          | Err(#location_info_mismatch, expectedAddress: Address, foundAddress: Address)
-export def getUtxoPartialFromLocation(addressToCheck, location, throwOnMismatch = true) ->
-  if !location ->
-    return Err(#location_not_found)
-  
-  -- Just in | populate the address on locationInfo if it was not set
-  -- It can be deduced from the script field
-  def detectedAddress = detectScriptToAddressType(location.script) except
-    | Err -> return Err(#invalid_script_address)
+export def isAtomicalOwnedByWalletRecord
+  : [Console] string, AtomicalStatus -> Result(IInputUtxoPartial, #locationInfoNotFound)
+  = { address, atomical ->
+    if !atomical.locationInfoObj is #some(_) ->
+      println(atomical)
+      return #err(#locationInfoObj)
     
-  set location.address = detectedAddress
+    def locationInfo = atomical.locationInfoObj
+    def currentLocation = locationInfo.locations(0) ?? ()
+    getUtxoPartialFromLocation(address, currentLocation, throwOnMismatch = false)
+  }
 
-  if 
-  | addressToCheck == location.address ->   
-    ( hash = location.txid
-      index = Number(location.index)
-      address = detectedAddress
-      witnessUtxo = (
-        value = Number(location.value)
-        script = Buffer.from(location.script, #hex)
+
+export def getUtxoPartialFromLocation
+  : string, Location, bool -> Result(IInputUtxoPartial?, Error) where 
+    Error = 
+      | #locationNotFound
+      | #invalidScriptAddress
+      | #locationInfoMismatch(expectedAddress: Address, foundAddress: Address)
+  = { addressToCheck, location, throwOnMismatch = true ->
+    if location is not #some(_) ->
+      return #err(#locationNotFound)
+    
+    -- Just in | populate the address on locationInfo if it was not set
+    -- It can be deduced from the script field
+    def detectedAddress = detectScriptToAddressType(script = location.script) except
+      | #err -> return #err(#invalidScriptAddress)
+      
+    set location.address = detectedAddress
+
+    if 
+    | addressToCheck == location.address ->   
+      ( hash = location.txid
+        index = Number(location.index)
+        address = detectedAddress
+        witnessUtxo = (
+          value = Number(location.value)
+          script = Buffer.from(location.script, #hex)
+        )
       )
-    )
-  | throwOnMismatch ->
-    Err(#location_info_mismatch, expectedAddress = addressToCheck, foundAddress = location.address)
-  | else ->
-    #nil
-
+    | throwOnMismatch ->
+      #err(#locationInfoMismatch(expectedAddress = addressToCheck, foundAddress = location.address))
+    | else ->
+      #nil
+  }
 
 export type AddressType =
   | #p2pkh
@@ -158,109 +168,114 @@ export type AddressType =
   | #unknown
 
 
-spec (string) -> AddressType
-export def getAddressType(address) -> if
-  | address.startsWith("bc1q")  -> #p2wpkh
-  | address.startsWith("bc1p")  -> #p2tr
-  | address.startsWith("1")     -> #p2pkh
-  | address.startsWith("3")     -> #p2sh
-  | address.startsWith("tb1q")  -> #p2wpkh_testnet
-  | address.startsWith("m")     -> #p2pkh_testnet
-  | address.startsWith("2")     -> #p2sh_testnet
-  | address.startsWith("tb1p")  -> #p2tr_testnet
-  | else                        -> #unknown
+export def getAddressType: string -> AddressType
+  = { address -> if
+    | address.startsWith("bc1q")  -> #p2wpkh
+    | address.startsWith("bc1p")  -> #p2tr
+    | address.startsWith("1")     -> #p2pkh
+    | address.startsWith("3")     -> #p2sh
+    | address.startsWith("tb1q")  -> #p2wpkh_testnet
+    | address.startsWith("m")     -> #p2pkh_testnet
+    | address.startsWith("2")     -> #p2sh_testnet
+    | address.startsWith("tb1p")  -> #p2tr_testnet
+    | else                        -> #unknown
+  }
 
+export def utxoToInput
+  :(???, string, string, (override: (vout?: number, script?: string | Buffer))) -> ???
+  = { utxo, address, publicKey, option ->
+    def addressType = getAddressType(address)
 
-spec (???, string, string, (override: (vout?: number, script?: string | Buffer))) -> ???
-export def utxoToInput(utxo, address, publicKey, option) ->
-  def addressType = getAddressType(address)
+    def script =
+      option.override.script match
+      | #nil if Buffer.isBuffer(option.override.script) -> option.override.script
+      | #nil -> option.override.script \Buffer.from(#hex)
+      | _ if utxo.script is Some(script) -> script \Buffer.from(#hex) 
+      | _ -> #nil
 
-  def script =
-    option.override.script match
-    | #nil if Buffer.isBuffer(option.override.script) -> option.override.script
-    | #nil -> option.override.script -Buffer.from(#hex)
-    | _ if utxo.script is Some(script) -> script -Buffer.from(#hex) 
-    | _ -> #nil
+    addressType match 
+      | #p2pkh | #p2pkh_testnet ->
+        def ( output ) = detectAddressTypeToScripthash(address)
 
-  addressType match 
-    | #p2pkh | #p2pkh_testnet ->
-      def ( output ) = detectAddressTypeToScripthash(address)
-      -- have transform script to scripthash, use witnessScript
-      ( hash = utxo.txid
-        index = option.override.vout ?? utxo.vout
-        witnessUtxo = (
-          value = utxo.value
-          script = Buffer.from(output as string, #hex)
+        -- have transform script to scripthash, use witnessScript
+        ( hash = utxo.txid
+          index = option.override.vout ?? utxo.vout
+          witnessUtxo = (
+            value = utxo.value
+            script = Buffer.from(output as string, #hex)
+          )
         )
-      )
-    
-    | #p2sh | #p2sh_testnet ->
-      def redeemData = bitcoin.payments.p2wpkh(pubkey = Buffer.from(publicKey, #hex))
       
-      ( hash = utxo.txid
-        index = option.override.vout ?? utxo.vout
-        witnessUtxo = (
-          value = utxo.value
-          script = script
+      | #p2sh | #p2sh_testnet ->
+        def redeemData = bitcoin.payments.p2wpkh(pubkey = Buffer.from(publicKey, #hex))
+        
+        ( hash = utxo.txid
+          index = option.override.vout ?? utxo.vout
+          witnessUtxo = (
+            value = utxo.value
+            script = script
+          )
+          redeemScript = redeemData.output
         )
-        redeemScript = redeemData.output
-      )
-    
-    | #p2wpkh | #p2wpkh_testnet ->
-      ( hash = utxo.txid
-        index = option.override.vout ?? utxo.vout
-        witnessUtxo = (
-          value = utxo.value
-          script = script
+      
+      | #p2wpkh | #p2wpkh_testnet ->
+        ( hash = utxo.txid
+          index = option.override.vout ?? utxo.vout
+          witnessUtxo = (
+            value = utxo.value
+            script = script
+          )
         )
-      )
-    
-    | AddressTypeString.p2tr || AddressTypeString.p2tr_testnet = 
-      ( hash = utxo.txid
-        index = option.override.vout ?? utxo.vout
-        witnessUtxo = (
-          value = utxo.value
-          script = script
+      
+      | AddressTypeString.p2tr || AddressTypeString.p2tr_testnet = 
+        ( hash = utxo.txid
+          index = option.override.vout ?? utxo.vout
+          witnessUtxo = (
+            value = utxo.value
+            script = script
+          )
+          tapInternalKey = publicKey \Buffer.from(#hex) \toXOnly
+        )    
+  }
+
+type Network2 = #network(Network) | #string(string) | #nil
+
+export def getNetwork: Network2 -> Network2 
+  = { | #string("testnet")              -> bitcoin.networks.testnet
+      | #string(s)                      -> bitcoin.networks.bitcoin
+      | (#nil | #network(_)) & network  -> network  }
+
+
+export def detectAddressTypeToScripthash2
+  : string, Network2 -> Result(Success, Error) where 
+      Success = (output: #string(string) | #buffer(Buffer), scripthash: string, address: string)
+      Error = Err(#unrecognizedAddress)
+  = { address, network ->
+    def network = getNetwork(network)
+    -- Detect legacy address
+    bitcoin.address.fromBase58Check(address) except
+    | Err -> return #nil
+
+    def addressType = getAddressType(address)
+
+    match addressType
+      | #p2pkh ->
+        def p2pkh = addressToP2PKH(address)
+        def p2pkhBuf = Buffer.from(p2pkh, #hex)
+
+        ( output = p2pkh
+          scripthash = p2pkhBuf \sha256 \Buffer.from(#hex) \reverse \toString(#hex)
+          address
         )
-        tapInternalKey = publicKey -Buffer.from(#hex) -toXOnly()
-      )    
+      
+      | #unknown ->
+        Err(#unrecognizedAddress)
+      
+      | _ -> 
+        def output = bitcoin.address \toOutputScript(network)
 
-
-spec (Net) -> Net where
-  Net = Network | string | #nil
-export def getNetwork | "testnet" -> bitcoin.networks.testnet
-                      | string s  -> bitcoin.networks.bitcoin
-                      | _         -> network  
-
-
-spec (string, Network | string | #nil) -> Success | Error where 
-  Success = (output: string | Buffer, scripthash: string, address: string)
-  Error = Err(#unrecognized_address)
-export def detectAddressTypeToScripthash2(address, network) ->
-  def _network = getNetwork(network)
-  -- Detect legacy address
-  bitcoin.address.fromBase58Check(address) except
-  | Err -> ()
-
-  def addressType = getAddressType(address)
-
-  match addressType
-    | #p2pkh ->
-      def p2pkh = addressToP2PKH(address)
-      def p2pkhBuf = Buffer.from(p2pkh, #hex)
-
-      ( output = p2pkh
-        scripthash = p2pkhBuf -sha256() -Buffer.from(#hex) -reverse() -toString(#hex)
-        address
-      )
-    
-    | #unknown ->
-      Err(#unrecognized_address)
-    
-    | _ -> 
-      def output = bitcoin.address -toOutputScript(_network)
-
-      ( output
-        scripthash = output -sha256() -Buffer.from(#hex) -reverse() -toString(#hex)
-        address
-      )
+        ( output
+          scripthash = output \sha256 \Buffer.from(#hex) \reverse \toString(#hex)
+          address
+        )
+  }

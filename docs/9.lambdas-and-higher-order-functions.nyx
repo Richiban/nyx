@@ -10,24 +10,24 @@ It's possible to define a regular function using the `def` keyword and then pass
 an argument:
 ---
 
-def add1(x) -> x + 1
+def add1 = { x -> x + 1 }
 
 def numbers = [1, 2, 3]
 
-def biggerNumbers = numbers -map(add1)
+def biggerNumbers = numbers \map(add1)
 
 ---
 However, it's more common to see an anonymous function (known as a lambda) passed directly to another function:
 ---
 
-def biggerNumbers = numbers -map {x -> x + 1}
+def biggerNumbers = numbers \map {x -> x + 1}
 
 ---
 Note that the trailing lambda syntax means that the brackets (parentheses) are not necessary; the above form
 is exactly equivalent to:
 ---
 
-def biggerNumbers = numbers -map({x -> x + 1})
+def biggerNumbers = numbers \map({x -> x + 1})
 
 
 
@@ -49,15 +49,14 @@ def names = people.map { name }
 def names = people.map { p -> p.name }
 
 --  Operators can also be used like this:
-spec int -> int
-def g = { + 2 }
+def g: int -> int = { + 2 }
 
 --  Lambda arguments can also be pattern-matched:
 
-things -map {
+things \map {
     | #nil -> 0
     | some(_) -> 1
-} -sum()
+} \sum
 
 --  This allows computation expression-style constructs:
 def names = seq {

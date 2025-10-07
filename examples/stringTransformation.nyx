@@ -1,7 +1,8 @@
 spec string -> list(string)
-def splitWords(input):
+def splitWords: string -> List(string) = { input ->
   input
-  -split(RegEx("(?=[A-Z])|_|-|\s"))
+  \split(RegEx("(?=[A-Z])|_|-|\s")) 
+}
 
 export type Casing =
   | #camel 
@@ -11,19 +12,19 @@ export type Casing =
   | #title 
   | #sentence 
   | #mid 
-  | #mid_sentence
+  | #midSentence
 
-spec (list(string), Casing) -> string
-export def rejoin(words, casing) ->
+
+export def rejoin: List(string), Casing -> string = { words, casing ->
   match casing
     | #kebab ->
-      words -map { toLowerCase() } -String.join('-')
+      words \map { .toLowerCase() } \String.join('-')
     | #snake ->
-      words -map { toLowerCase() } -String.join('_')
+      words \map { .toLowerCase() } \String.join('_')
     | #pascal ->
       words 
-        -map { replace(RegEx("(^\w|\s\w)(\S*)", #global), { _, m1, m2 -> m1.toUpperCase() + m2.toLowerCase() }) } 
-        -String.join()
+        \map { replace(RegEx("(^\w|\s\w)(\S*)", #global), { _, m1, m2 -> m1.toUpperCase() + m2.toLowerCase() }) } 
+        \String.join
     | #camel ->
       mut first = true
       def newWords = MutList[]
@@ -38,10 +39,10 @@ export def rejoin(words, casing) ->
       newWords.join("")
     | case #title:
       words 
-        -map { 
-          replace( RegEx("(^\w|\s\w)(\S*)", #global), { _, m1, m2: m1.toUpperCase() + m2.toLowerCase() } ) 
+        \map { 
+          replace( RegEx("(^\w|\s\w)(\S*)", #global), { _, m1, m2 -> m1.toUpperCase() + m2.toLowerCase() } ) 
         } 
-        -String.join(" ")
+        \String.join(" ")
     | #sentence:
       mut first = true
       def newWords = MutList[]
@@ -56,9 +57,11 @@ export def rejoin(words, casing) ->
         | word ->
           newWords += word.toLowerCase()
 
-      newWords -String.join(' ')
-    case #mid_sentence ->
-      words -map { toLowerCase() } -String.join(' ')
+      newWords \String.join(' ')
+    case #midSentence ->
+      words \map { toLowerCase() } \String.join(' ')
+}
+
 
 def tests = [
   "oneTwoThree"
@@ -69,6 +72,6 @@ def tests = [
 
 for tests | test ->
   def words = splitWords(test)
-  def rejoined = rejoin(words, #mid_sentence)
+  def rejoined = rejoin(words, #midSentence)
 
   println(rejoined)

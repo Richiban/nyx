@@ -1,50 +1,51 @@
 type Config = (
-  help: bool = false
-  verbose: bool = false
-  input: string = ""
+  help   : bool   = false
+  verbose: bool   = false
+  input  : string = ""
 )  
 
 type Arguments = list(String)
 
 type CliConfigM = StateT(Config, ReaderT(Arguments, Err(String)))
 
-spec [Eq(α)](List(α), α, Nat) -> Nat?
-def indexOf?(xs, s, start = 0) ->
-  match xs
-  | [] -> None
-  | (== s) :: tail -> Some(start)
-  | _ :: tail -> indexOf?(tail, s, start + 1)
+def indexOf: [Eq(α) + Seq(s)] s(α), α, (start: Nat = 0) -> Nat?
+  = { xs, s, start ->
+    match xs
+    | [] -> None
+    | [{ == s }, ..] -> #some(start)
+    | [_, ..tail] -> indexOf(tail, s, start = start + 1)
+  }
 
-spec (String) -> ReaderT(Arguments, Except(String), String) 
-def requiredArgument(name) = reader {
-  def args = do read
-  
-  def value = 
-    match indexOf?(args, name)
-    | Some i where i + 1 < args.length -> args(i + 1)
-    | _ -> ""
+def requiredArgument: String -> ReaderT(Arguments, Except(String), String) 
+  = reader { name ->
+    def args = do read
     
-  if value == "" -> return Err("Command line argument {name} is missing")
-  
-  return value
-}
-
-spec (String) -> ReaderT(Arguments, Err(String), bool)
-def optionalSwitch(name: String) -> reader {
-  def args <- read
-  
-  return match indexOf?(args, name)
-  | Some _ -> true
-  | None -> false 
-}
-
-def parseArguments: CliConfigM(bool) = CliConfigM {
-  mut config <- read
-
-  if (bind optionalSwitch "--help") ->
-    return Err("Usage: example [--help] [--verbose] [--input <input file>]")
+    def value = 
+      match indexOf?(args, name)
+      | #some(i) if i + 1 < args.length -> args(i + 1)
+      | _ -> ""
+      
+    if value == "" -> throw "Command line argument {name} is missing"
     
-  set config = { config
+    return value
+  }
+
+def optionalSwitch: String -> ReaderT(Arguments, Err(String), bool) 
+  = reader { name ->
+    def args = read ()
+    
+    return match indexOf(args, name)
+    | Some _ -> true
+    | None -> false 
+  }
+
+def parseArguments: CliConfigM(bool) = {
+  mut config = read ()
+
+  if bind optionalSwitch "--help" ->
+    throw "Usage: example [--help] [--verbose] [--input <input file>]"
+    
+  set config = { config ->
     verbose = bind optionalSwitch "--verbose"
     input = bind requiredArgument "--input"
   }
@@ -53,14 +54,13 @@ def parseArguments: CliConfigM(bool) = CliConfigM {
   return true
 }
 
-spec [Console](List(string)) -> ()
-def main(args) ->
+def main: [Console] List(string) -> () = { args ->
   def config: Config = ( input = "default" )
 
-  match parseArguments -run(config) -run(args)
-  | Except.ok (_, c) ->
+  match parseArguments \run(config) \run(args)
+  | #some (_, c) ->
     println("Processing input '{c.input}' verbose={c.verbose}")
-  | Except.error e -> println(e)
-
+  | #err(e) -> println("Error: {e}")
+}
 
 #eval main ["--input", "foo.txt", "--verbose"]

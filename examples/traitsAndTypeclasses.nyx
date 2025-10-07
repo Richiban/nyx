@@ -1,103 +1,107 @@
 --  Some types are meant to be implemented directly
 --  This is an ".. is a .." relationship
-type Iterator(a) = (moveNext :: () -> a | #done)
+type Iterator(α) = (moveNext :: () -> α | #done)
 
-type Seq(a) = (getIterator :: () -> Iterator(a))
+type Seq(α) = (getIterator :: () -> Iterator(α))
 
-type Collection(a) = 
-  Seq(a) & 
+type Collection(α) = 
+  Seq(α) & 
   (size :: () -> int)
     
-type Set(a) = 
-  Collection(a) & 
+type Set(α) = 
+  Collection(α) & 
   (contains :: a -> bool)
 
-type SortedSet(a) = 
-  Set(a) & 
+type SortedSet(α) = 
+  Set(α) & 
   (min :: a; max :: a)
 
 type NumericRange(a :: number) = 
-  SortedSet(a)
+  SortedSet(α)
   & (min :: a, max :: a) where min <= max
 
 --  Others are meant to be implemented via a separate instance
 --  This is a "there exists a .. for .." relationship
-type Monad(m :: type -> type) = (
-  lift :: a -> m(a)
-  bind :: (m(a), (a -> m(b))) -> m(b)
+context Monad(m: type -> type) = (
+  lift: a -> m(α)
+  bind: m(α), (a -> m(β)) -> m(β)
 )
 
-impl Monad(Option) = (
-  def bind(m, f): m
-    case #some, x: f(x)
-    case #nil   : #nil
+default Monad(Option) = (
+  bind = {
+    | #some(x), f -> f(x)
+    | #nil, _     -> #nil
+  }
 
-  def lift(x): (#some, x)
+  lift = { x -> #some(x) }
 )
 
 --  For example, there is a Monoid type, and int can be made into a monoid
 --  But, crucially, there are multiple ways to make a monoid out of int
 --  such as addition, multiplication, bitwise and, bitwise or, etc.
 
-type Monoid(m) = (
-  empty   :: m
-  combine :: (m, m) -> m
+context Monoid(α) = (
+  empty:   α
+  combine: α, α -> α
 )
 
-def AdditiveMonoid :: Monoid(int) = (
+def additiveMonoid: Monoid(int) = (
   empty = 0
-  def combine(x, y): x + y
+  combine = { x, y -> x + y }
 )
 
-def MultiplicativeMonoid :: Monoid(int) = (
+def multiplicativeMonoid: Monoid(int) = (
   empty = 1
-  def combine(x, y): x * y
+  combine = { x, y -> x * y }
 )
 
-def BitwiseAndMonoid :: Monoid(int) = (
+def bitwiseAndMonoid: Monoid(int) = (
   empty = 0
-  def combine(x, y): x .& y
+  combine = { x, y -> x .& y }
 )
 
-def BitwiseOrMonoid :: Monoid(int) = (
+def bitwiseOrMonoid: Monoid(int) = (
   empty = 0
-  def combine(x, y): x .| y
+  combine = { x, y -> x .| y }
 )
 
-def reduce[Monoid(a)](xs): a =
-  xs \ fold(empty, combine)
+def reduce: [Monoid(α)] Seq(α) -> α
+  = { xs ->
+    xs \fold(empty, combine)
+  }
 
-def sum(xs) = reduce[MultiplicativeMonoid](xs)
+def sum(xs) = use MultiplicativeMonoid in reduce(xs)
 
 type Point = (x: int, y: int)
 
 def points = Point[
-  (x: 1, y: 2)
-  (x: 3, y: 4)
-  (x: 5, y: 6)
+  (1, 2)
+  (3, 4) 
+  (5, 6)
 ]
 
-def Point.+(a, b) = Point(x: a.x + b.x, y: a.y + b.y)
+def Point.`+` = { a, b -> Point(x = a.x + b.x, y = a.y + b.y) }
 
-def Point.`0` = Point(x: 0, y: 0)
+def Point.`0` = Point(x = 0, y = 0)
 
-type Summable(a) =
-  ( zero: a
-    `+`: (a, a) -> a
-  )
+context Sum(α) = (
+  `0`: α
+  `+`: α, α -> α
+)
 
---  We could explicitly define the Summable typeclass instance for Point, but
+--  We could explicitly define the Sum typeclass instance for Point, but
 --  we don't need to; one can be synthesized from the `+` and `0` methods that
 --  are defined on Point.
 --  These methods are in the global context, so narrower contexts can be automatically
 --  synthesized from them.
-default Summable(Point) = 
-  ( zero = Point(x: 0, y: 0)
-    `+`(a, b) = Point(x: a.x + b.x, y: a.y + b.y)
-  )
+default Sum(Point) = (
+  `0` = Point(x: 0, y: 0)
+  `+` = { a, b -> Point(x: a.x + b.x, y: a.y + b.y) }
+)
 
-spec [Summable(Point)](list(Point)) -> Point
-def sum(items) ->
-  items.fold(zero) { acc, item -> acc + item }
+def sum: [Sum(Point)] List(Point) -> Point
+  = { items ->
+    items \fold(0) { + }
+  }
 
-def r = points --sum()
+def r = points \sum

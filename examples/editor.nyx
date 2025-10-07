@@ -1,275 +1,306 @@
 module lines
 
 import
-  editor
-  enumerable { Enumerable }
-  utils/lines as lineUtils
-  selectionsAndRanges 
-  io/SubjectIOBase 
+  Editor
+  Enumerable
+  Utils.Lines as lineUtils
+  SelectionsAndRanges 
+  Io/SubjectIOBase 
 
 export type LinePair =
-  | (prev: #nil, current: TextLine)
-  | (prev: TextLine,  current: #nil)
-  | (prev: TextLine,  current: TextLine)
+  | #firstLine(prev: #nil, current: TextLine)
+  | #lastLine(prev: TextLine, current: #nil)
+  | #line(prev: TextLine, current: TextLine)
 
 export type Direction = #backwards | #forwards
-export type Change = #greater_than | #less_than
+export type Change = #greaterThan | #lessThan
 
-spec Change -> (number, number) -> number
-def changeToDiff | #greater_than -> { > }
-                 | #less_than    -> { < }
+def changeToDiff
+  : Change -> (number, number -> number)
+  = { | #greaterThan -> { > }
+      | #lessThan    -> { < } }
+
+export def getNearestSignificantLine
+  : TextDocument, Position -> TextLine
+  = { document, position ->
+    def currentLine = document.lineAt(position.line)
+
+    if currentLine.isEmptyOrWhitespace ->
+      def lines = lineUtils.iterLinesOutwards(document, position.line)
+
+      for lines | backwardsLine, forwardsLine ->
+        if backwardsLine is #some(line) and not line.isEmptyOrWhitespace ->
+          return backwardsLine
+
+        if forwardsLine is #some(line) and not line.isEmptyOrWhitespace ->
+          return forwardsLine
+
+    currentLine
+  }
 
 
-spec (TextDocument, Position) -> TextLine
-export def getNearestSignificantLine(document, position) ->
-  def currentLine = document.lineAt(position.line)
-
-  if currentLine.isEmptyOrWhitespace ->
-    def lines = lineUtils.iterLinesOutwards(document, position.line)
-
-    for lines | backwardsLine, forwardsLine ->
-      if backwardsLine is Some line and not line.isEmptyOrWhitespace ->
-        return backwardsLine
-
-      if forwardsLine is Some line and not line.isEmptyOrWhitespace ->
-        return forwardsLine
-
-  currentLine
-
-spec TextLine -> TextLine
-export def rangeWithoutIndentation(line) ->
-  line.range with (
-    start = line.range.start with (
-      character = line.firstNonWhitespaceCharacterIndex
+export def rangeWithoutIndentation
+  : TextLine -> TextLine
+  = { line ->
+    line.range with (
+      start = line.range.start with (
+        character = line.firstNonWhitespaceCharacterIndex
+      )
     )
-  )
+  }
 
-spec (Change, Direction, TextDocument, TextLine) -> TextLine | #nil
-export def getNextLineOfChangeOfIndentation(change, direction, document, currentLine) ->
-  def diff = changeToDiff(change)
-  def lines = document ~iterLines(
-    startingPosition = currentLine.range.start
-    direction
-    currentInclusive = false
-  )
+export def getNextLineOfChangeOfIndentation
+  : [Document] Change, Direction, TextLine -> #some(TextLine) | #nil
+  = { change, direction, currentLine ->
+    def diff = changeToDiff(change)
 
-  lines
-    ~filter { !isEmptyOrWhitespace }
-    ~filter { diff(firstNonWhitespaceCharacterIndex, currentLine.firstNonWhitespaceCharacterIndex) /= 0 }
-    ~tryHead
+    def lines = iterLines(
+      startingPosition = currentLine.range.start
+      direction
+      currentInclusive = false
+    )
 
+    lines
+      \filter { l -> not isEmptyOrWhitespace(l) }
+      \filter { l -> diff(l.firstNonWhitespaceCharacterIndex, currentLine.firstNonWhitespaceCharacterIndex) /= 0 }
+      \tryHead
+      except #notFound -> #nil
+  }
 
-spec(TextLine, TextLine) -> RelativeIndentation
-export def getRelativeIndentation(startingLine, targetLine) -> if 
-  | targetLine.isEmptyOrWhitespace ->
-    #no_indentation
-  | startingLine.firstNonWhitespaceCharacterIndex > targetLine.firstNonWhitespaceCharacterIndex ->
-    #less_indentation
-  | startingLine.firstNonWhitespaceCharacterIndex < targetLine.firstNonWhitespaceCharacterIndex ->
-    #more_indentation
-  | else ->
-    #same_indentation
+export def getRelativeIndentation
+  : TextLine, TextLine -> RelativeIndentation
+  = { startingLine, targetLine -> 
+    if 
+    | targetLine.isEmptyOrWhitespace ->
+      #noIndentation
+    | startingLine.firstNonWhitespaceCharacterIndex > targetLine.firstNonWhitespaceCharacterIndex ->
+      #lessIndentation
+    | startingLine.firstNonWhitespaceCharacterIndex < targetLine.firstNonWhitespaceCharacterIndex ->
+      #moreIndentation
+    | else ->
+      #sameIndentation
+  }
 
-spec (TextDocument, IterationOptions) -> Source(LinePair)
-export def iterLinePairs(document, options) ->
-  iterLines(document, (options with currentInclusive = true))
-    ~pairwise
-    ~map {
-      | a, b where options.direction == #forwards -> (prev = a, current = b)
-      | a, b -> (prev = b, current = a)
-    }
+export def iterLinePairs
+  : TextDocument, IterationOptions -> Source(LinePair)
+  = { document, options ->
+    iterLines(document, (options with currentInclusive = true))
+      \pairwise
+      \map {
+        | a, b where options.direction == #forwards -> (prev = a, current = b)
+        | a, b -> (prev = b, current = a)
+      }
+  }
 
-spec TextDocument, Position, Direction -> TextLine | #nil
-export def getNextSignificantLine(document, position, direction) ->
-  def lines = document ~iterLines(
-    startingPosition = position
-    direction = direction
-    currentInclusive = false
-  )
+ 
+export def getNextSignificantLine
+  : TextDocument, Position, Direction -> #some(TextLine) | #noLine
+  = { document, position, direction ->
+    def lines = document \iterLines(
+      startingPosition = position
+      direction = direction
+      currentInclusive = false
+    )
 
-  lines ~tryFind(lineIsSignificant)
-
+    lines \tryFind(lineIsSignificant) except #notFound -> #noLine
+}
 
 --  A "stop line" is one that is either blank or contains only punctuation
-spec TextLine -> bool
-export def lineIsStopLine(line) ->
-  not RegEx("[a~zA~Z0~9]").test(line.text)
+export def lineIsStopLine
+  : TextLine -> bool
+  = { line -> 
+    not (line.text \RegEx.matches("[a\zA\Z0\9]"))
+  }
 
-spec TextLine -> bool
-export def lineIsSignificant(line) ->
-  !lineIsStopLine(line)
+export def lineIsSignificant: TextLine -> bool
+  = { line -> !lineIsStopLine(line) }
 
-spec (TextEditor, Position, common.Change, common.DirectionOrNearest) -> #nil
-def moveToChangeOfIndentation(editor, cursorPosition, change, direction) ->
-  if cursorPosition and editor.document ->
+def moveToChangeOfIndentation
+: [TextEditor] Position, common.Change, common.DirectionOrNearest -> ()
+= { cursorPosition, change, direction ->
+  if cursorPosition and document ->
     mut line: TextLine? = #nil
-    def currentLine = editor.document.lineAt(cursorPosition.line)
+    def currentLine = document.lineAt(cursorPosition.line)
 
     match direction
       | #nearest ->
         set line = getNearestLineOfChangeOfIndentation(
-          editor.document,
-          editor.document.lineAt(cursorPosition.line),
+          document,
+          document.lineAt(cursorPosition.line),
           change
         )
       | #backwards | #forwards ->
         set line = lineUtils.getNextLineOfChangeOfIndentation(
           change,
           direction,
-          editor.document,
+          document,
           currentLine
         )
 
-    if line is Some line ->
-      editor.selection = Selection(
+    if line is #some(line) ->
+      selection = Selection(
         line.range.start
         line.range.start
       )
-
-spec Direction -> (number -> number)
-def directionToDelta | #forwards  -> { + 1 }
-                     | #backwards -> { - 1 }
-
-export spec TextDocument, IterationOptions -> Source(TextLine)
-def iterLines(document, options) ->
-  def advance = directionToDelta(options.direction)
-  mut currentLineNumber = wordRangeToPosition(
-    options.startingPosition
-    options.direction
-  ).line
-
-  def withinBounds() ->
-    currentLineNumber >= 0 and
-    (!options.bounds || currentLineNumber >= options.bounds.start.line) and
-    (!options.bounds || currentLineNumber <= options.bounds.end.line) and
-    currentLineNumber < document.lineCount  
-
-  seq {
-    while withinBounds() ->
-      def newLine = document.lineAt(currentLineNumber)
-
-      yield newLine
-
-      currentLineNumber = advance(currentLineNumber)
-  } ~skip(if options.currentInclusive -> 0 else -> 1)
-
-spec (TextDocument, TextLine, common.Change) -> TextLine
-def getNearestLineOfChangeOfIndentation(document, currentLine, change) ->
-  def diff = changeToDiff(change)
-
-  for iterLinesOutwards(document, currentLine.lineNumber) | backwardsLine, forwardsLine ->
-    if forwardsLine and
-      !forwardsLine.isEmptyOrWhitespace and
-      diff(
-        forwardsLine.firstNonWhitespaceCharacterIndex,
-        currentLine.firstNonWhitespaceCharacterIndex
-      ) ->
-      return forwardsLine
-
-    if backwardsLine and
-      !backwardsLine.isEmptyOrWhitespace and
-      diff(
-        backwardsLine.firstNonWhitespaceCharacterIndex,
-        currentLine.firstNonWhitespaceCharacterIndex
-      ) ->
-      return backwardsLine
-
-
-spec (TextDocument, number) -> Seq(LinePair)
-export def iterLinesOutwards(document, currentLineNumber) ->
-  mut forwardsPointer = currentLineNumber + 1
-  mut backwardsPointer = currentLineNumber - 1  
-
-  def forwardsPointerInBounds() ->
-    forwardsPointer <= document.lineCount
-
-  def backwardsPointerInBounds() ->
-    backwardsPointer >= 0
-
-  seq {
-    while forwardsPointerInBounds() and backwardsPointerInBounds() ->
-      def backwardsLine = 
-        if backwardsPointerInBounds() -> document.lineAt(backwardsPointer)
-        else #nil
-
-      def forwardsLine =
-        if forwardsPointerInBounds() -> document.lineAt(forwardsPointer)
-        else #nil
-
-      yield (backwardsLine, forwardsLine)
-
-      set forwardsPointer++
-      set backwardsPointer--
   }
 
-export spec (list(QuickCommand), (label: string, detail: string)?) -> Async(QuickCommand | string | #nil)
-def quickCommandPicker(commands, freeEntryOptions) -> async { resolve, reject ->
-  type QuickPickItem = QuickPickItem & {
-    quickKey: common.Char?
-    displayOnly: true?
+def directionToDelta: Direction -> (number -> number)
+  = { | #forwards  -> { + 1 }
+      | #backwards -> { - 1 } }
+
+export def iterLines
+  : [TextDocument] IterationOptions -> Source(TextLine)
+  = { options ->
+    def advance = directionToDelta(options.direction)
+    mut currentLineNumber = wordRangeToPosition(
+      options.startingPosition
+      options.direction
+    ).line
+
+    def withinBounds = {
+      currentLineNumber >= 0 and
+      (!options.bounds || currentLineNumber >= options.bounds.start.line) and
+      (!options.bounds || currentLineNumber <= options.bounds.end.line) and
+      currentLineNumber < lineCount  
+    }
+
+    seq {
+      while withinBounds() ->
+        def newLine = lineAt(currentLineNumber)
+
+        yield newLine
+
+        currentLineNumber = advance(currentLineNumber)
+    } \skip(if options.currentInclusive -> 0 else -> 1)
   }
 
-  def quickPick = window.createQuickPick(): QuickPickItem
 
-  def freeEntryItems = list {
-    if freeEntryOptions ->
-      yield (
-        label = ""
-        kind = QuickPickItemKind.Separator
-        displayOnly = true
+def getNearestLineOfChangeOfIndentation
+  : [TextDocument] TextLine, common.Change -> TextLine
+  = { currentLine, change ->
+    def diff = changeToDiff(change)
+
+    for iterLinesOutwards(currentLine.lineNumber) | backwardsLine, forwardsLine ->
+      if forwardsLine and
+        !forwardsLine.isEmptyOrWhitespace and
+        diff(
+          forwardsLine.firstNonWhitespaceCharacterIndex,
+          currentLine.firstNonWhitespaceCharacterIndex
+        ) ->
+        return forwardsLine
+
+      if backwardsLine and
+        !backwardsLine.isEmptyOrWhitespace and
+        diff(
+          backwardsLine.firstNonWhitespaceCharacterIndex,
+          currentLine.firstNonWhitespaceCharacterIndex
+        ) ->
+        return backwardsLine
+  }
+
+
+export def iterLinesOutwards
+  : TextDocument, number -> Seq(LinePair)
+  = { document, currentLineNumber ->
+    mut forwardsPointer = currentLineNumber + 1
+    mut backwardsPointer = currentLineNumber - 1  
+
+    def forwardsPointerInBounds() ->
+      forwardsPointer <= document.lineCount
+
+    def backwardsPointerInBounds() ->
+      backwardsPointer >= 0
+
+    seq {
+      while forwardsPointerInBounds() and backwardsPointerInBounds() ->
+        def backwardsLine = 
+          if backwardsPointerInBounds() -> document.lineAt(backwardsPointer)
+          else #nil
+
+        def forwardsLine =
+          if forwardsPointerInBounds() -> document.lineAt(forwardsPointer)
+          else #nil
+
+        yield (backwardsLine, forwardsLine)
+
+        set forwardsPointer++
+        set backwardsPointer--
+    }
+  }
+
+  
+export def quickCommandPicker
+  : (list(QuickCommand), (label: string, detail: string)?) -> Async(QuickCommand | string | #nil)
+  = { commands, freeEntryOptions -> async { resolve, reject ->
+      type QuickPickItem = QuickPickItem & (
+        quickKey: common.Char?
+        displayOnly: true?
       )
-      yield (
-        label = freeEntryOptions.label
-        alwaysShow = true
-        detail = freeEntryOptions.detail
-        displayOnly = true
-      )
-  }
 
-  set quickPick.items = commands
-    ~map { e ->
-      ( quickKey = e.quickKey
-        label = "[{e.quickKey}]"
-        description = e.label
-        execute = e.execute )
+      def quickPick = window.createQuickPick(): QuickPickItem
+
+      def freeEntryItems = list {
+        if freeEntryOptions ->
+          yield (
+            label = ""
+            kind = QuickPickItemKind.Separator
+            displayOnly = true
+          )
+          yield (
+            label = freeEntryOptions.label
+            alwaysShow = true
+            detail = freeEntryOptions.detail
+            displayOnly = true
+          )
       }
-    ~concat(freeEntryItems)
 
-  quickPick.onDidHide {
-    resolve()
-    quickPick.dispose()
-  }
+      set quickPick.items = commands
+        \map { e ->
+          ( quickKey = e.quickKey
+            label = "[{e.quickKey}]"
+            description = e.label
+            execute = e.execute )
+          }
+        \concat(freeEntryItems)
 
-  quickPick.onDidChangeValue { s ->
-    commands ~tryFind { quickKey == s } match
-      | #some, option ->
-        resolve(option)
+      quickPick.onDidHide {
+        resolve()
         quickPick.dispose()
-        return
-      | #nil where !freeEntryOptions -> 
-        set quickPick.value = ""
-      | #nil ->
-        #nil
+      }
+
+      quickPick.onDidChangeValue { s ->
+        commands
+        \tryFind { .quickKey == s } 
+        \match
+          | #some, option ->
+            resolve(option)
+            quickPick.dispose()
+            return
+          | #nil where !freeEntryOptions -> 
+            set quickPick.value = ""
+          | #nil ->
+            #nil
+      }
+
+      quickPick.onDidAccept {
+        def selected = quickPick.selectedItems(0)
+
+        if selected.displayOnly ->
+          if quickPick.value ->
+            resolve(quickPick.value)
+          else return
+        
+        commands 
+          \tryFind { .quickKey == selected.quickKey } 
+          \match
+            | Some option ->
+              resolve(option)
+              quickPick.dispose()
+              return
+            | #nil -> 
+              quickPick.dispose()
+      }
+
+      quickPick.show()
+    }
   }
-
-  quickPick.onDidAccept {
-    def selected = quickPick.selectedItems(0)
-
-    if selected.displayOnly ->
-      if quickPick.value ->
-        resolve(quickPick.value)
-      else return
-    
-    commands 
-      ~tryFind { quickKey == selected.quickKey } 
-      ~match
-        | Some option ->
-          resolve(option)
-          quickPick.dispose()
-          return
-        | #nil -> 
-          quickPick.dispose()
-  }
-
-  quickPick.show()
-}

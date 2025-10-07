@@ -1,0 +1,323 @@
+--  Examples from the paper "Liberating effects use rows and handlers"
+--  by Daniel Hillerström and Sam Lindley.
+--  <https://www.dhil.net/research/papers/liberating_effects-tyde2016.pdf>
+
+module Nim
+
+import(
+  Nyx.Num.Float64
+  Nyx.Num.Random
+)
+
+----------------------------------------------------------
+-- Definition of players
+----------------------------------------------------------
+
+-- A player is either `#bob` or `#alice`
+type Player
+  | #bob
+  | #alice
+
+
+def Player.`==` = {
+  | #bob, #bob     -> true
+  | #alice, #alice -> true
+  | _              -> false
+}
+
+default Player.show: Show(Player) = (
+  show = {
+    | #bob   -> "bob"
+    | #alice -> "alice"
+  }
+)
+
+----------------------------------------------------------
+-- Game of Nim
+----------------------------------------------------------
+
+-- Operation to move a certain number of sticks.
+context Move = (
+  ctl move: (Player, sticks: int) -> int
+)
+
+def [Move] aliceTurn = {
+  | { <= 0 } -> #bob
+  | _        -> bobTurn(n - move(#alice, n))
+}
+
+def [Move] bobTurn = {
+  | { <= 0 } -> #alice 
+  | _        -> aliceTurn(n - move(#bob, n))
+}
+
+def game = { n ->
+  aliceTurn(n)
+}
+
+----------------------------------------------------------
+-- Perfect strategy
+----------------------------------------------------------
+
+def perfect: Move = (
+  move = { _, n -> max(1, n % 4) }
+)
+
+export def examplePerfect1 = {
+  use perfect
+  game(7)       -- alice
+}
+
+export def examplePerfect2 = {
+  use perfect
+  game(12)      -- bob
+}
+
+
+----------------------------------------------------------
+-- Game trees
+----------------------------------------------------------
+
+-- A game tree
+type GameTree =
+  | #take(Player, moves: List(int, GameTree))
+  | #winner(Player)
+
+
+fun validMoves = { n ->
+  [1, 2, 3] \filter { <= n }
+}
+
+def gametree: Move = (
+  return = { x -> Winner(x) }
+  ctl move = { p, n ->
+    def moves    = validMoves(n)
+    def subgames = moves \map(resume)
+    def subtrees = moves \zip(subgames)
+    
+    #take(p, subtrees)
+  }
+)
+
+export def GameTree.show = { gt ->
+  showGameTree(gt, indent = 2)
+}
+
+def showGameTree: (GameTree, indent: int) -> string 
+  = { 
+    | #winner(p), _ -> p.show ++ " wins"
+    | #take(p, moves), indent ->
+        def lines = moves \map { sticks, gtx ->
+          String.concatMany([
+            "\n"
+            String.repeat(" ", indent)
+            sticks.show
+            " -> "
+            gtx.showGameTree(indent+2)
+          ])
+        }
+
+        p.show ++ lines.join
+  }
+
+export def exampleGameTree = {
+  use gametree in game(3)   -- figure 1 in the paper
+}
+
+
+----------------------------------------------------------
+-- Cheating
+----------------------------------------------------------
+
+context Cheat = (
+  cheat: Player -> a
+)
+
+def [Throws] cheatReport: Cheat = (
+  cheat = { p ->
+    throw(p.show ++ " cheated!")
+  }
+)
+
+impl check: Move = (
+  ctl move = { p, n ->
+    def m = move(p, n)
+
+    if validMoves(n) \find { == m } \bool ->
+      resume(m)
+    else -> 
+      cheat(p)
+  }
+)
+
+export def exampleCheck = {
+  use perfect, cheatReport, check
+  game(7)  -- alice
+}
+
+export def exampleUse = {
+  use x = map([1,2,3])
+  x + 2
+}
+
+----------------------------------------------------------
+-- Cheating strategy
+----------------------------------------------------------
+
+impl pc: Move = (
+  move = {
+    | #alice, n -> max(1, n % 4)
+    | #bob,   n -> n
+  }
+)
+
+export def examplePc1 = {
+  use pc, cheatReport, check
+  game(12)
+}
+
+
+export def examplePc2 = {
+  -- the `perfect` on the outside is necessary as the type system
+  -- does not detect that `check` will never perform a `move`.
+  use perfect, cheatReport, check, pc
+  game(12)
+}
+
+
+
+----------------------------------------------------------
+-- Choosing a strategy
+----------------------------------------------------------
+
+context Choose = (
+  choose: () -> bool
+)
+
+def bobChooses: [Choose] = { m ->
+  if choose() -> pc(m) 
+  else -> perfect(m)
+}
+
+def allResults: Choose = (
+  ctl return = { x -> [x] }
+  ctl choose = { resume(true) ++ resume(false)}
+)
+
+export def exampleChoose = {
+  use (ctl choose = { resume(true) ++ resume(false) })
+  use bobChooses
+
+  [game(7)]   -- [bob,alice]
+}
+
+impl coin: [Random] Choose = (
+  choose = { Random.coinToss() }
+)
+
+export def exampleCoin: [Random] = {
+  use coin, bobChooses
+  game(7)
+}
+
+----------------------------------------------------------
+-- Scoreboard
+----------------------------------------------------------
+
+context State(s) = (
+  get: () -> s
+  put: s -> ()
+)
+
+impl state: State(s) = { init, action ->
+  mut s = init
+
+  use: State(int) = (
+    get = { s }
+    put = { x -> set s = x }
+  )
+
+  action()
+}
+
+
+-- The current state of the game as a list of moves.
+type GameState = List(player, int)
+
+def s0 = [(#alice, 0), (#bob, 0)]
+
+impl scoreUpdater = (
+  ctl return = { p -> 
+    put(updateScore(p, get()))
+    p
+  }
+)
+
+def updateScore: Player, GameState -> GameState
+  = { p, gs ->
+    gs \replace { q, s ->
+      if p == q -> return (q, s + 1)
+    }
+  }
+
+impl printer: [Console] State = (
+  ctl return = { x -> printBoard(get()); x }
+)
+
+def printBoard: [Console] GameState -> () 
+  = { gs ->
+    def scores = gs \map { p, s -> "{p} -> {s}" }
+    scores \String.join("\n") \println
+  }
+
+export def examplePrint1 = {
+  use state(s0),
+      printer,
+      coin,
+      bobChooses,
+      scoreUpdater
+
+  game(7)
+}
+
+def replay: [e] int, ([e] () -> a) -> a
+  = { n, action ->
+    use (
+      ctl return = { x -> 
+        if n <= 1 -> x 
+        else replay(n - 1, action)
+      }
+    )
+
+    action()
+  }
+
+export def examplePrint2 = {
+  use state(s0),
+      printer,
+      replay(10),
+      coin,
+      bobChooses,
+      scoreUpdater
+
+  game(7)
+}
+
+
+export def main()
+  [ "",
+    examplePerfect1() \write,
+    examplePerfect2() \write,
+    exampleGameTree() \write,
+    exampleCheck() \write,
+    examplePc2() \write,
+    exampleChoose() \write
+  ]
+  \String.join("\n-----------\n")
+  \print
+
+  use (
+    ctl throw = { exn -> exn \write \println }
+  )
+
+  examplePc1() \write \println -- raises exception

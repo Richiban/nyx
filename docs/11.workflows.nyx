@@ -83,21 +83,22 @@ def greetingAsync =
 --  Which is rewritten to:
 def greetingAsync =
   async.apply({ builder ->
-    builder.bind(getName(), { name ->
+    builder.await(getName(), { name ->
         builder.return("Hello, {name}")
     })
   })
 
 --  It's also possible to write a function that executes in the context of the workflow
 --  you want to use, although it's normally recommended to use the helper functions
-def greetingAsync[AsyncWorkflow]() ->
+def greetingAsync: [AsyncWorkflow] = {
   def name = await getName()
 
   return "Hello, {name}"
+}
 
 --  The AsyncWorkflow in the standard library provides support for `await`, `use` and `try` keywords:
 
-spec Async(Result(Customer, #customer_not_found))
+spec Async(Result(Customer, #customerNotFound))
 def asyncCustomerName = async { 
   def dbConnection = use getDbConnection()
   def customer = try await getCustomer(5)
@@ -118,7 +119,7 @@ def result = async {
   def url = "http://example.com/movies"
   def response = await fetch(url) : list(Movie)
 
-  return response -take(10)
+  return response \take(10)
 }
 
 ---
@@ -129,11 +130,11 @@ be skipped if the expression under the keyword returns an error
 
 ---
 
-def getCustomer(customerID: int): Result(Customer, #customer_not_found) -> ...
+def getCustomer(customerID: int): Result(Customer, #customerNotFound) -> ...
 
-def getLastOrder(customer: Customer): Result(Order, #order_not_found) -> ...
+def getLastOrder(customer: Customer): Result(Order, #orderNotFound) -> ...
 
-spec Result(Money, #customer_not_found | #order_not_found)
+spec Result(Money, #customerNotFound | #orderNotFound)
 def lastOrderTotal = handle {
   def customer = try getCustomer(5)
   def order = try getLastOrder(customer)
@@ -146,23 +147,23 @@ def lastOrderTotal = handle {
 ---
 
 def numSelected = checkboxes
-  -filter { isSelected }
-  -count()
+  \filter { .isSelected }
+  \count()
 
 
 def totalSpendForCustomer = orders
-  -filter { customerId == 5 }
-  -map { total }
-  -sum()
+  \filter { .customerId == 5 }
+  \map { .total }
+  \sum
 
 --  You can do complicated queries such as joins, and even combine them
 --  with 'do' to make superloops
 customers 
-  -join(orders) { customer, order -> order.customerId == customer.customerId }
-  -filter { customer, order -> order.total > 100 and customer.age > 18 }
-  -map { customer, order -> order.customerId, customer.name }
-  -distinct
-  -iter { customerId, name ->
+  \join(orders) { customer, order -> order.customerId == customer.customerId }
+  \filter { customer, order -> order.total > 100 and customer.age > 18 }
+  \map { customer, order -> order.customerId, customer.name }
+  \distinct
+  \iter { customerId, name ->
       console?.log "{customer.name} (id -> {order.id}) is over 18 and has at least 1 order over $100"
   }
 
@@ -171,8 +172,8 @@ query {
   def order = from orders
   join order.customerId == customer.customerId
   where order.total > 100 and customer.age > 18
-  distinct { order.customerId, customer.name }
-} -iter { customerId, name ->
+  distinct order.customerId, customer.name
+} \iter { customerId, name ->
     console?.log "{name} (id -> {customerId}) is over 18 and has at least 1 order over $100"
 }
 
@@ -193,7 +194,7 @@ query {
     def student = from db.Student
     where student.studentId = 1
     select student
-    exactlyOneOrNil
+    trySingle
 }
 
 query {
@@ -207,11 +208,11 @@ query {
 ---
 
 def html = (
-  def head(body: HtmlBuilder -> HtmlElement) -> HtmlElement
+  head = { (body: HtmlBuilder -> HtmlElement) -> HtmlElement }
 
-  def body(body: HtmlBuilder -> HtmlElement) -> HtmlElement
+  body = { (body: HtmlBuilder -> HtmlElement) -> HtmlElement }
 
-  def apply(block: [this.typeof()] () -> HtmlElement) -> HtmlElement
+  apply = { (block: [typeof(this)] () -> HtmlElement) -> HtmlElement }
 
   ...
 )
@@ -234,7 +235,7 @@ def result = html {
           "This is some"
           b { "mixed" }
           "text. For more see the"
-          a(href = "http ->//nyxlang.org") {
+          a(href = "http://nyxlang.org") {
               "Nyx"
           }
           "project"

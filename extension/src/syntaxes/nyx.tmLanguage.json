@@ -97,7 +97,7 @@
 				}
 			]
 		},
-		"tuple_signature": {
+		"record_signature": {
 			"patterns": [
 				{
 					"match": "(([?[:alpha:]0-9'`^._ ]+))+",
@@ -130,7 +130,7 @@
 							}
 						},
 						{
-							"include": "#tuple_signature"
+							"include": "#record_signature"
 						}
 					]
 				},
@@ -269,7 +269,7 @@
 					},
 					"patterns": [
 						{
-							"include": "#tuple_signature"
+							"include": "#record_signature"
 						}
 					]
 				},
@@ -358,7 +358,7 @@
 					},
 					"patterns": [
 						{
-							"include": "#tuple_signature"
+							"include": "#record_signature"
 						}
 					]
 				},
@@ -380,7 +380,7 @@
 					},
 					"patterns": [
 						{
-							"include": "#tuple_signature"
+							"include": "#record_signature"
 						}
 					]
 				},

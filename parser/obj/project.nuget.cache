@@ -1,0 +1,11 @@
+{
+  "version": 2,
+  "dgSpecHash": "xx7jV0Csg3s=",
+  "success": true,
+  "projectFilePath": "C:\\Users\\RichardGibson\\Source\\Richiban\\nyx\\parser2\\parser2.fsproj",
+  "expectedPackageFiles": [
+    "C:\\Users\\RichardGibson\\.nuget\\packages\\fparsec\\1.1.1\\fparsec.1.1.1.nupkg.sha512",
+    "C:\\Users\\RichardGibson\\.nuget\\packages\\fsharp.core\\9.0.202\\fsharp.core.9.0.202.nupkg.sha512"
+  ],
+  "logs": []
+}

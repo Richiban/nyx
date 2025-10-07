@@ -5,18 +5,24 @@
 --  	with "fizzbaz" etc.
 
 --  OO style
-def NumberGame(ruleBuilder: [MapBuilder]() -> Map(int, string)) ->
-  spec int -> string
-  def playNumber(i) ->
-    ruleBuilder()
-      -partialMap { divisor, word if i % divisor == 0 -> word }
-      -String.join
-      -match 
-        | "" -> i.toString()
-        | s -> s
+def NumberGame: ([MapBuilder] () -> ()) -> NumberGame
+  = { ruleBuilder ->
+    def rules = dict { ruleBuilder() }
 
-  spec (int, int) -> Seq(string)
-  def apply(start: Int, end: Int) = (start..end) map(playNumber)
+    def playNumber = { i ->
+      rules
+        \select { divisor, word -> if i % divisor == 0 -> return word }
+        \String.join
+        \match 
+          | "" -> i.toString()
+          | s -> s      
+    }
+
+    (playNumber = playNumber)
+  }
+
+  def apply: int, int -> Seq(string)
+    = { start, end -> start..end \map(playNumber) }
 
 def main() =
   def fizzbuzz = NumberGame {
@@ -30,19 +36,21 @@ def main() =
 
 --  FP style
 
-partial def playNumber(divisor, i) ->
-  if i % divisor == 0 ->
-    word
+def playNumber: [Partial(int)] int, int -> ()
+  = { divisor, i ->
+    if i % divisor == 0 ->
+      return word
+  }
     
 def numberGame(Map(int, string)) ->
   rules
-    -partialMap(playNumber)
-    -String.join
-    -match
+    \flatMap(playNumber)
+    \String.join
+    \match
       | "" -> i.toString()
       | s -> s 
 
-def fizzbuzz = numberGame(map {
+def fizzbuzz = numberGame(dict {
   3 => "fizz"
   5 => "buzz"
   7 => "baz"

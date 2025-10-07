@@ -20,7 +20,7 @@ def greeting = "Hello world" --  internal
 
 export def greet() -> greeting --  Exported, and now visible to other code that imports this module
 
---  It is highly recommended (compiler warning) that exported definitions have a spec (or are otherwise explicitly typed)
+--  It is highly recommended (compiler warning) that exported definitions have a type annotation
 --  If desired, you can escape this by giving a value the type of `_` in its spec, which is how you explicitly tell the compiler
 --  that you want it to infer a type.
 

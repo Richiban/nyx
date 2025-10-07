@@ -20,7 +20,7 @@
 
 --  Can be represented in Nyx with:
 
-def Point(x: int, y: int) ->
+type Point { x: int, y: int ->
   ( x
     y
     def move(dx: int, dy: int) ->
@@ -29,6 +29,7 @@ def Point(x: int, y: int) ->
         y = y + dy
       )
   )
+}
 
 default PointExtensions = (
   def toString(p: Point): string ->
@@ -55,9 +56,9 @@ def point(x: int, y: int): Point ->
 --  Despite the fact that this is just a function, we call this a "constructor"
 
 
-def f[Show(Point)](p: Point) ->
-  p --toString()
-
+def f [Show(Point)] { p: Point ->
+  p \toString
+}
 
   
 --  -- OO-style programming and classes --
@@ -75,54 +76,60 @@ def f[Show(Point)](p: Point) ->
 --  with the same name, for the return type of the definition.  
 
 --  For example, this definition is both a function and a type, and quite nicely emulates a class:
-type def Counter(count: int) ->
-mut count = count
+type Counter = { count: int ->
+  mut count = count
 
-( def increment() -> count += 1
-  def decrement() -> count -= 1
-  def count -> count 
-)
+  ( increment = { count += 1 }
+    decrement = { count -= 1 }
+    count = { count }
+  )
+}
 
 --  If this definition had been written `def counter` then it would have had the type:
 --  `(count: int) -> (increment: () -> (); decrement: (): (); count: int)`
---  but, thanks to the upper| first character, its type is now:
+--  but, thanks to the uppercase first character, its type is now:
 --  `(count: int): Counter`
 
---  This is equivalent to:
-type Counter = (increment: () -> (); decrement: () -> (); count: int)
-def counter(count: int): Counter ->
-mut count = count
-
-( def increment() -> count += 1
-  def decrement() -> count -= 1
-  def count -> count
+--  This is equivalent to these two definitions:
+type Counter = (
+  increment: () -> ()
+  decrement: () -> ()
+  count: int
 )
 
+def Counter: int -> Counter = { count ->
+  mut count = count
+
+  ( increment = { count += 1 }
+    decrement = { count -= 1 }
+    count = { count}
+  )
+}
 
 --  It's important to remember though that this form is still ultimately just a function definition,
 --  although it acts a lot like a constructor
-type def ResourceController(repo: ResourceRepository): MvcController ->
-( def get(id) -> repo.get?(id).Option.map(toJson)
-  def post(data) -> repo.save(data) 
-)
-
+type ResourceController = { repo: ResourceRepository ->
+  ( get = { id -> repo.get?(id) \Option.map(toJson) }
+    post = { data -> repo.save(data) }
+  )
+}
   
 --  It's also possible to specify the list of "interfaces" that your type "implements"
 type Rule = (divisor: int, word: string)
 
 --  For example, this type implements the `Seq` "interface":
-def NumberGame(rules: seq(Rule)): seq(Rule) ->
-( def getIterator() -> rules.getIterator()
-  def apply(n) -> 
-    rules
-      -partialMap { rule if n % rule.divisor == 0 -> word }
-      -joinString("")
-      -match
-        | "" -> string(n)
-        | s  -> s 
-)
-
-
+type NumberGame: seq(Rule) = { rules: seq(Rule) ->
+  ( getIterator = { rules.getIterator() }
+    apply = { n ->
+      rules
+        \select { rule -> if n % rule.divisor == 0 -> #some(word) else -> #skip }
+        \joinString("")
+        \match
+          | "" -> string(n)
+          | s  -> s 
+    }
+  )
+}
 
 --  -- Classes (constructors) --
 
@@ -130,40 +137,41 @@ def NumberGame(rules: seq(Rule)): seq(Rule) ->
 
 --  For example, a class with a constructor and a method:
 
-  spec (string, int) -> Person
-  def Person(name, age) ->
-      mut age = age --  Shadow the `age` variable with a mutable version
-  
-      --  Return the object representing the class instance
-      ( name = name
-        def age -> age
-        def setAge(newAge: int) -> set age = newAge
-        def toString() -> "{name} is {age} years old"
-        def ageDiff(other: Person) -> 
-          def diff = age - other.age
-          abs(diff)
-      )
+type Person = { name, age ->
+  mut age = age --  Shadow the `age` variable with a mutable version
+
+  --  Return the object representing the class instance
+  ( name = name
+    age = { age }
+    setAge = { newAge -> set age = newAge }
+    toString = { "{name} is {age} years old" }
+    ageDiff = { (other: Person) -> 
+      abs(age - other.age)
+    }
+  )
+}
   
   --  This is a regular type definition
   
-  type Option(t) = (#some, t) | #nil
-      def force() ->
-          this
-            | (#some, val) -> val
-            | #nil -> throw (#force_none)
+type Option(t) = #some(t) | #nil
+
+def Option.force(this) ->
+    match this
+      | (#some, val) -> val
+      | #nil -> throw (#force_none)
   
-  --  This is a type def, Nyx's equivalent of a nominal type
-      It is both a function and a type definition
+--  This is a type def, Nyx's equivalent of a nominal type
+    It is both a function and a type definition
+
+    A type def can be thought of as a type depending on a validation function
+    A type def is a function that takes in any number of parameters and returns the finalised object
+    type defs can be "fallible", where they return an Option
   
-      A type def can be thought of as a type depending on a validation function
-      A type def is a function that takes in any number of parameters and returns the finalised object
-      type defs can be "fallible", where they return an Option
-  
-  type def Email?(value: string) ->
-      if Regex("[^@]@[^@]\.[^@]").matches(s) ->
-          some value
-      else 
-          None
+def Email?(value: string) ->
+    if s \Regex.matches("[^@]@[^@]\.[^@]") ->
+        #some(value)
+    else 
+        #nil
   
   --  This results in a type equivalent to:
   

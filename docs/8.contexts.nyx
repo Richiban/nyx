@@ -12,29 +12,61 @@ A context can be used for effect-oriented programming
 A function without any contexts is known to be total (i.e. has no side effects and is referentially transparent)
 because stateful mutations or IO require a context.
 
+Declare a context with the `context` keyword (a context definition looks otherwise the same as a type)
+definition.
+
+Load an instance into the current context with the `with` keyword.
+
 ---
 
-def f() ->
+def f = {
   println("Hello, world!") --  Error: Function `println` is not defined. Did you mean to use the `Console` context?
+}
 
-def[Console] g() ->
+-- A value's context forms part of its type. You can specify a context only, still leaving 
+-- the rest of the type to be inferred
+
+def g: [Console] = {
   println("Hello, world!") --  OK
+}
+-- Equivalent to:
+def g: [Console] () -> () = {
+  println("Hello, world!") --  OK
+}
 
 --  This means Nyx programs follow the "functional core, imperative shell" paradigm
 
 
-context Console ->
-  def println(s: String) -> ...
+context Console = (
+  println: string -> ()
+)
 
+--  Mutation is controlled by the fact that modules cannot directly contain mutable variables; they
+--  must be wrapped in a context.
 
---  Mutation is controlled by the fact that modules cannot directly contain mutable variables; they must be wrapped in a context
+context MyState(α) = (
+  get: () -> α
+  set: α -> ()
+)
 
+impl myState: int -> MyState(int) 
+  = {
+    mut x = 0
 
-context MyState ->
-  mut x = 0
+    ( get = { x }
+      set = { x' -> set x = x' } )
+  }
 
-  def getX() -> x
-  def setX(newX: int) -> set x = newX
+def stateSum = { xs -> 
+  use myState(0)
+
+  for xs | x ->
+    set(get() + x)
+
+  get()
+}
+
+stateSum([1, 2, 3]) -- prints 6
 
 ---
 The `main` method of any program automatically runs in the `Console` context, giving it access to 
@@ -53,37 +85,41 @@ Imagine we have a list of points that we wish to sum:
 type Point = (x: int, y: int)
 
 def points = Point
- [| x | y |
-  | 1 | 2 |
-  | 3 | 4 |
-  | 5 | 6 |]
+  [ (1, 2) 
+    (3, 4) 
+    (5, 6) ]
 
 ---
 We can define a typeclass for types that can be summed; i.e. any type for which there is a zero value and a + method
 
 ---
 
-type Summable(a) = (
-  zero: a
-  `+`: (a, a) -> a
+context Sum(α) = (
+  `0`: α
+  `+`: α, α -> α
 )
 
 ---
-And then use this function that uses the Summable context to sum a list of items without
+And then use this function that uses the Sum context to sum a list of items without
 having to explicitly pass in the zero and + functions
 
 ---
 
-spec [Summable(a)](list(a)) -> a
-def sum(items) -> items -fold(`0`) { + }
+def sum: [Sum(α)] list(α) -> α
+  = { items -> 
+    items \fold(`0`) { + }
+  }
+
+def sum: [Sum(α)] list(α) -> α
+  = { \fold(`0`) { + } }
 
 ---
-We could explicitly define an instance of the Summable typeclass for Point:
+We could explicitly define an instance of the Sum typeclass for Point:
 
-  def PointSum: Summable(Point) = 
-    ( zero = Point(x: 0, y: 0)
-      `+`(a, b) = Point(x: a.x + b.x, y: a.y + b.y)
-    )
+  impl pointSum: Sum(Point) = ( 
+    `0` = Point(x = 0, y = 0)
+    `+` = { a, b -> Point(x = a.x + b.x, y = a.y + b.y) }
+  )
 
 but we don't need to; by defining `+` and `0` on Point itself, they are defined in the 
 global context and therefore an instance of Summable(Point) can automatically 
@@ -91,77 +127,89 @@ by synthesized.
 
 ---
 
-def Point.+(a, b) = Point(x: a.x + b.x, y: a.y + b.y)
+def Point.`+` = { a, b -> 
+  Point(x = a.x + b.x, y = a.y + b.y) 
+}
 
-def Point.`0` = Point(x: 0, y: 0)
+def Point.`0` = Point(x = 0, y = 0)
 
 ---
 Now the following method call just works
 
 ---
 
-def r = points -sum()
+def r = points \sum
 
 ---
-If we want to supply custom behaviour, we can define an instance of Summable(Point) 
+If we want to supply custom behaviour, we can define an instance of Sum(Point) 
 and use it explicitly
 
 ---
 
-def PointSum = Summable(Point)(
-  zero = Point(x: 0, y: 0)
-  `+`(a, b) = Point(x: a.x + b.x, y: a.y + b.y)
+impl pointSum: Sum(Point) = (
+  `0` = Point(x = 0, y = 0)
+  `+` = { a, b -> Point(x = a.x + b.x, y = a.y + b.y) }
 )
 
-def r = points -sum[PointSum]()
+def r = use PointSum in points \sum
 
 
-spec [CurrencyConversionTable] (Pounds, Dollars) -> Dollars
-def addPoundsAndDollars(p, d) ->
-  convert(p, #dollars) + d -- `convert` is a function on the `CurrencyConversionTable` context
-
+def addPoundsAndDollars
+  : [CurrencyConversionTable] Pounds, Dollars -> Dollars
+  = { p, d ->
+    convert(p, #dollars) + d -- `convert` is a function on the `CurrencyConversionTable` context
+  }
+  
 --  This is how effect control is done in Nyx
 
---  All console programs implicitly run in ConsoleContext, giving access to things like `print` and `readline`
-def main() ->
+--  All console programs implicitly run with Console in the context, giving access to things like `print` and `readline`
+def main = {
   sayHello()
+}
 
 --  Functions can be annotated with a context. The functions on that context are now available to call within that function, and functions
 --  that in turn require that context can be called
-spec [ConsoleContext] () -> ()
-def sayHello() ->
-  println("Hello world!")
 
+def sayHello
+  : [Console] () -> ()
+  = {
+    println("Hello world!")
+  }
 
---  Contexts can be combined. For example, the following function requires a context that has both `ConsoleContext` and `FileSystemContext`:
-spec [ConsoleContext, FileSystemContext] (string) -> ()
-def readAndPrintFile(filename) ->
-  def contents = openFile(filename).contents
+--  Contexts can be combined. For example, the following function requires a context that has both `Console` and `FileSystemContext`:
+def readAndPrintFile
+  : [Console + FileSystemContext] string -> ()
+  = { filename ->
+    def contents = openFile(filename).contents
 
-  print(contents)
-
+    print(contents)
+  }
 
 
 --  Contexts also allow for Haskell-style typeclasses. For example, the following context allows any type to be converted to a string:
 
-type Writeable(a) = (
-  write: a -> string
+context Writeable(α) = (
+  write: α -> string
 )
 
 type Person = (
   name: string
-  age: int
+  age : int
 )
 
-default Writeable(Person) ->
-  --  Note that the spec is inferred from the trait and doesn't need to be written again
-  def write(p) -> "{p.name} is {p.age} years old"
+--  The `use` keyword loads an object into the context in a statement context. 
+--  We can define a default impl at the top level of a module,
+--  so that anyone who loads our module gets this in their context automatically. Such declarations
+--  do not have to be named, but it's recommended
+default Write(Person) = (
+  --  Note that the type is inferred from the context and doesn't need to be written again
+  write = { p -> "{p.name} is {p.age} years old" }
+)
 
-
-spec [Writeable(a), ConsoleContext] a -> string
-def someFunction(x) ->
-  println(write(x)) --  Since we're in the context of Writeable(a), the function `write` is in scope
-
+def [Write(α) + Console] someFunction
+  = { x ->
+    println(write(x)) --  Since we're in the context of Write(α), the function `write` is in scope
+  }
 
 --  When in a function body, in order to call another function that requires a context, you have two options (let's say you're
 --  in function `f` and you want to call function `g`):
@@ -169,27 +217,57 @@ def someFunction(x) ->
 --	    b) create a context yourself, start a context block, and then call `g` within that block
 --      c) import an `impl` that gives you the context that you need
 
-type MyContext = (
+context MyContext = (
   m: string -> ()
 )
 
-def g[MyContext]() -> 
-m("Hello world") -- `m` is in scope from context `MyContext`
+def [MyContext] g = {
+  m("Hello world") -- `m` is in scope from context `MyContext`
+}
 
-
-def f() ->
+def f = {
   g() --  Error: `g` requires `MyContext` in the context
+}
 
-def f[MyContext]() -> 
-  g() --  This works because we have added the context to `f`'s signature, passing the need to create a context on to our caller
+def f: [MyContext] = {
+  g() --  This works because we have added the context to `f`'s signature, passing the context
+      --  requirement on to our caller
+}
 
-def f() ->
-def c: MyContext = ( def m(s) -> println(s) )
 
-context(c) ->
-  g() --  This works because we have created an instance of the necessary context and started a context block
+-- declare an abstract operation: emit, how it emits is defined dynamically by a handler.
+context Emit = ( 
+  emit: (msg: string) -> () 
+)
 
-def f() ->
-import aModule/containingAnImplOf/MyContext --  This works because we have imported an default that gives us the context we need
+-- emit a standard greeting.
+def hello: [Emit]
+  = { emit("hello world!") }
 
-g()
+-- emit a standard greeting to the console.
+export def helloConsole1: [Console]
+  use Emit = (
+    emit = { msg -> println(msg) }
+  )
+
+  hello()
+
+
+-- Higher-order functions
+
+def collect: List(α), ([Yield(β)] α -> ()) -> List(β)
+  = {
+    ...
+  }
+
+
+-- Higher-order functions and parametric contexts
+
+def mapList: [ε] List(α), ([ε] α -> β) -> List(β)
+  = {
+    ...
+  }
+
+-- Contexts can be aliased for ease of use
+
+context Web = [Console + Logger + Http]

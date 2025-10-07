@@ -1,39 +1,50 @@
-module com.agilogy.arrow2.sql
+module Agilogy.Arrow2.Sql
 
-import
-  arrow/core/continuations/Raise
-  java/sql/Connection
-  java/sql/PreparedStatement
-  java/sql/SQLException
-  javax/sql/DataSource
+import (
+  Arrow.Core.Continuations.Raise
+  Nyx.Sql.Connection
+  Nyx.Sql.PreparedStatement
+  Nyx.Sql.SQLException
+  Nyx.Sql.DataSource
+)
 
 def DuplicateKey = ()
 
-type SqlPrimitive = #sql_int | #sql_string
+type SqlPrimitive = #sqlInt | #sqlString
 
 spec [Connection, Raise(Nothing)] (string, seq(SqlPrimitive)) -> Async(int)
-export def executeUpdate(query, args) -> async {
-  def ps = using prepareStatement(query)
-    for 0.., args | pos, arg -> ps -setArgument(pos, arg)
-    ps.executeUpdate()
+def executeUpdate(query, args) -> async {
+  def ps = use prepareStatement(query)
+  
+  for 0.., args | pos, arg ->
+    ps \setArgument(pos, arg)
+    
+  ps.executeUpdate()
 }
 
-spec [Connection, Raise(DuplicateKey)] (string, seq(SqlPrimitive)) -> Async(int)
-export def executeUpdateCatchDuplicateKey(query, args) -> async {
-  match executeUpdate(query, *args)
-    | Err(#SQLException, e) if isDuplicateKey(e) ->
-      raise(DuplicateKey)
-    | Err(#SQLException, e) -> 
-      return e
-}
 
-spec (PreparedStatement, int, SqlPrimitive) -> ()
-def setArgument | smt, pos, #sql_int -> smt -setInt(pos, arg.value)
-                | smt, pos, #sql_string -> smt -setString(pos, arg.value)
-                | _ -> ()
+def executeUpdateCatchDuplicateKey
+  : [Connection + Raise(DuplicateKey)] string, seq(SqlPrimitive) -> Async(int)
+  = async { query, args ->
+    match executeUpdate(query, *args)
+      | Err(#SQLException, e) if isDuplicateKey(e) ->
+        raise(DuplicateKey)
+      | Err(#SQLException, e) -> 
+        return e
+  }
 
-spec [Raise(e)] (DataSource, [Raise(e), Connection] () -> a) -> a
-def withConnection(dataSource, f) ->
-  [getConnection()] {
-    [Raise]f(dataSource@Raise, dataSource)
+
+def setArgument
+  : PreparedStatement, int, SqlPrimitive -> ()
+  = { | smt, pos, #sqlInt -> smt \setInt(pos, arg.value)
+      | smt, pos, #sqlString -> smt \setString(pos, arg.value)
+      | _ -> ()
+    }
+
+def withConnection
+  : [Raise(e)] DataSource, ([Raise(e) + Connection] () -> α) -> α
+  = { dataSource, f ->
+    use getConnection()
+      
+    f(dataSource, dataSource)    
   }

@@ -63,9 +63,9 @@ def message = "Hello " +
 ---
 # Commas
 
-Commas are used to separate items in a list, fields in a tuple, or parameters in a function call.
+Commas are used to separate items in a list, fields in a record, or parameters in a function call.
 
-You can use newlines instead of commas, where each item in the list or tuple has the same level of indentation.
+You can use newlines instead of commas, where each item in the list or record has the same level of indentation.
 
 ---
   
@@ -78,8 +78,8 @@ def items = [
   3
 ]
 
-def myTuple = (a = 1, b = 2, c = 3)
-def myTuple = (
+def myRecord = (a = 1, b = 2, c = 3)
+def myRecord = (
   a = 1
   b = 2
   c = 3
@@ -132,7 +132,7 @@ variable can be reassigned.
 
 ---
 
-type Ref(a) = (mut value: a)
+type Ref(α) = (mut value: a)
 
 def myRef = Ref(1)
 set myRef.value = 2
@@ -164,27 +164,12 @@ def from4ToEnd = 4..
 
 def arraySlice = data(1..100)
 def anotherSlice = data(1..)
-def first5Letters = str.subString(..4)
+def first5Letters = str(..4)
 
---	Tuples
+--	Records
 
---	A comma joins two or more values together into a tuple. each member of the tuple can be
---  of any type
-def things = ("John", "Alexander", 5, Uri())
-
----
-Because Nyx supports union types a tuple can be enumerated. In the above example the
-tuple "things" is of type (string, string, int, Uri), and can be used as a Sequence
-of the following type -> Sequence(string|int|Uri).
-
----
-
-for things
-  | s: string -> println("We have a string -> {s}")
-  | i: int ->  	println("We have an integer -> {i}")
-  | uri: Uri ->  println("We have a uri -> {uri}")
-
---	Other literals might not be found in other languages, such as object literals.
+--	Other literals might not be found in other languages, such as
+--  object literals (called records)
 def coordinates = ( x = 1, y = 2 )
 
 --	Target-typed collection literals, defaults to List
@@ -206,10 +191,10 @@ def namesAndAges =
 
 --	This is equivalent to:
 def namesAndAges = [
-( name = "Felix", 	age = 22 )
-( name = "Taylor",	age = 30 )
-( name = "Peter",   age = 28 )
-( name = "Sean", 	  age = 45 )
+  ( name = "Felix", 	age = 22 )
+  ( name = "Taylor",	age = 30 )
+  ( name = "Peter",   age = 28 )
+  ( name = "Sean", 	  age = 45 )
 ]
 
 
@@ -218,18 +203,18 @@ def namesAndAges = [
 --  If-statements
 
 if cond ->
-    some_code()
+    someCode()
 else ->
-    some_other_code()
+    someOtherCode()
 
 
 --  If-statements can have many branches, obviating the need for `else if` or `elif` chains
 if | cond1 ->
-        some_code()
+        someCode()
    | cond2 -> 
-        some_other_code()
+        someOtherCode()
    | else ->
-        yet_more_code()
+        yetMoreCode()
         
 
 ---
@@ -247,21 +232,21 @@ explicitly import `nyx`.
 
 --  -- Operators --
 
-Operator overloading -> while Nyx doesn't allow you to create your own operators, it has a list of operators that
+Operator overloading: while Nyx doesn't allow you to create your own operators, it has a list of operators that
 are considered valid that you can choose from. Some of them are considered "spare", in that they have no pre-defined
 meaning in Nyx, leaving you free to give them your own.
 
-Primary example -> `->`
+Primary example: `=>`
 
 ---
 # Custom operators
 
 You can define an operator in the same way as a regular function, but where the name of the function is the operator
-you wish to overload wrapped in brackets. E.g.
+you wish to overload wrapped in backticks. E.g.
 
 ---
 
-def `=>`(a, b) -> ...
+def `=>` = { a, b -> ... }
 
 
 ---
@@ -272,13 +257,19 @@ It's a bit like `throw NotImplementedException` but will give a compiler warning
 
 ---
 
-def myFunction() -> ...
+def myFunction = { () -> ... }
 
 ---
-# Tuple unwrapping
+# Record unwrapping
 
-Since there's no overloading in Nyx, tuples and tuple types get automatically unwrapped for you.
+Since there's no overloading in Nyx, records and record types get automatically unwrapped for you.
 For example, `list((string, int))` can just be written as `list(string, int)`. In other languages
 this would be ambiguous but in Nyx it's not.
 
 ---
+
+# Compiler errors & warnings
+
+Nyx is a bit different from other languages in that type errors and name errors are compiler warnings,
+not errors. This means that even if you call a function that does not exist the compiler can still 
+produce an executable result. This is part of the "Inform but don't block" principle

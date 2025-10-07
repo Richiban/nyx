@@ -45,25 +45,25 @@ Promise(t)
 --	Abstractions
 
 
-type Source(a) =
-  ( getEnumerator: () -> Enumerator(a) )
+type Source(α) =
+  ( getEnumerator: () -> Enumerator(α) )
 
-type Collection(a) =
-  Sequence(a) & ( count: int )
+type Collection(α) =
+  Sequence(α) & ( count: int )
 
 type Map(key, value) =
-  Collection(a) & ( get: key -> value )
+  Collection(α) & ( get: key -> value )
 
-type List(a) =
-  Map(int, a) & Collection(a)
+type List(α) =
+  Map(int, a) & Collection(α)
 
 ---
 --	Implementations
-type LinkedList(a) =
-  () | (a, LinkedList(a))
-  & Sequence(a)
+type LinkedList(α) =
+  () | (a, LinkedList(α))
+  & Sequence(α)
 
-def LinkedList(a).getEnumerator() ->
+def LinkedList(α).getEnumerator() ->
   seq { 
     mut current = this
 
@@ -72,11 +72,11 @@ def LinkedList(a).getEnumerator() ->
       set current = tail
   }
 
-type NonEmptyLinkedList(a) =
-  a | (a, NonEmptyLinkedList(a))
-  & NonEmptySequence(a)
+type NonEmptyLinkedList(α) =
+  a | (a, NonEmptyLinkedList(α))
+  & NonEmptySequence(α)
 
-def NonEmptyLinkedList(a).head
+def NonEmptyLinkedList(α).head
   | (head, _) | head -> head
 
 def getEnumerator() -> seq {
@@ -101,43 +101,44 @@ def getEnumerator() -> seq {
 
 
 type MapBuilder = (
-    (->): (k, v) -> ()
+    `=>`: (k, v) -> ()
 )
 
 type Map = ...
     
-def Map.apply(block: [MapBuilder]() -> ()) ->
+def Map.apply(block: [MapBuilder] () -> ()) ->
   def map = HashMap()
 
-  context(def (->)(k, v) -> map.add(k, v)) ->
-    block()
+  use `=>` = { k, v -> map.add(k, v) }
+    
+  block()
 
   map
 
 def myMap = Map {
-    "hello" -> "world"
-    "foo" -> "bar"
+    "hello" => "world"
+    "foo" => "bar"
 }
 
 
-type Option(a) = (#some, a) | #nil 
+type Option(α) = (#some, a) | #nil 
 
-spec (a -> b) -> Option(b)
-def Option(a).map(f) -> this
+spec (α -> β) -> Option(β)
+def Option(α).map(f) -> this
       | #some, val -> (#some, f(val))
       | #nil -> #nil
       
-def Option(a).force(): a -> this
+def Option(α).force(): a -> this
       | #some, val -> val
       | #nil -> throw InvalidOperationException()
 
 type Error(err) = (#error, err)
-    spec (err -> a) -> Error(a)
+    spec (err -> α) -> Error(α)
     def map(f) -> this
           | #error, err -> (#error, f(err))
 
 type Ok(result) = (#ok, result)
-    spec (result -> a) -> Ok(a)
+    spec (result -> α) -> Ok(α)
     def map(f) -> this
           | #ok, val -> (#ok, f(val))
 
@@ -147,12 +148,12 @@ type Result(success, err) = Ok(success) | Error(err)
           | #ok, val -> (#some, val)
           | _ -> #nil
 
-    spec (err -> a) -> Result(success, a)
+    spec (err -> α) -> Result(success, a)
     def mapErr(f) -> this
           | #ok, val -> #ok(val)
           | error -> error
 
-    spec (success -> a) -> Result(a, err)
+    spec (success -> α) -> Result(a, err)
     def mapOk(f) -> this
           | #ok, val -> #ok(f(val))
           | #error, err -> #error(err)

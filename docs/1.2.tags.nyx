@@ -11,14 +11,18 @@ with Typescript's string literal types, although tags are not strings.
 ---
 
 --  Tags can be used as values:
-def x = #my_tag
+def x = #myTag
 
 --  And also types:
-def y: Option(#my_second_tag) = #my_second_tag
+def y: #mySecondTag = #mySecondTag
   
---  Tags are particularly useful when used in type unions, such as for passing flags to functions:
-def openFile(fileName: string, mode: #read | #readwrite) -> 
+--  Tags are not particularly useful on their own; they are really designed
+--  to be used in tag unions. One such use case is for passing flags to functions:
+def openFile
+  : string, (#read | #readwrite) ->  
+  = { fileName, mode -> 
     ...
+  }
 
 openFile("file.txt", #readwrite)
 
@@ -34,6 +38,32 @@ is not present at runtime.
 
 type Color = #red | #green | #blue
 
--- To emulate a discriminated union, use a tag as the first field in a tuple:
+-- Tags can carry values to effectively implement discriminated unions:
 
-type Color = #red | #green | #blue | (#custom, string)
+type Color = 
+    | #red
+    | #green
+    | #blue
+    | #custom(string)
+
+
+-- Since tag unions are _structural_, it's possible to write polymorphic functions that might specify
+-- that a particular type union has at least one or more particular tags in it, but is flexible on any
+-- other members. For example, the Option.map function in the standard library is such a function.
+
+-- Here we see that Option.map accepts a value of any tag union as long as that union includes `#some(α)`
+    
+def Option.map
+  : (#some(α) | rest), (α -> β) -> (#some(β) | rest)
+  = { | #some(a), f -> #some(f(a))
+      | other, _ -> other }
+
+-- In the pattern match we first see if the value is `#some(a)`; if it is then we map the internal value.
+-- Crucially, any other value is simply returned as-is. This has the effect of preserving the names of
+-- any non-success cases in a union, for example:
+
+def x : (#some(string) | #notFound) = ...
+def y : (#some(int) | #divideByZero) = ...
+
+x \Option.map { .length } -- (#some(int) | #notFound)
+y \Option.map { \Math.abs } -- (#some(int) | #divideByZero)

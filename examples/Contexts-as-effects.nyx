@@ -1,0 +1,166 @@
+def encode2: string, int -> string 
+  = { s, shift ->
+    s \map { c ->
+      if c !in 'a'..'z' -> return c
+
+      def base = c - 'a' \int
+      def rot  = (base + shift) % 26
+      
+      rot.char + 'a'
+    }
+  }
+
+
+def sublist: List(a), int, int -> List(a) 
+  = { xs, start, len = xs.length ->
+    if start <= 0 -> return xs.take(len)
+
+    match xs
+      | []        -> []
+      | [_, ..xx] -> xx \sublist(start - 1, len)
+  }
+
+
+-- The letter frequency table for English
+def english = [8.2,1.5,2.8,4.3,12.7,2.2,
+               2.0,6.1,7.0,0.2,0.8,4.0,2.4,
+               6.7,7.5,1.9,0.1, 6.0,6.3,9.1,
+               2.8,1.0,2.4,0.2,2.0,0.1]
+
+-- Small helper functions
+def percent: int, int -> float = { n, m ->
+  100.0 * (float64(n) / float64(m))
+}
+
+def rotate: List(a), int -> List(a) = { xs, n ->
+  xs.drop(n) ++ xs.take(n)
+}
+
+-- Calculate a frequency table for a string
+def freqs: string -> List(float64) = { s ->
+  def lowers = list('a', 'z')
+  def occurs = lowers \map { c -> s \count(c \string) }
+  def total  = occurs \sum
+  
+  occurs \map { i -> percent(i, total) }
+}
+
+-- Calculate how well two frequency tables match according
+-- to the _chi-square_ statistic.
+def chisqr: List(float64), List(float64) -> float64 = { xs, ys ->
+  (xs, ys)
+  \map { x, y -> ((x - y) ^ 2.0) / y}
+  \foldr(0.0) { + }
+}
+
+-- Crack a Caesar encoded string
+def uncaesar: string -> string = { s ->
+  def table  = freqs(s)                         -- build a frequency table for `s`
+  def chitab = [0..25] \map { n ->           -- build a list of chisqr numbers for each shift between 0 and 25
+                 chisqr(table \rotate(n), english) }
+
+  def min    = chitab \min                      -- find the mininal element
+  def shift  = chitab \indexOf { == min } \negate  -- and use its position as our shift
+  
+  s \encode(shift)
+}
+
+def testUncaesar = {
+  "nrnd lv d ixq odqjxdjh"
+  \uncaesar
+  \println
+}
+
+------------------------------------
+
+context type Raise = (
+  raise: (msg: string) -> a
+)
+
+def safeDivide: [Raise] int, int -> int
+  = { x, y ->
+    if y == 0 -> raise("divide by zero")
+    else -> x / y
+  }
+
+def raiseConst: () -> int
+  = {
+    use Raise (                 -- The `use` construct puts the relevant record into the context
+      raise = { _ -> 42 }
+    )
+
+    8 + safeDivide(1, 0)          -- Returns 42, not 50
+  }
+
+
+def raiseConst2: () -> int
+  = {
+    use: Raise = (                 -- The `use` construct puts the relevant record into the context
+      raise = { _ -> resume 42 }
+    )
+
+    8 + safeDivide(1, 0)          -- Returns 50
+  }
+
+context type Ask(a) = (
+  ask: () -> a
+)
+
+def addTwice: [Ask(int)] () -> int
+  = {
+    ask() + ask()
+  }
+
+def askConst: () -> int
+  = {
+    use: Ask(int) = (
+      ask = { 21 }
+    )
+
+    addTwice()
+  }
+
+def askRandom: [Random] () -> int
+  = {
+    use: Ask(int) = (
+      ask = { randomInt() }
+    )
+
+    addTwice()
+  }
+
+
+------------------------------------
+
+context type State(a) = (
+  get: () -> a
+  set: a -> ()
+)
+
+def sumdown: [State(int)] int -> int 
+  = { sum = 0 ->
+    def i = get()
+
+    if i <= 0 -> sum 
+    else ->
+      set(i - 1)
+      sumdown(sum + i)
+  }
+
+def state: [c] a, ([State(a) + c] () -> b) -> b
+  = { init, action ->
+    memory {
+      mut st = init
+
+      use: State(a) = (
+        get = { st }
+        set = { i -> set st = i }
+      )
+
+      action()
+    }
+  }
+
+state(10) {
+  sumdown()
+} -- evaluates to 55.

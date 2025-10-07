@@ -18,8 +18,8 @@ def sayHello() -> println("Hello!")
 type Greeter = ( greet: () -> () )
 
 --  Generates a type _and_ a function, both called 'Greeter'
-def Greeter() ->
-  ( def greet() -> println("Hello!") )
+def Greeter() =
+  ( greet[Console] = { println("Hello!") } )
 
---  Tags are written in snake_case
-type Thing = #new_thing | #old_thing
+type Thing = #newThing | #oldThing
+

@@ -24,21 +24,23 @@ os.makedirs("ImageSort/{args.f}")
 print("{args.f.capitalize()} directory is created.")
 
 -- Defining all global variables
-context AppCtx ->
+context AppCtx =
   def df = []
   def total = 0
   def dict, final, imgList = {}, [], []
 
 -- Create dataframe and save it as an excel file
-spec [AppCtx](int, list(???)) -> ()
-def createDataSet(val = 0, data = []) ->
-  set dict(len(data)) = data
 
-  if val != 0 and val == max(dict.keys()) ->
-    def finalDf = pd.DataFrame(dict(val)
-      | columns = ["Blue", "Green", "Red"])
-    finalDf.toExcel("ImageSort/{args.f}-output.xlsx")
+def createDataSet
+  : [AppCtx] int, list(???) -> ()
+  = { val = 0, data = [] ->
+    set dict(len(data)) = data
 
+    if val != 0 and val == max(dict.keys()) ->
+      def finalDf = pd.DataFrame(dict(val)
+        | columns = ["Blue", "Green", "Red"])
+      finalDf.toExcel("ImageSort/{args.f}-output.xlsx")
+  }
 
 -- Generating colors for each row of the frame
 def generateColors(cSorted, frame, row) ->
@@ -82,7 +84,7 @@ def step(bgr, repetitions = 1) ->
   mut v2 = int(v * repetitions)
 
   -- To get a smoother color band
-  if h2 -mod 2 == 1 ->
+  if h2 \mod 2 == 1 ->
     set v2 = repetitions - v2
     set lum = repetitions - lum
 
@@ -115,7 +117,7 @@ def makeVideo() ->
 
 
 def main() ->
-  def img = cv2.imread("Image/{args.f}.jpg") -cv2.resize(800, 500)
+  def img = cv2.imread("Image/{args.f}.jpg") \cv2.resize(800, 500)
   imgList.append(img)
 
   def height, width = Img.shape
@@ -130,7 +132,7 @@ def main() ->
 
       -- val includes all rgb values between the range of 0 to 1
       -- This makes the sorting easier and efficient
-      def val = val -List.map { / 255.0 }
+      def val = val \List.map { / 255.0 }
       color.append(val)
 
     def thresh = findThreshold(

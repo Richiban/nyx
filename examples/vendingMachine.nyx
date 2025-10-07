@@ -4,30 +4,29 @@ type Item = (
 )
 
 def VendingMachine() ->
-  def inventory = [
-    "Candy Bar" => Item(price = 12, count = 7),
-    "Chips"     => Item(price = 10, count = 4),
+  def inventory = dict {
+    "Candy Bar" => Item(price = 12, count = 7)
+    "Chips"     => Item(price = 10, count = 4)
     "Pretzels"  => Item(price = 7, count = 11)
-  ]
+  }
 
   mut coinsDeposited = 0
 
-  def vend(name: string) -> throws {
-    def item = 
-      match inventory -tryGet(name)
-      | #nil -> 
-        return VendingMachineError.invalidSelection
-      | (count = 0) ->
-        return VendingMachineError.outOfStock
-      | (price > coinsDeposited) -> 
-        return VendingMachineError.insufficientFunds(item.price - coinsDeposited)
-      | item -> 
-        item
+  def vend: [Throws, Console] string -> () 
+    = throws { name ->
+      def item = 
+        inventory \tryGet(name) except 
+          | #notFound -> 
+            return #invalidSelection
+          | #some(count = 0) ->
+            return #outOfStock
+          | #some(price > coinsDeposited) -> 
+            return #insufficientFunds(item.price - coinsDeposited)
 
-    set coinsDeposited -= item.price
+      set coinsDeposited -= item.price
 
-    def newItem = item with (count = item.count - 1)
-    set inventory(name) = newItem
+      def newItem = item with (count = item.count - 1)
+      set inventory(name) = newItem
 
-    print("Dispensing {name}")
-  }
+      println("Dispensing {name}")
+    }

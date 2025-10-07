@@ -198,11 +198,13 @@ def shas = [
 ]
 
 
-def convertSha(base64Sha: string) : string ->
-  def bytes = base64Sha ~Convert.fromBase64String()
-  def hex = bytes ~BitConverter.toString()
-  hex ~replace("-", "") ~toLower()
-
+def convertSha
+: string -> string
+= { base64Sha ->
+  def bytes = base64Sha \Convert.fromBase64String
+  def hex = bytes \BitConverter.toString
+  hex \replace("-", "") \toLower
+}
 
 type Result = (
   name: string
@@ -220,32 +222,31 @@ for shas | sha ->
 
   async {
     def res = await "https://www.virustotal.com/api/v3/files/{packageId}"  
-      ~withHeader("x-apikey", apiKey)
-      ~getJsonAsync()
+      \withHeader("x-apikey", apiKey)
+      \getJsonAsync()
 
     def name =
-      res("data")("attributes")("names")(0) ~map(toString)
+      res("data")("attributes")("names")(0) \map(toString)
       except Err -> "<unknown>"
 
     def votes = res("data")("attributes")("last_analysis_stats")
 
     def status = 
-      if votes("malicious") ~map(toString) == "0" -> "OK"
+      if votes("malicious") \map(toString) == "0" -> "OK"
       else "MALICIOUS"
 
     results 
-      ~add(Result(name, sha, packageId, status, votes("malicious") 
-      ~toString()))
+      \add(Result(name, sha, packageId, status, votes("malicious").toString()))
 
     println($"Retieved {packageId} ({name}): {status}")
   } except Err (statusCode = statusCode) ->
-      println($"Error ({packageId}): {ex.StatusCode}")
+      println("Error ({packageId}): {ex.StatusCode}")
 
-def fileName = DateTime.Now.ToString("yyyy-MM-dd_HH-mm-ss") + ".csv"
+def fileName = Moment.now.toString("yyyy-MM-dd_HH-mm-ss") ++ ".csv"
 
 manage {
   def writer = using StreamWriter()
-  def csv = using CsvWriter(writer, #invariant_culture)
+  def csv = using CsvWriter(writer, #invariantCulture)
 
-  csv ~writeRecords(results ~filter {r -> r.status == "MALICIOUS"})
+  csv \writeRecords(results \filter { .status == "MALICIOUS" })
 }

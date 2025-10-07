@@ -38,60 +38,78 @@ def points = p1..p2	--  This is now legal `points: series(Point)`
 
 -- If we want to see what the `..` operator is doing, we can write a function to generate it ourselves:
 
-spec [(succ: (a) -> a, `<=`: (a, a) -> bool)] (start: a, end: a) -> series(a)
-def range 
-  | start, end where end < start ->
-    series {}
-  | (start, end) ->
-    mut current = start
 
-    series {
-      while current <= end ->
-        yield current
-        set current = succ(current)
-    }
+def range 
+  : [(succ: (α) -> α, `<=`: (a, a) -> bool)] (start: a, end: a) -> series(α)
+  = { | start, end where end < start ->
+        series {}
+      | (start, end) ->
+        mut current = start
+
+        series {
+          while current <= end ->
+            yield current
+            set current = succ(current)
+      }
+  }
 
 ---
 In the standard library you might find these types defined:
 
 ---
 
-type ClosedRange(n) = (leftLimit: n, rightLimit: n)
-type LeftOpenRange(n) = (rightLimit: n)
-type RightOpenRange(n) = (leftLimit: n)
-type OpenRange(n) = ()
+type Range[Ord(n)](n) = 
+  | #closedRange(leftLimit: n, rightLimit: n)
+  | #leftOpenRange(rightLimit: n)
+  | #rightOpenRange(leftLimit: n)
+  | #openRange
 
-type Range[Comp(n)](n) = ClosedRange(n) | LeftOpenRange(n) | RightOpenRange(n) | OpenRange(n)
+-- The `Enum` typeclass is used for types that have predecessors and successors — i.e., enumerable 
+-- or discrete types. It provides functions for:
+-- * Getting the successor: succ
+-- * Getting the predecessor: pred
+-- * Converting to/from Int: fromEnum and toEnum
+-- * Generating ranges: [x..y] desugars to enumFromTo x y
 
-type StepRange[Comp(n), Succ(n)] = ClosedRange(n) | RightOpenRange(n)
+type StepRange[Enum(n)] =
+  | #closedRange(leftLimit: n, rightLimit: n)
+  | #rightOpenRange(leftLimit: n) 
 
-spec [Comp(n), Succ(n)](StepRange(n)) -> Iter(n)
-def iterate(r) ->
-  def left, right = 
-    match r
-    | (l, r) -> (l, Some(r))
-    | (l)    -> (l, #nil)
+def iterate
+  : [Enum(n)] (StepRange(n)) -> Iter(n)
+  = { r ->
+    def left, right = 
+      match r
+      | l, r -> (l, #some(r))
+      | l    -> (l, #nil)
 
-  seq {
-    mut current = left
+    seq {
+      mut current = left
 
-    while current < right ->
-      yield current
+      while current < right ->
+        yield current
 
-      set current = succ(current)
+        set current = succ(current)
+    }
   }
 
-spec [Comp(n)](n, Range(n)) -> bool
-def Range.contains(testVal, range) ->
-  match range
-  | (leftLimit, rightLimit)   -> testVal <= rightLimit and testVal >= leftLimit
-  | (rightLimit = rightLimit) -> testVal <= rightLimit
-  | (leftLimit = leftLimit)   -> testVal <= leftLimit
-  | ()                        -> true
+
+def Range.contains
+  : [Ord(n)] n, Range(n) -> bool
+  = { testVal, range ->
+    match range
+    | #closedRange(leftLimit, rightLimit) -> testVal <= rightLimit and testVal >= leftLimit
+    | #leftOpenRange(rightLimit)          -> testVal <= rightLimit
+    | #rightOpenRange(leftLimit)          -> testVal <= leftLimit
+    | #openRange()                        -> true
+  }
 
 -- There's syntax support for ranges using the .. operator
 
-def getLogs(timespan: Range(Moment)) ->
-  logs ~filter { log -> timespan ~contains(log.timestamp) }
+def getLogs 
+  : Range(Moment)
+  = { timespan ->
+    logs \filter { log -> timespan \contains(log.timestamp) }
+  }
 
 def myLogs = getLogs((Moment.today)..)

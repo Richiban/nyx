@@ -22,7 +22,7 @@ def transform(context, token) ->
     def property = member: IPropertySymbol
     where property.isIndexer is false
     yield Property(property.name, property.type.toString(), property.getMethod is not null, property.setMethod?.isInitOnly is false)
-  } -toArray()
+  } \toArray()
 
   PartialRecordSyntax(
       node.identifier.toString()
@@ -45,7 +45,7 @@ def generateSource(record) ->
       yield $"""
                       "{name}" => {name},
           """
-  } -String.join("\r\n")
+  } \String.join("\r\n")
 
   def switchStmt = query {
     def property = from record.Properties
@@ -56,7 +56,7 @@ def generateSource(record) ->
                         {name} = ({property.Type}) value
                         break
     """
-  } -String.join("\r\n")
+  } \String.join("\r\n")
 
   def indexer = $$"""
           public object this[string name]

@@ -80,7 +80,7 @@ A function can take an argument of type 'any'. This allows any object to be pass
 
 ---
 
-def f(a: any) = string(a)
+def f(a: any) = string(α)
 
 --	A function with a type of 'undefined' will never return. Either it will loop forever or will always throw.
 
@@ -95,7 +95,7 @@ def f(): undefined = throw NotImplementedException
 def x: string | int = ...	-- (|) is a set union. In this | 'x' is a member of the set which is a union of 
                             --  strings and ints, meaning that in this | x is a string or an int  
 
-def x: (string, int) = ...	-- (,) gives the cartesian product of two (or more) sets, i.e. a tuple.
+def x: (string, int) = ...	-- (,) gives the cartesian product of two (or more) sets, i.e. a record.
 
 def x: A & B = ...			-- (&) gives the intersection between two sets. So x is of type A *and* type B.
 
@@ -132,24 +132,24 @@ def x = head([]) --  x: undefined
 
 
 
---	--	Types -> Tuples --
---	Tuples are a way of grouping values together. They are immutable (by default) and can contain any type of value. 
---  Each tuple is optionally named; if you do not supply a name then the field is said to be 'positional' and its name
---  will be the value of the index of the field. For example, the following tuple:
+--	--	Types -> Records --
+--	Records are a way of grouping values together. They are immutable (by default) and can contain any type of value. 
+--  Each record is optionally named; if you do not supply a name then the field is said to be 'positional' and its name
+--  will be the value of the index of the field. For example, the following record:
 
-  type MyTuple = (string, int, data: string)
+  type MyRecord = (string, int, data: string)
 
-  --  Note that named fields must come last in the tuple (and therefore positional values must come first)
+  --  Note that named fields must come last in the record (and therefore positional values must come first)
   
   --  Is equivalent to:
-  type MyTuple = (
+  type MyRecord = (
       0: string
       1: int
       data: string
   )
   
   
-  --	In Nyx, tuple types can be thought of as abstract types, or interfaces. When thinking of interfaces think
+  --	In Nyx, record types can be thought of as abstract types, or interfaces. When thinking of interfaces think
   --	of structural interfaces, meaning that they don't need to be explicitly implemented. Example below ->
   
   type Named = ( name: string )
@@ -176,14 +176,14 @@ def x = head([]) --  x: undefined
                               --	for Named, even though it doesn't explicitly
                               --	implement it
   
-  --	Tuples can also have optional members.
+  --	Records can also have optional members.
   
   type Person1 = (name: string; petsName?: string)
   
   --  This could also be written as a type union, as seen below:
   
   type Person2 = 
-      | (name: string, petsName = #nil)
+      | (name: string, petsName = #noPet)
       | (name: string, petsName: string)
   
   --  Note that, even though the type of 'petsName' has been declared as 'string', it ends up being `string?`
@@ -192,48 +192,68 @@ def x = head([]) --  x: undefined
   
   type Colour = #red | #green | #blue
   
-  --  Discriminated unions can be modelled through unions of tuples, where a tag in the first position is used 
+  --  Discriminated unions can be modelled through unions of records, where a tag in the first position is used 
       as the discriminator. Example ->
   
   type Shape = 
-      | (#circle, radius: number)
-      | (#rectangle, width: number, height: number)
+    | #circle(radius: number)
+    | #rectangle(width: number, height: number)
   
   --  You can then pattern match on the tag to extract the values:
-  spec Shape -> number
-  def area | (#circle, radius)           -> Math.pi * radius ** 2
-           | (#rectangle, width, height) -> width * height
+  def area: Shape -> number 
+    = { | #circle(radius)           -> Math.pi * radius ** 2
+        | #rectangle(width, height) -> width * height }
   
   type ContactInfo = 
       | #nil
-      | (#telephone, string)
-      | (#email, string)
-      | (#email_and_telephone, email: string, telephone: string)
+      | #telephone(string)
+      | #email(string)
+      | #emailAndTelephone(email: string, telephone: string)
   
   --  Usage: 
   
-  spec ContactInfo -> ()
-  def sendMessage | #nil -> () --  Do nothing
-                  | #telephone, telephone -> sendSMS(telephone)
-                  | #email, email -> sendEmail(email)
-                  | #email_and_telephone, email, telephone ->
-                      sendEmail(email)
-                      sendSMS(telephone)
   
-  --	There is no equivalent of 'void' from other languages; it is convention to use the tag '#nil' instead.
-  --  Note: you may ask why we don't use the empty tuple () instead of #nil. The reason is that, since tuples are
-  --  structurally typed, () is actually the top type of all tuples.
+  def sendMessage: ContactInfo -> ()
+    = { | #nil -> () --  Do nothing
+        | #telephone(telephone) -> sendSMS(telephone)
+        | #email(email) -> sendEmail(email)
+        | #emailAndTelephone(email, telephone) ->
+          sendEmail(email)
+          sendSMS(telephone) }
   
-  spec string -> #nil
-  def writeToConsole(message) ->
+  --	There is no equivalent of 'void' from other languages; the value/type 'unit' is used instead: ()
+  
+  def writeToConsole: string -> ()
+    = { message ->
       ...
+    }
   
-  --	Tuple types can be defined inline at the point of their use.
-  def calculateDistance (point: (x: int, y: int)) ->
+  --	Record types can be defined inline at the point of their use.
+  def calculateDistance = { (point: (x: int, y: int)) ->
       Math.sqrt(point.x ^ 2 + point.y ^ 2)
+  }
   
-  
+  --  Records can be combined
   type A = ( a: string )
   type B = ( b: string )
   
   def obj: A & B = ( a = "a", b = "b" )
+
+
+-- Nominal types
+
+-- Sometimes the name of a type is what's significant about a type, rather than its shape
+-- Nyx provides nominal and nominal-private types
+
+nominal User = (
+  id: UserId
+  name: string
+)
+
+nominal UserId = private string
+
+-- A nominal type cannot be constructed outside of its home module. To make it useful you need
+-- to expose a constructor function
+
+-- A nominal-private type (also known as an opaque type) is one whose structure is completely
+-- hidden outside its home module

@@ -10,12 +10,12 @@ Some patterns are total, meaning that they will always match. For example:
 
 ---
 
-def tuple = (4, 5)
+def record = (4, 5)
 
-def (x, y) = tuple -- This pattern can be used in a definition because it is total; i.e. it will always match
+def (x, y) = record -- This pattern can be used in a definition because it is total; i.e. it will always match
 
-def (4, y) = tuple -- This pattern is partial, not total, so this is a compiler error. What will happen 
-                   -- to the program if the first element of the tuple is not 4? Use a match expression instead
+def (4, y) = record -- This pattern is partial, not total, so this is a compiler error. What will happen 
+                   -- to the program if the first element of the record is not 4? Use a match expression instead
 
 ---
 # Match expressions
@@ -74,8 +74,7 @@ list2 	 -- => [4,5,6]
 def text = "Hello world"
 def (length = length, letters = [firstLetter, ..., lastLetter]) = text
 
-spec int -> string
-def classifyNumber = { 
+def classifyNumber: int -> string = { 
     | 0     -> "zero"
     | 1..10 -> "small"
     | > 10  -> "really big!"
@@ -136,22 +135,24 @@ Imagine a function that returns a Colour
 type Colour = (red: byte, green: byte, blue: byte)
 
 -- This type natively supports destructuring:
-
-spec Colour -> string
-def colourToString(Colour(r, g, b)) -> "rgb({r}, {g}, {b})"
+ 
+def colourToString: Colour -> string 
+  = { Colour(r, g, b) -> "rgb({r}, {g}, {b})" }
 
 -- We can add a custom pattern that allows us to destructure a Colour by HSL values:
 
-pattern HSL(colour: Colour) -> (
-  hue = colour -getHue()
-  saturation = colour -getSaturation()
-  lightness = colour -getLightness()
-)
+pattern HSL: Colour -> ??? 
+  = { colour -> 
+    ( hue = colour \getHue
+      saturation = colour \getSaturation
+      lightness = colour \getLightness
+    )
+  }
 
 -- We can now use our custom pattern in a definition:
 
-spec Colour -> string
-def colourToString(HSL(h, s, l)) -> "hsl({h}, {s}, {l})"
+def colourToString: Colour -> string
+  = { HSL(h, s, l) -> "hsl({h}, {s}, {l})" }
 
 
 
@@ -180,13 +181,14 @@ pattern Some = not #nil
 
 --  Note that the above is a simple pattern alias; it could have been written as 
 
-pattern Some(s) -> match s
+pattern Some { s -> match s
   | (not #nil) s -> (true, s)
   | _ -> false
+}
 
 --  It can then be used like this:
 match someFunction()
-| Some data -> data
+| #some data -> data
 | #nil -> "no data"
 
 
@@ -194,35 +196,38 @@ match someFunction()
 
 --  Some patterns can have both inputs and outputs; e.g. this regex pattern:
 
-pattern Regex(r: string, s: string) ->
+pattern Regex { r, s ->
   if Regex(r).match(s) ->
     s
   else ->
     #nil
+}
 
-
-def fizzbuzz(range: seq(int)) ->
-  range -map { i ->
+def fizzbuzz { range ->
+  range \map { i ->
     match i % 3, i % 5
       | 0, 0 -> "fizzbuzz"
       | 0, _ -> "fizz"
       | _, 0 -> "buzz"
-      else   -> string(i)
+      | else   -> string(i)
   }
+}
 
 -- Using a custom pattern, we can reduce the Fizzbuzz example above to:
 
-pattern DivisibleBy?(divisor, x) ->
-  if x div divisor == 0 -> true
+pattern DivisibleBy | _ = { divisor, x ->
+  if x \mod divisor == 0 -> true
   else -> false
+}
 
-def fizzbuzz(range: seq(int)) ->
-  range -map {
+def fizzbuzz { range ->
+  range \map {
     | DivisibleBy(3) and DivisibleBy(5) -> "fizzbuzz"
     | DivisibleBy(3) -> "fizz"
     | DivisibleBy(5) -> "buzz"
     | else -> "{i}"
   }
+}
 
 --  There is also an `except` keyword, which works like `match` except that it does
 --  not necessarily need to match all cases; any unmatched values are simply returned
@@ -235,9 +240,12 @@ def f(x: #a | #b | #c | #d) ->
 
 
 --  The `except` keyword is especially useful for handling errors. For example, given the function
-def getCustomer(id: string): Customer | #not_found -> 
-  if ... -> #not_found
-  else -> Customer(...)
+def getCustomer
+  : (id: string) -> #some(Customer) | #notFound 
+  = { id -> 
+    if ... -> #notFound
+    else -> #some(Customer(...))
+  }
 
 --  we can use `except` to handle the error case in a more functional way:
 def f() ->
@@ -252,31 +260,47 @@ def f() ->
 
 --  The syntax for pattern matching is to pipe an expression to a series of `case` arms, like so:
 
-def f(x) = x -match
+def f = { x -> x \match
   | 1 -> "one"
   | 2 -> "two"
   | 3 -> "three"
-  | _ -> "lots"
+  | _ -> "lots" }
 
 --  Active patterns are functions that can be used in a | arm. They are written as a normal function, but with the
 --  name encased in brackets
 
 --  The simplest active pattern is a function that returns a boolean. If the function returns true, the match arm is executed.
-pattern Even(x) = x % 2 == 0
+--  Patterns can be partial or total
+pattern Even | _ = { x -> x % 2 == 0 }
 
-pattern (Even | Odd)(x) = if x % 2 == 0 -> Even else -> Odd
+pattern Even | Odd = { x -> 
+  if x % 2 == 0 -> Even 
+  else -> Odd
+}
 
-def f(x) = match x
+def f { x -> match x
   | Even -> "even"
   | Odd  -> "odd" -- This pattern is known to be complete, so we don't need a catch-all arm
+}
 
 --  Active patterns can also return a value. This value is then bound to the name of the active pattern in the match arm.
 --  This pattern is also `partial` (indicated by the `?`), meaning that it might not match
-pattern Regex?(r, x) ->
+pattern Regex? = { r, x ->
   if Regex.match(r, x) is [y, ...] ->
-    (true, y)
-  else -> false
+    #some(y)
+  else -> #noMatch
+}
 
-def f | Regex("^[0-9]+$", d) -> "a number -> {d}"
-      | Regex("^[a-z]+$", s) -> "a string -> {s}"
-      | _                    -> "something else"
+def f = { | Regex("^[0-9]+$", d) -> "a number -> {d}"
+          | Regex("^[a-z]+$", s) -> "a string -> {s}"
+          | _                    -> "something else" }
+
+
+
+--  It's also possible to match using an arbitrary function:
+
+match someInt()
+| 0               -> "zero"
+| { < 5 }         -> "small"
+| { in 5..10 }    -> "medium"
+| { x -> x > 10 } -> "big"

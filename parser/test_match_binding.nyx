@@ -1,0 +1,9 @@
+def identity = { x ->
+  match x
+  | y -> y
+}
+
+def alwaysZero = { x ->
+  match x
+  | _ -> 0
+}

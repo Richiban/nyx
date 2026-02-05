@@ -1,0 +1,6 @@
+def test = { x ->
+  match x
+  | 0 -> "zero"
+  | 1 -> "one"
+  | else -> "many"
+}

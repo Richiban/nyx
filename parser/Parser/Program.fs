@@ -21,6 +21,15 @@ type Expression =
     | BinaryOp of string * Expression * Expression
     | Pipe of Expression * Identifier * Expression list  // expr \func or expr \func(args)
     | Block of Statement list
+    | Match of Expression * MatchArm list
+
+and Pattern =
+    | LiteralPattern of Literal
+    | IdentifierPattern of Identifier
+    | WildcardPattern
+    | ElsePattern
+
+and MatchArm = Pattern * Expression
 
 and Statement =
     | DefStatement of Identifier * Expression
@@ -122,15 +131,46 @@ let literal: Parser<Literal, unit> =
 let expression, expressionRef = createParserForwardedToRef<Expression, unit>()
 let lambda, lambdaRef = createParserForwardedToRef<Expression, unit>()
 let functionCall, functionCallRef = createParserForwardedToRef<Expression, unit>()
+let matchExpr, matchExprRef = createParserForwardedToRef<Expression, unit>()
+
+// Pattern parsers
+let pattern, patternRef = createParserForwardedToRef<Pattern, unit>()
+
+let literalPattern = literalNoWs |>> LiteralPattern
+let wildcardPattern = pstring "_" >>% WildcardPattern
+let elsePattern = pstring "else" >>% ElsePattern
+let identifierPattern = identifierNoWs |>> IdentifierPattern
+
+do patternRef := 
+    choice [
+        attempt literalPattern
+        attempt elsePattern
+        attempt wildcardPattern
+        identifierPattern
+    ] .>> ws
+    <?> "pattern"
+
+// Match expression parser
+do
+    let matchArm =
+        pstring "|" >>. ws >>. pattern .>>. (pstring "->" >>. ws >>. expression)
+        <?> "match arm"
+    
+    matchExprRef :=
+        pipe2
+            (pstring "match" >>. ws >>. expression)
+            (many1 (ws >>. matchArm))
+            (fun scrutinee arms -> Match(scrutinee, arms))
+        <?> "match expression"
 
 // Operator precedence parser
 let opp = new OperatorPrecedenceParser<Expression, unit, unit>()
 
 // Primary expression (literals, identifiers, function calls, lambdas, parenthesized expressions)
-// Primary expression (literals, identifiers, function calls, lambdas, parenthesized expressions)
 // Version without trailing whitespace consumption (for use in block contexts)
 let primaryExprNoWs =
     choice [
+        attempt matchExpr
         attempt lambda
         attempt functionCall
         literalNoWs |>> LiteralExpr

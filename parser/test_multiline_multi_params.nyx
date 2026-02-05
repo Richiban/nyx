@@ -1,0 +1,5 @@
+def g = { x, y, z ->
+    println(x)
+    println(y)
+    println(z)
+}

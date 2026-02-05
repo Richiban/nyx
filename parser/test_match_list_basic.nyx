@@ -1,0 +1,12 @@
+def list = [1, 2, 3, 4, 5]
+
+def describeList = match list
+  | [] -> "empty"
+  | [x] -> "single: {x}"
+  | [x, y] -> "pair: {x}, {y}"
+  | [x, y, z] -> "triple: {x}, {y}, {z}"
+  | else -> "many"
+
+def head = match list
+  | [first] -> first
+  | else -> 0

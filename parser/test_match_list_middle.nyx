@@ -1,0 +1,9 @@
+def list = [1, 2, 3, 4, 5]
+
+def getFirstAndLast = match list
+  | [first, ..., last] -> (first, last)
+  | else -> (0, 0)
+
+def getEnds = match list
+  | [a, b, ..., y, z] -> (a, b, y, z)
+  | else -> (0, 0, 0, 0)

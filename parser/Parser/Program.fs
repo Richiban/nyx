@@ -23,6 +23,7 @@ type Expression =
     | Block of Statement list
     | Match of Expression * MatchArm list
     | TupleExpr of Expression list
+    | ListExpr of Expression list
 
 and Pattern =
     | LiteralPattern of Literal
@@ -32,12 +33,19 @@ and Pattern =
     | TuplePattern of Pattern list
     | RecordPattern of Identifier * Pattern list  // Type name and patterns by position
     | RecordMemberPattern of (Identifier * Pattern) list  // Patterns by member name
+    | ListPattern of Pattern list * Pattern option  // patterns, optional splat at end
+    | ListSplatMiddle of Pattern list * Pattern list  // patterns before ..., patterns after
 
 and MatchArm = Pattern * Expression
 
 and Statement =
     | DefStatement of Identifier * Expression
     | ExprStatement of Expression
+
+// Helper type for parsing list patterns
+type ListPatternElement =
+    | RegularPattern of Pattern
+    | Splat of Identifier option
 
 type Definition =
     | ValueDef of Identifier * Expression
@@ -179,12 +187,63 @@ let recordMemberPattern =
             (pstring "," .>> ws))
     |>> RecordMemberPattern
 
+// List pattern: [pat1, pat2, ...] or [pat1, ...rest] or [first, ..., last]
+let listPattern =
+    let splatPattern = 
+        pstring "..." >>. ws >>. opt identifierNoWs
+        |>> Splat
+    
+    let regularPatternOrSplat =
+        (attempt splatPattern) <|> (pattern |>> RegularPattern)
+    
+    between
+        (pstring "[")
+        (pstring "]")
+        (sepBy (ws >>. regularPatternOrSplat) (pstring "," .>> ws))
+    |>> fun elements ->
+        // Find where the splat is (if any)
+        let splatIndex = elements |> List.tryFindIndex (fun e -> 
+            match e with Splat _ -> true | _ -> false)
+        
+        match splatIndex with
+        | None ->
+            // No splat - regular list pattern
+            let patterns = elements |> List.map (fun e -> 
+                match e with 
+                | RegularPattern p -> p 
+                | _ -> failwith "unexpected")
+            ListPattern(patterns, None)
+        | Some idx when idx = elements.Length - 1 ->
+            // Splat at end: [a, b, ...rest] or [a, b, ...]
+            let beforeSplat = elements |> List.take idx |> List.map (fun e ->
+                match e with 
+                | RegularPattern p -> p 
+                | _ -> failwith "unexpected")
+            let splatName = 
+                match elements.[idx] with
+                | Splat (Some id) -> Some (IdentifierPattern id)
+                | Splat None -> None
+                | _ -> failwith "unexpected"
+            ListPattern(beforeSplat, splatName)
+        | Some idx ->
+            // Splat in middle: [first, ..., last]
+            let beforeSplat = elements |> List.take idx |> List.map (fun e ->
+                match e with 
+                | RegularPattern p -> p 
+                | _ -> failwith "unexpected")
+            let afterSplat = elements |> List.skip (idx + 1) |> List.map (fun e ->
+                match e with 
+                | RegularPattern p -> p 
+                | _ -> failwith "unexpected")
+            ListSplatMiddle(beforeSplat, afterSplat)
+
 do patternRef := 
     choice [
         attempt literalPattern
         attempt elsePattern
         attempt recordPatternByPosition  // Must come before identifierPattern
         attempt recordMemberPattern
+        attempt listPattern
         attempt tuplePattern
         attempt wildcardPattern
         identifierPattern
@@ -218,6 +277,14 @@ let tupleOrParenExpr =
         | [single] -> single  // Single expression in parens is just that expression
         | multiple -> TupleExpr multiple
 
+// List expression parser
+let listExpr =
+    between
+        (pstring "[")
+        (pstring "]")
+        (sepBy (ws >>. expression) (pstring "," .>> ws))
+    |>> ListExpr
+
 // Primary expression (literals, identifiers, function calls, lambdas, parenthesized expressions)
 // Version without trailing whitespace consumption (for use in block contexts)
 let primaryExprNoWs =
@@ -226,6 +293,7 @@ let primaryExprNoWs =
         attempt lambda
         attempt functionCall
         literalNoWs |>> LiteralExpr
+        listExpr
         tupleOrParenExpr
         identifierNoWs |>> IdentifierExpr
     ]

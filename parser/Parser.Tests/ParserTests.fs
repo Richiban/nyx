@@ -293,3 +293,286 @@ def pi = 3.14"""
         | _ -> failwith "Expected ModuleDecl"
     | Result.Error err ->
         failwith $"Parse failed: {err}"
+
+// Function Call Tests
+[<Fact>]
+let ``Parse function call with no arguments`` () =
+    let result = parseModule "def x = foo()"
+    
+    result |> isOk |> should equal true
+    match result with
+    | Result.Ok module' ->
+        module' |> should haveLength 1
+        match module'.[0] with
+        | Def (ValueDef (name, FunctionCall (funcName, args))) ->
+            name |> should equal "x"
+            funcName |> should equal "foo"
+            args |> should haveLength 0
+        | _ -> failwith "Expected Def with FunctionCall"
+    | Result.Error err -> failwith $"Parse should succeed, got: {err}"
+
+[<Fact>]
+let ``Parse function call with one argument`` () =
+    let result = parseModule "def x = println(\"Hello\")"
+    
+    result |> isOk |> should equal true
+    match result with
+    | Result.Ok module' ->
+        module' |> should haveLength 1
+        match module'.[0] with
+        | Def (ValueDef (name, FunctionCall (funcName, args))) ->
+            name |> should equal "x"
+            funcName |> should equal "println"
+            args |> should haveLength 1
+            match args.[0] with
+            | LiteralExpr (StringLit value) -> value |> should equal "Hello"
+            | _ -> failwith "Expected string literal argument"
+        | _ -> failwith "Expected Def with FunctionCall"
+    | Result.Error err -> failwith $"Parse should succeed, got: {err}"
+
+[<Fact>]
+let ``Parse function call with multiple arguments`` () =
+    let result = parseModule "def result = add(1, 2)"
+    
+    result |> isOk |> should equal true
+    match result with
+    | Result.Ok module' ->
+        module' |> should haveLength 1
+        match module'.[0] with
+        | Def (ValueDef (name, FunctionCall (funcName, args))) ->
+            name |> should equal "result"
+            funcName |> should equal "add"
+            args |> should haveLength 2
+            match args.[0], args.[1] with
+            | LiteralExpr (IntLit v1), LiteralExpr (IntLit v2) -> 
+                v1 |> should equal 1
+                v2 |> should equal 2
+            | _ -> failwith "Expected int literal arguments"
+        | _ -> failwith "Expected Def with FunctionCall"
+    | Result.Error err -> failwith $"Parse should succeed, got: {err}"
+
+[<Fact>]
+let ``Parse function call with identifier argument`` () =
+    let result = parseModule "def y = foo(x)"
+    
+    result |> isOk |> should equal true
+    match result with
+    | Result.Ok module' ->
+        module' |> should haveLength 1
+        match module'.[0] with
+        | Def (ValueDef (name, FunctionCall (funcName, args))) ->
+            name |> should equal "y"
+            funcName |> should equal "foo"
+            args |> should haveLength 1
+            match args.[0] with
+            | IdentifierExpr id -> id |> should equal "x"
+            | _ -> failwith "Expected identifier argument"
+        | _ -> failwith "Expected Def with FunctionCall"
+    | Result.Error err -> failwith $"Parse should succeed, got: {err}"
+
+[<Fact>]
+let ``Parse nested function calls`` () =
+    let result = parseModule "def x = outer(inner(42))"
+    
+    result |> isOk |> should equal true
+    match result with
+    | Result.Ok module' ->
+        module' |> should haveLength 1
+        match module'.[0] with
+        | Def (ValueDef (name, FunctionCall (funcName, args))) ->
+            name |> should equal "x"
+            funcName |> should equal "outer"
+            args |> should haveLength 1
+            match args.[0] with
+            | FunctionCall (innerName, innerArgs) ->
+                innerName |> should equal "inner"
+                innerArgs |> should haveLength 1
+                match innerArgs.[0] with
+                | LiteralExpr (IntLit v) -> v |> should equal 42
+                | _ -> failwith "Expected int literal in inner call"
+            | _ -> failwith "Expected nested function call"
+        | _ -> failwith "Expected Def with FunctionCall"
+    | Result.Error err -> failwith $"Parse should succeed, got: {err}"
+
+// Lambda Expression Tests
+[<Fact>]
+let ``Parse lambda with no parameters`` () =
+    let result = parseModule "def f = { 42 }"
+    
+    result |> isOk |> should equal true
+    match result with
+    | Result.Ok module' ->
+        module' |> should haveLength 1
+        match module'.[0] with
+        | Def (ValueDef (name, Lambda (parameters, body))) ->
+            name |> should equal "f"
+            parameters |> should haveLength 0
+            match body with
+            | LiteralExpr (IntLit v) -> v |> should equal 42
+            | _ -> failwith "Expected int literal in lambda body"
+        | _ -> failwith "Expected Def with Lambda"
+    | Result.Error err -> failwith $"Parse should succeed, got: {err}"
+
+[<Fact>]
+let ``Parse lambda with one parameter`` () =
+    let result = parseModule "def f = { x -> x }"
+    
+    result |> isOk |> should equal true
+    match result with
+    | Result.Ok module' ->
+        module' |> should haveLength 1
+        match module'.[0] with
+        | Def (ValueDef (name, Lambda (parameters, body))) ->
+            name |> should equal "f"
+            parameters |> should haveLength 1
+            parameters.[0] |> should equal "x"
+            match body with
+            | IdentifierExpr id -> id |> should equal "x"
+            | _ -> failwith "Expected identifier in lambda body"
+        | _ -> failwith "Expected Def with Lambda"
+    | Result.Error err -> failwith $"Parse should succeed, got: {err}"
+
+[<Fact>]
+let ``Parse lambda with multiple parameters`` () =
+    let result = parseModule "def add = { x, y -> 42 }"
+    
+    result |> isOk |> should equal true
+    match result with
+    | Result.Ok module' ->
+        module' |> should haveLength 1
+        match module'.[0] with
+        | Def (ValueDef (name, Lambda (parameters, body))) ->
+            name |> should equal "add"
+            parameters |> should haveLength 2
+            parameters.[0] |> should equal "x"
+            parameters.[1] |> should equal "y"
+        | _ -> failwith "Expected Def with Lambda"
+    | Result.Error err -> failwith $"Parse should succeed, got: {err}"
+
+[<Fact>]
+let ``Parse lambda with function call in body`` () =
+    let result = parseModule "def f = { x -> println(x) }"
+    
+    result |> isOk |> should equal true
+    match result with
+    | Result.Ok module' ->
+        module' |> should haveLength 1
+        match module'.[0] with
+        | Def (ValueDef (name, Lambda (parameters, body))) ->
+            name |> should equal "f"
+            parameters |> should haveLength 1
+            parameters.[0] |> should equal "x"
+            match body with
+            | FunctionCall (funcName, args) ->
+                funcName |> should equal "println"
+                args |> should haveLength 1
+            | _ -> failwith "Expected function call in lambda body"
+        | _ -> failwith "Expected Def with Lambda"
+    | Result.Error err -> failwith $"Parse should succeed, got: {err}"
+
+[<Fact>]
+let ``Parse lambda as function argument`` () =
+    let result = parseModule "def x = map({ x -> x }, items)"
+    
+    result |> isOk |> should equal true
+    match result with
+    | Result.Ok module' ->
+        module' |> should haveLength 1
+        match module'.[0] with
+        | Def (ValueDef (name, FunctionCall (funcName, args))) ->
+            name |> should equal "x"
+            funcName |> should equal "map"
+            args |> should haveLength 2
+            match args.[0] with
+            | Lambda (parameters, _) ->
+                parameters |> should haveLength 1
+                parameters.[0] |> should equal "x"
+            | _ -> failwith "Expected lambda as first argument"
+        | _ -> failwith "Expected Def with FunctionCall"
+    | Result.Error err -> failwith $"Parse should succeed, got: {err}"
+
+// Binary Operator Tests
+[<Fact>]
+let ``Parse addition`` () =
+    let result = parseModule "def sum = 1 + 2"
+    
+    result |> isOk |> should equal true
+    match result with
+    | Result.Ok module' ->
+        module' |> should haveLength 1
+        match module'.[0] with
+        | Def (ValueDef (name, BinaryOp (op, left, right))) ->
+            name |> should equal "sum"
+            op |> should equal "+"
+            match left, right with
+            | LiteralExpr (IntLit v1), LiteralExpr (IntLit v2) ->
+                v1 |> should equal 1
+                v2 |> should equal 2
+            | _ -> failwith "Expected int literals"
+        | _ -> failwith "Expected Def with BinaryOp"
+    | Result.Error err -> failwith $"Parse should succeed, got: {err}"
+
+[<Fact>]
+let ``Parse multiplication`` () =
+    let result = parseModule "def product = 3 * 4"
+    
+    result |> isOk |> should equal true
+    match result with
+    | Result.Ok module' ->
+        match module'.[0] with
+        | Def (ValueDef (_, BinaryOp (op, _, _))) ->
+            op |> should equal "*"
+        | _ -> failwith "Expected Def with BinaryOp"
+    | Result.Error err -> failwith $"Parse should succeed, got: {err}"
+
+[<Fact>]
+let ``Parse operator precedence - multiplication before addition`` () =
+    let result = parseModule "def x = 1 + 2 * 3"
+    
+    result |> isOk |> should equal true
+    match result with
+    | Result.Ok module' ->
+        match module'.[0] with
+        | Def (ValueDef (_, BinaryOp ("+", LiteralExpr (IntLit 1), BinaryOp ("*", LiteralExpr (IntLit 2), LiteralExpr (IntLit 3))))) ->
+            () // Correct precedence: 1 + (2 * 3)
+        | _ -> failwith "Expected correct precedence: 1 + (2 * 3)"
+    | Result.Error err -> failwith $"Parse should succeed, got: {err}"
+
+[<Fact>]
+let ``Parse parenthesized expression`` () =
+    let result = parseModule "def x = (1 + 2) * 3"
+    
+    result |> isOk |> should equal true
+    match result with
+    | Result.Ok module' ->
+        match module'.[0] with
+        | Def (ValueDef (_, BinaryOp ("*", BinaryOp ("+", LiteralExpr (IntLit 1), LiteralExpr (IntLit 2)), LiteralExpr (IntLit 3)))) ->
+            () // Correct: (1 + 2) * 3
+        | _ -> failwith "Expected correct precedence: (1 + 2) * 3"
+    | Result.Error err -> failwith $"Parse should succeed, got: {err}"
+
+[<Fact>]
+let ``Parse comparison operators`` () =
+    let result = parseModule "def x = 5 > 3"
+    
+    result |> isOk |> should equal true
+    match result with
+    | Result.Ok module' ->
+        match module'.[0] with
+        | Def (ValueDef (_, BinaryOp (">", LiteralExpr (IntLit 5), LiteralExpr (IntLit 3)))) ->
+            ()
+        | _ -> failwith "Expected comparison operator"
+    | Result.Error err -> failwith $"Parse should succeed, got: {err}"
+
+[<Fact>]
+let ``Parse equality operators`` () =
+    let result = parseModule "def x = a == b"
+    
+    result |> isOk |> should equal true
+    match result with
+    | Result.Ok module' ->
+        match module'.[0] with
+        | Def (ValueDef (_, BinaryOp ("==", IdentifierExpr "a", IdentifierExpr "b"))) ->
+            ()
+        | _ -> failwith "Expected equality operator"
+    | Result.Error err -> failwith $"Parse should succeed, got: {err}"

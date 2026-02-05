@@ -1,0 +1,7 @@
+module LambdaTest
+
+def constant = { 42 }
+def identity = { x -> x }
+def add = { x, y -> 42 }
+def greet = { name -> println(name) }
+def result = map({ x -> x }, items)

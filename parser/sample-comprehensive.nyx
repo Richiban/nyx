@@ -1,0 +1,20 @@
+module ComprehensiveExample
+
+def greeting = "Hello"
+def name = "World"
+def pi = 3.14159
+def isReady = true
+
+def sum = 1 + 2 + 3
+def calculation = (10 + 5) * 2 - 8 / 4
+def comparison = sum > 10
+
+def identity = { x -> x }
+def add = { x, y -> x + y }
+def multiply = { a, b -> a * b }
+
+def result = add(5, 3)
+def nested = multiply(add(2, 3), 4)
+
+def mapped = map({ x -> x * 2 }, numbers)
+def filtered = filter({ n -> n > 0 }, values)

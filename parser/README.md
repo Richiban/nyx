@@ -14,6 +14,8 @@ Currently supports parsing:
   - Floats: `3.14159`
   - Booleans: `true`, `false`
 - **Identifiers**: Variable references like `someValue`
+- **Function calls**: `println("Hello")`, `add(1, 2)`, nested calls
+- **Lambda expressions**: `{ x -> x }`, `{ x, y -> add(x, y) }`, `{ 42 }`
 - **Whitespace handling**: Flexible whitespace and newlines
 
 ## Project Structure
@@ -43,11 +45,13 @@ cd parser
 dotnet test
 ```
 
-All 23 tests should pass:
+All 33 tests should pass:
 - Literal parsing (strings, ints, floats, booleans)
 - Module declarations
 - Value definitions
 - Identifier handling (underscores, digits)
+- Function calls (no args, single arg, multiple args, nested)
+- Lambda expressions (no params, single param, multiple params, as arguments)
 - Whitespace handling (leading, trailing, extra)
 - Error cases (missing equals, missing value, unterminated strings)
 - Complex scenarios (multiple definitions, blank lines)

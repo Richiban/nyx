@@ -16,6 +16,9 @@ type Literal =
 type Expression =
     | LiteralExpr of Literal
     | IdentifierExpr of Identifier
+    | FunctionCall of Identifier * Expression list
+    | Lambda of Identifier list * Expression
+    | BinaryOp of string * Expression * Expression
 
 type Definition =
     | ValueDef of Identifier * Expression
@@ -67,13 +70,70 @@ let literal: Parser<Literal, unit> =
     ]
     <?> "literal"
 
-// Parser for expressions
-let expression: Parser<Expression, unit> =
+// Forward references for recursive expression parsing
+let expression, expressionRef = createParserForwardedToRef<Expression, unit>()
+let lambda, lambdaRef = createParserForwardedToRef<Expression, unit>()
+let functionCall, functionCallRef = createParserForwardedToRef<Expression, unit>()
+
+// Operator precedence parser
+let opp = new OperatorPrecedenceParser<Expression, unit, unit>()
+
+// Primary expression (literals, identifiers, function calls, lambdas, parenthesized expressions)
+let primaryExpr =
     choice [
+        attempt lambda
+        attempt functionCall
         literal |>> LiteralExpr
+        between (pstring "(") (pstring ")") (ws >>. expression .>> ws)
         identifier |>> IdentifierExpr
-    ]
-    <?> "expression"
+    ] .>> ws
+
+opp.TermParser <- primaryExpr
+
+// Define operators with precedence
+// Multiplicative operators (higher precedence)
+opp.AddOperator(InfixOperator("*", ws, 7, Associativity.Left, fun x y -> BinaryOp("*", x, y)))
+opp.AddOperator(InfixOperator("/", ws, 7, Associativity.Left, fun x y -> BinaryOp("/", x, y)))
+
+// Additive operators
+opp.AddOperator(InfixOperator("+", ws, 6, Associativity.Left, fun x y -> BinaryOp("+", x, y)))
+opp.AddOperator(InfixOperator("-", ws, 6, Associativity.Left, fun x y -> BinaryOp("-", x, y)))
+
+// Comparison operators (lower precedence)
+opp.AddOperator(InfixOperator("<", ws, 4, Associativity.Left, fun x y -> BinaryOp("<", x, y)))
+opp.AddOperator(InfixOperator(">", ws, 4, Associativity.Left, fun x y -> BinaryOp(">", x, y)))
+opp.AddOperator(InfixOperator("<=", ws, 4, Associativity.Left, fun x y -> BinaryOp("<=", x, y)))
+opp.AddOperator(InfixOperator(">=", ws, 4, Associativity.Left, fun x y -> BinaryOp(">=", x, y)))
+
+// Equality operators (lowest precedence)
+opp.AddOperator(InfixOperator("==", ws, 3, Associativity.Left, fun x y -> BinaryOp("==", x, y)))
+opp.AddOperator(InfixOperator("!=", ws, 3, Associativity.Left, fun x y -> BinaryOp("!=", x, y)))
+
+// Wire up the expression parser
+do expressionRef := opp.ExpressionParser
+
+// Wire up the lambda parser
+do 
+    let paramList = sepBy identifier (pstring "," .>> ws)
+    let arrow = pstring "->" .>> ws
+    let lambdaWithParams = pipe2 (paramList .>> arrow) expression (fun parameters body -> Lambda(parameters, body))
+    let lambdaNoParams = expression |>> (fun body -> Lambda([], body))
+    
+    lambdaRef :=
+        between (pstring "{") (pstring "}") (
+            ws >>. (attempt lambdaWithParams <|> lambdaNoParams) .>> ws
+        )
+        <?> "lambda expression"
+
+// Wire up the function call parser
+do 
+    functionCallRef :=
+        pipe2
+            identifier
+            (between (pstring "(") (pstring ")") 
+                (sepBy expression (pstring "," .>> ws)))
+            (fun name args -> FunctionCall(name, args))
+        <?> "function call"
 
 // Parser for module declaration
 let moduleDecl: Parser<TopLevelItem, unit> =

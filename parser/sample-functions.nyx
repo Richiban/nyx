@@ -1,0 +1,9 @@
+module FunctionTest
+
+def greeting = "Hello"
+def name = "World"
+
+def message = println(greeting)
+def result = add(1, 2)
+def nested = outer(inner(42))
+def noArgs = getCurrentTime()

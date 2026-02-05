@@ -1,0 +1,13 @@
+module BinaryOpTest
+
+def sum = 1 + 2
+def product = 3 * 4
+def difference = 10 - 5
+def quotient = 20 / 4
+
+def complex = 1 + 2 * 3
+def withParens = (1 + 2) * 3
+
+def comparison = 5 > 3
+def equality = x == y
+def inequality = a != b

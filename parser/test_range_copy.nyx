@@ -1,0 +1,3 @@
+def test = match 5
+  | 1..3 -> "small"
+  | else -> "other"

@@ -1,0 +1,16 @@
+def classifyNumber = { n ->
+  match n
+  | 0 -> "zero"
+  | > 100 -> "really big"
+  | > 10 -> "big"
+  | < 0 -> "negative"
+  | else -> "small"
+}
+
+def temperature = 75
+
+def comfort = match temperature
+  | < 32 -> "freezing"
+  | >= 32 -> "not freezing"
+  | > 100 -> "too hot"
+  | else -> "comfortable"

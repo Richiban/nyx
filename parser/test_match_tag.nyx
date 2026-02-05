@@ -1,0 +1,21 @@
+def maybeValue = #some(42)
+
+def unwrap = match maybeValue
+  | #some(x) -> x
+  | #none -> 0
+  | else -> -1
+
+def result = #error("failed")
+
+def process = match result
+  | #ok data -> data
+  | #error msg -> "Error: {msg}"
+  | #error -> "Unknown error"
+  | else -> "unexpected"
+
+def simple = #nil
+
+def check = match simple
+  | #nil -> "empty"
+  | #some x -> "has value"
+  | else -> "other"

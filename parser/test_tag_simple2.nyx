@@ -1,0 +1,1 @@
+def test = match someValue | #some(val) -> val | else -> 0

@@ -1,0 +1,13 @@
+def maybeValue = someDummyValue
+
+def unwrap = match maybeValue
+  | #some(x) -> x
+  | #none -> 0
+  | else -> -1
+
+def result = anotherDummyValue
+
+def process = match result
+  | #ok -> "success"
+  | #error(msg) -> msg
+  | else -> "unexpected"

@@ -35,6 +35,9 @@ and Pattern =
     | RecordMemberPattern of (Identifier * Pattern) list  // Patterns by member name
     | ListPattern of Pattern list * Pattern option  // patterns, optional splat at end
     | ListSplatMiddle of Pattern list * Pattern list  // patterns before ..., patterns after
+    | RangePattern of Expression * Expression  // start..end (inclusive)
+    | GuardPattern of string * Expression  // operator (>, <, >=, <=, ==, !=) and value
+    | TagPattern of Identifier * Pattern option  // #tagName or #tagName(pattern)
 
 and MatchArm = Pattern * Expression
 
@@ -104,7 +107,10 @@ let stringLiteralNoWs: Parser<Literal, unit> =
 let stringLiteral: Parser<Literal, unit> = stringLiteralNoWs .>> ws
 
 let intLiteralNoWs: Parser<Literal, unit> =
-    pint32 .>> notFollowedBy (pchar '.')  |>> IntLit
+    // Allow parsing int even if followed by dots (for range operator "..")
+    // Just don't allow a SINGLE dot (which would make it a float)
+    let notFloat = followedBy (pstring "..") <|> notFollowedBy (pchar '.')
+    pint32 .>> notFloat |>> IntLit
     <?> "integer literal"
 
 let intLiteral: Parser<Literal, unit> = intLiteralNoWs .>> ws
@@ -148,10 +154,26 @@ let matchExpr, matchExprRef = createParserForwardedToRef<Expression, unit>()
 // Pattern parsers
 let pattern, patternRef = createParserForwardedToRef<Pattern, unit>()
 
-let literalPattern = literalNoWs |>> LiteralPattern
 let wildcardPattern = pstring "_" >>% WildcardPattern
 let elsePattern = pstring "else" >>% ElsePattern
 let identifierPattern = identifierNoWs |>> IdentifierPattern
+
+// Parse either a range pattern (1..10), an integer literal pattern (1), 
+// or other literal types (float, bool, string)
+// NOTE: For ranges, we only allow INTEGER literals to avoid ambiguity with floats like "1."
+let literalOrRangePattern =
+    choice [
+        // Try integer with optional range
+        attempt (
+            intLiteralNoWs >>= fun startLit ->
+            opt (pstring ".." >>. ws >>. intLiteralNoWs) >>= fun endLitOpt ->
+            match endLitOpt with
+            | Some endLit -> preturn (RangePattern(LiteralExpr startLit, LiteralExpr endLit))
+            | None -> preturn (LiteralPattern startLit)
+        )
+        // Or any other literal type
+        literalNoWs |>> LiteralPattern
+    ]
 
 // Tuple pattern: (pat1, pat2, ...)
 let tuplePattern =
@@ -237,16 +259,46 @@ let listPattern =
                 | _ -> failwith "unexpected")
             ListSplatMiddle(beforeSplat, afterSplat)
 
+// Range pattern: 1..10
+// Must use attempt to ensure proper backtracking if ".." is not found
+// Guard pattern: > 10, < 5, >= 10, <= 5, == 5, != 5
+let guardPattern =
+    attempt (
+        let guardOp = 
+            choice [
+                pstring ">="
+                pstring "<="
+                pstring "=="
+                pstring "!="
+                pstring ">"
+                pstring "<"
+            ]
+        guardOp .>>. (ws >>. (literalNoWs |>> LiteralExpr))
+        |>> fun (op, value) -> GuardPattern(op, value)
+    )
+
+// Tag pattern: #nil or #some(x) or #error data
+let tagPattern =
+    attempt (
+        (pstring "#" >>. identifierNoWs) .>>. 
+        (opt (ws >>. (
+            (between (pstring "(") (pstring ")") (ws >>. pattern .>> ws))
+            <|> pattern)))
+        |>> fun (tagName, binding) -> TagPattern(tagName, binding)
+    )
+
 do patternRef := 
     choice [
-        attempt literalPattern
-        attempt elsePattern
+        attempt elsePattern         // "else" must come before identifiers
+        attempt tagPattern          // "#tag" must come before literals/identifiers
+        attempt guardPattern        // "> 5" must come before operators in other contexts
+        attempt literalOrRangePattern  // Handles both literals and ranges (1 or 1..10)
         attempt recordPatternByPosition  // Must come before identifierPattern
         attempt recordMemberPattern
         attempt listPattern
         attempt tuplePattern
         attempt wildcardPattern
-        identifierPattern
+        identifierPattern           // Last resort - any identifier
     ] .>> ws
     <?> "pattern"
 
@@ -539,14 +591,26 @@ let main argv =
     if argv.Length > 0 then
         let file = argv.[0]
         let text = System.IO.File.ReadAllText(file)
-        match parseModule text with
-        | Result.Ok ast ->
-            printfn "Parsed successfully:"
-            ast |> List.iter (printfn "  %A")
-            0
-        | Result.Error err ->
-            printfn "Parse error: %s" err
-            1
+        
+        // Debug mode: if file ends with .txt, parse as pattern
+        if file.EndsWith(".txt") then
+            match run (literalOrRangePattern .>> eof) text with
+            | Success(pat, _, _) ->
+                printfn "Pattern parsed successfully:"
+                printfn "  %A" pat
+                0
+            | Failure(errorMsg, _, _) ->
+                printfn "Pattern parse error: %s" errorMsg
+                1
+        else
+            match parseModule text with
+            | Result.Ok ast ->
+                printfn "Parsed successfully:"
+                ast |> List.iter (printfn "  %A")
+                0
+            | Result.Error err ->
+                printfn "Parse error: %s" err
+                1
     else
         printfn "Usage: NyxParser <file.nyx>"
         1

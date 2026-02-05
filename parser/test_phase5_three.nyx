@@ -1,0 +1,5 @@
+def testRange = match 5 | 1..10 -> "small" | else -> "large"
+
+def testGuard = match 25 | > 10 -> "big" | else -> "small"
+
+def testTag = match someVal | #some(x) -> x | else -> 0

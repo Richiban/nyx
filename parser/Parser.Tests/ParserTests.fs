@@ -621,6 +621,113 @@ let ``Parse shorthand lambda as function argument`` () =
         | _ -> failwith "Expected Def with FunctionCall"
     | Result.Error err -> failwith $"Parse should succeed, got: {err}"
 
+// Pipe Operator Tests
+[<Fact>]
+let ``Parse simple pipe`` () =
+    let result = parseModule "def result = x \\f"
+    
+    result |> isOk |> should equal true
+    match result with
+    | Result.Ok module' ->
+        module' |> should haveLength 1
+        match module'.[0] with
+        | Def (ValueDef (name, Pipe (expr, funcName, args))) ->
+            name |> should equal "result"
+            match expr with
+            | IdentifierExpr id -> id |> should equal "x"
+            | _ -> failwith "Expected identifier in pipe left side"
+            funcName |> should equal "f"
+            args |> should haveLength 0
+        | _ -> failwith "Expected Def with Pipe"
+    | Result.Error err -> failwith $"Parse should succeed, got: {err}"
+
+[<Fact>]
+let ``Parse pipe with arguments`` () =
+    let result = parseModule "def result = x \\f(y, z)"
+    
+    result |> isOk |> should equal true
+    match result with
+    | Result.Ok module' ->
+        module' |> should haveLength 1
+        match module'.[0] with
+        | Def (ValueDef (name, Pipe (expr, funcName, args))) ->
+            name |> should equal "result"
+            match expr with
+            | IdentifierExpr id -> id |> should equal "x"
+            | _ -> failwith "Expected identifier"
+            funcName |> should equal "f"
+            args |> should haveLength 2
+            match args.[0], args.[1] with
+            | IdentifierExpr y, IdentifierExpr z ->
+                y |> should equal "y"
+                z |> should equal "z"
+            | _ -> failwith "Expected identifiers as arguments"
+        | _ -> failwith "Expected Def with Pipe"
+    | Result.Error err -> failwith $"Parse should succeed, got: {err}"
+
+[<Fact>]
+let ``Parse chained pipes`` () =
+    let result = parseModule "def result = x \\f \\g \\h"
+    
+    result |> isOk |> should equal true
+    match result with
+    | Result.Ok module' ->
+        module' |> should haveLength 1
+        match module'.[0] with
+        | Def (ValueDef (name, Pipe (Pipe (Pipe (expr, f, _), g, _), h, _))) ->
+            name |> should equal "result"
+            match expr with
+            | IdentifierExpr id -> id |> should equal "x"
+            | _ -> failwith "Expected identifier"
+            f |> should equal "f"
+            g |> should equal "g"
+            h |> should equal "h"
+        | _ -> failwith "Expected nested Pipe"
+    | Result.Error err -> failwith $"Parse should succeed, got: {err}"
+
+[<Fact>]
+let ``Parse pipe with literal`` () =
+    let result = parseModule "def result = 5 \\double"
+    
+    result |> isOk |> should equal true
+    match result with
+    | Result.Ok module' ->
+        module' |> should haveLength 1
+        match module'.[0] with
+        | Def (ValueDef (name, Pipe (expr, funcName, args))) ->
+            name |> should equal "result"
+            match expr with
+            | LiteralExpr (IntLit n) -> n |> should equal 5
+            | _ -> failwith "Expected int literal"
+            funcName |> should equal "double"
+            args |> should haveLength 0
+        | _ -> failwith "Expected Def with Pipe"
+    | Result.Error err -> failwith $"Parse should succeed, got: {err}"
+
+[<Fact>]
+let ``Parse pipe with lambda argument`` () =
+    let result = parseModule "def result = items \\map({ x -> x * 2 })"
+    
+    result |> isOk |> should equal true
+    match result with
+    | Result.Ok module' ->
+        module' |> should haveLength 1
+        match module'.[0] with
+        | Def (ValueDef (name, Pipe (expr, funcName, args))) ->
+            name |> should equal "result"
+            match expr with
+            | IdentifierExpr id -> id |> should equal "items"
+            | _ -> failwith "Expected identifier"
+            funcName |> should equal "map"
+            args |> should haveLength 1
+            match args.[0] with
+            | Lambda (parameters, _) ->
+                parameters |> should haveLength 1
+                parameters.[0] |> should equal "x"
+            | _ -> failwith "Expected lambda argument"
+        | _ -> failwith "Expected Def with Pipe"
+    | Result.Error err -> failwith $"Parse should succeed, got: {err}"
+
 // Binary Operator Tests
 [<Fact>]
 let ``Parse addition`` () =
@@ -815,6 +922,27 @@ let ``Parse binary-operators.nyx file`` () =
         module' |> hasBinaryOp "/" |> should equal true
         module' |> hasBinaryOp "==" |> should equal true
         module' |> hasBinaryOp "!=" |> should equal true
+    | Result.Error err -> failwith $"Parse failed: {err}"
+
+[<Fact>]
+let ``Parse piping.nyx file`` () =
+    let result = parseTestFile "piping.nyx"
+    
+    result |> isOk |> should equal true
+    match result with
+    | Result.Ok module' ->
+        module' |> List.length |> should be (greaterThan 5)
+        match module'.[0] with
+        | ModuleDecl name -> name |> should equal "Piping"
+        | _ -> failwith "Expected ModuleDecl"
+        
+        // Verify we have some pipe expressions
+        let hasPipe = module' |> List.exists (fun item ->
+            match item with
+            | Def (ValueDef (_, Pipe _)) -> true
+            | _ -> false
+        )
+        hasPipe |> should equal true
     | Result.Error err -> failwith $"Parse failed: {err}"
 
 [<Fact>]

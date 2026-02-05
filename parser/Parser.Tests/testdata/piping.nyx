@@ -1,0 +1,15 @@
+module Piping
+
+def simple = x \f
+def withArgs = x \f(y, z)
+def chained = x \f \g \h
+def withLiteral = 5 \double
+def withLambda = items \map({ x -> x * 2 })
+
+def chainedWithArgs = value
+  \add(1)
+  \multiply(2)
+  \subtract(3)
+
+def withShorthandLambda = numbers \map({ * 2 }) \filter({ > 10 })
+def propertyChain = person \getName \toUpper \trim

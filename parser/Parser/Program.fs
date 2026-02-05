@@ -19,6 +19,7 @@ type Expression =
     | FunctionCall of Identifier * Expression list
     | Lambda of Identifier list * Expression
     | BinaryOp of string * Expression * Expression
+    | Pipe of Expression * Identifier * Expression list  // expr \func or expr \func(args)
     | Block of Statement list
 
 and Statement =
@@ -139,8 +140,28 @@ opp.AddOperator(InfixOperator(">=", ws, 4, Associativity.Left, fun x y -> Binary
 opp.AddOperator(InfixOperator("==", ws, 3, Associativity.Left, fun x y -> BinaryOp("==", x, y)))
 opp.AddOperator(InfixOperator("!=", ws, 3, Associativity.Left, fun x y -> BinaryOp("!=", x, y)))
 
-// Wire up the expression parser
-do expressionRef := opp.ExpressionParser
+// Pipe parser - handles expr \func or expr \func(args)
+let pipeTarget =
+    pipe2
+        identifier
+        (opt (between (pstring "(") (pstring ")") (sepBy (opp.ExpressionParser) (pstring "," .>> ws))))
+        (fun funcName args ->
+            match args with
+            | Some argList -> (funcName, argList)
+            | None -> (funcName, [])
+        )
+
+let pipeExpr =
+    let pipeOp = pstring "\\" >>. ws >>. pipeTarget
+    pipe2
+        opp.ExpressionParser
+        (many (pipeOp .>> ws))
+        (fun expr pipes ->
+            pipes |> List.fold (fun acc (funcName, args) -> Pipe(acc, funcName, args)) expr
+        )
+
+// Wire up the expression parser with piping support
+do expressionRef := pipeExpr
 
 // Wire up the lambda parser
 do 
@@ -157,8 +178,13 @@ do
         ))
     
     // Shorthand lambda: { * 2 } means { x -> x * 2 }
+    // Also supports comparison operators: { > 10 } means { x -> x > 10 }
     let shorthandUnaryOp =
-        let operators = [("*", "*"); ("/", "/"); ("+", "+"); ("-", "-")]
+        let operators = [
+            ("*", "*"); ("/", "/"); ("+", "+"); ("-", "-");
+            ("<=", "<="); (">=", ">="); ("<", "<"); (">", ">");
+            ("==", "=="); ("!=", "!=")
+        ]
         choice (operators |> List.map (fun (op, opStr) ->
             pstring op >>. ws >>. primaryExpr |>> (fun rightExpr ->
                 Lambda(["x"], BinaryOp(opStr, IdentifierExpr "x", rightExpr))

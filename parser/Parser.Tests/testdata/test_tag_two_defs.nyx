@@ -1,0 +1,2 @@
+def a = #some(42)
+def b = match a | #some(x) -> x | else -> 0

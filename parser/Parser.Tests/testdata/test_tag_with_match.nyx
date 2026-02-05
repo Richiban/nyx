@@ -1,0 +1,4 @@
+def a = #some(42)
+def b = match a | #some(x) -> x | else -> 0
+def c = #pair(10, 20)
+def d = match c | #pair(x, y) -> x | else -> 0

@@ -24,6 +24,7 @@ type Expression =
     | Match of Expression list * MatchArm list  // Can match on multiple values
     | TupleExpr of Expression list
     | ListExpr of Expression list
+    | TagExpr of Identifier * Expression option  // #tagName or #tagName(expr)
 
 and Pattern =
     | LiteralPattern of Literal
@@ -278,13 +279,18 @@ let guardPattern =
     )
 
 // Tag pattern: #nil or #some(x) or #error data
+// Tag pattern: #tagName or #tagName(pattern) or #tagName(p1, p2, ...)
 let tagPattern =
     attempt (
-        (pstring "#" >>. identifierNoWs) .>>. 
-        (opt (ws >>. (
-            (between (pstring "(") (pstring ")") (ws >>. pattern .>> ws))
-            <|> pattern)))
-        |>> fun (tagName, binding) -> TagPattern(tagName, binding)
+        (pstring "#" >>. identifierNoWs) >>= fun tagName ->
+        opt (between 
+                (pstring "(") 
+                (pstring ")") 
+                (sepBy1 (ws >>. pattern) (pstring "," .>> ws))) >>= fun patternsOpt ->
+        match patternsOpt with
+        | None -> preturn (TagPattern(tagName, None))
+        | Some [single] -> preturn (TagPattern(tagName, Some single))
+        | Some multiple -> preturn (TagPattern(tagName, Some (TuplePattern multiple)))
     )
 
 do patternRef := 
@@ -337,6 +343,19 @@ let listExpr =
         (sepBy (ws >>. expression) (pstring "," .>> ws))
     |>> ListExpr
 
+// Tag expression parser: #tagName or #tagName(expr)
+// The payload can be a tuple-like expression with comma-separated values
+let tagExpr =
+    pstring "#" >>. identifierNoWs >>= fun tagName ->
+    opt (between 
+            (pstring "(") 
+            (pstring ")") 
+            (sepBy1 (ws >>. expression) (pstring "," .>> ws))) >>= fun payloadOpt ->
+    match payloadOpt with
+    | None -> preturn (TagExpr(tagName, None))
+    | Some [single] -> preturn (TagExpr(tagName, Some single))  // Single value
+    | Some multiple -> preturn (TagExpr(tagName, Some (TupleExpr multiple)))  // Multiple values as tuple
+
 // Primary expression (literals, identifiers, function calls, lambdas, parenthesized expressions)
 // Version without trailing whitespace consumption (for use in block contexts)
 let primaryExprNoWs =
@@ -344,6 +363,7 @@ let primaryExprNoWs =
         attempt matchExpr
         attempt lambda
         attempt functionCall
+        attempt tagExpr  // #tag or #tag(expr)
         literalNoWs |>> LiteralExpr
         listExpr
         tupleOrParenExpr

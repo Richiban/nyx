@@ -1,0 +1,9 @@
+def nilTag = #nil
+
+def someTag = #some(42)
+
+def errorTag = #error("something went wrong")
+
+def okTag = #ok
+
+def nestedTag = #some(#nested(123))

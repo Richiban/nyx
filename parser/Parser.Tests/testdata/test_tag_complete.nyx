@@ -1,0 +1,11 @@
+def maybe = #some(42)
+
+def unwrap = match maybe | #some(x) -> x | #none -> 0 | else -> -1
+
+def res = #error("failed")
+
+def process = match res | #ok -> "success" | #error(msg) -> msg | else -> "unexpected"
+
+def nest = #outer(#inner(5))
+
+def unwrapNested = match nest | #outer(#inner(n)) -> n | else -> 0

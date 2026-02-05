@@ -1,0 +1,6 @@
+def nil = #nil
+def ok = #ok
+def err = #error("message")
+def some = #some(42)
+def pair = #pair(1, 2)
+def deep = #outer(#inner(#leaf(99)))

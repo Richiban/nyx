@@ -66,31 +66,48 @@ let greaterIndentation (refCol: int64) =
         else pzero
 
 // Parser for identifiers
-let identifier: Parser<Identifier, unit> =
+let identifierNoWs: Parser<Identifier, unit> =
     let isIdentStart c = isLetter c || c = '_'
     let isIdentContinue c = isLetter c || isDigit c || c = '_'
-    many1Satisfy2 isIdentStart isIdentContinue .>> ws
+    many1Satisfy2 isIdentStart isIdentContinue
     <?> "identifier"
 
+let identifier: Parser<Identifier, unit> = identifierNoWs .>> ws
+
 // Parser for literals
-let stringLiteral: Parser<Literal, unit> =
+let stringLiteralNoWs: Parser<Literal, unit> =
     between (pstring "\"") (pstring "\"") (manyChars (noneOf "\""))
     |>> StringLit
-    .>> ws
     <?> "string literal"
 
-let intLiteral: Parser<Literal, unit> =
-    pint32 .>> notFollowedBy (pchar '.') .>> ws |>> IntLit
+let stringLiteral: Parser<Literal, unit> = stringLiteralNoWs .>> ws
+
+let intLiteralNoWs: Parser<Literal, unit> =
+    pint32 .>> notFollowedBy (pchar '.')  |>> IntLit
     <?> "integer literal"
 
-let floatLiteral: Parser<Literal, unit> =
-    pfloat .>> ws |>> FloatLit
+let intLiteral: Parser<Literal, unit> = intLiteralNoWs .>> ws
+
+let floatLiteralNoWs: Parser<Literal, unit> =
+    pfloat |>> FloatLit
     <?> "float literal"
 
-let boolLiteral: Parser<Literal, unit> =
+let floatLiteral: Parser<Literal, unit> = floatLiteralNoWs .>> ws
+
+let boolLiteralNoWs: Parser<Literal, unit> =
     (stringReturn "true" (BoolLit true) <|> stringReturn "false" (BoolLit false))
-    .>> ws
     <?> "boolean literal"
+
+let boolLiteral: Parser<Literal, unit> = boolLiteralNoWs .>> ws
+
+let literalNoWs: Parser<Literal, unit> =
+    choice [
+        attempt intLiteralNoWs
+        attempt floatLiteralNoWs
+        boolLiteralNoWs
+        stringLiteralNoWs
+    ]
+    <?> "literal"
 
 let literal: Parser<Literal, unit> =
     choice [
@@ -110,14 +127,18 @@ let functionCall, functionCallRef = createParserForwardedToRef<Expression, unit>
 let opp = new OperatorPrecedenceParser<Expression, unit, unit>()
 
 // Primary expression (literals, identifiers, function calls, lambdas, parenthesized expressions)
-let primaryExpr =
+// Primary expression (literals, identifiers, function calls, lambdas, parenthesized expressions)
+// Version without trailing whitespace consumption (for use in block contexts)
+let primaryExprNoWs =
     choice [
         attempt lambda
         attempt functionCall
-        literal |>> LiteralExpr
+        literalNoWs |>> LiteralExpr
         between (pstring "(") (pstring ")") (ws >>. expression .>> ws)
-        identifier |>> IdentifierExpr
-    ] .>> ws
+        identifierNoWs |>> IdentifierExpr
+    ]
+
+let primaryExpr = primaryExprNoWs .>> ws
 
 opp.TermParser <- primaryExpr
 
@@ -160,6 +181,16 @@ let pipeExpr =
             pipes |> List.fold (fun acc (funcName, args) -> Pipe(acc, funcName, args)) expr
         )
 
+// Expression parser that stops at newlines (for use in blocks)
+let exprWithoutCrossingNewlines =
+    let pipeOp = pstring "\\" >>. skipMany (skipAnyOf " \t") >>. pipeTarget
+    pipe2
+        opp.ExpressionParser
+        (many (attempt (notFollowedBy newline >>. pipeOp) .>> skipMany (skipAnyOf " \t")))
+        (fun expr pipes ->
+            pipes |> List.fold (fun acc (funcName, args) -> Pipe(acc, funcName, args)) expr
+        )
+
 // Wire up the expression parser with piping support
 do expressionRef := pipeExpr
 
@@ -167,8 +198,33 @@ do expressionRef := pipeExpr
 do 
     let paramList = sepBy identifier (pstring "," .>> ws)
     let arrow = pstring "->" .>> ws
-    let lambdaWithParams = pipe2 (paramList .>> arrow) expression (fun parameters body -> Lambda(parameters, body))
-    let lambdaNoParams = expression |>> (fun body -> Lambda([], body))
+    
+    // Block lambda body: two strategies depending on whether there are newlines
+    // - Single line: use full expression parser with operators and pipes
+    // - Multi-line: parse each line as primary expression only (simplified for now)
+    let blockBody =
+        // Try multi-line first (has newlines between expressions)
+        let multiLine =
+            let lineExpr = primaryExprNoWs .>> skipMany (skipAnyOf " \t\r")
+            let lineEnd = skipMany1 newline >>. skipMany (skipAnyOf " \t\r")
+            
+            skipMany (skipAnyOf " \t\r\n") >>.
+            lineExpr .>>. (attempt (lineEnd >>. sepEndBy1 lineExpr lineEnd)) .>>
+            skipMany (skipAnyOf " \t\r\n")
+            |>> (fun (first, rest) ->
+                Block ((first :: rest) |> List.map ExprStatement)
+            )
+        
+        // Single line: just parse full expression
+        let singleLine =
+            skipMany (skipAnyOf " \t\r\n") >>.
+            expression .>>
+            skipMany (skipAnyOf " \t\r\n")
+        
+        attempt multiLine <|> singleLine
+    
+    let lambdaWithParams = pipe2 (paramList .>> arrow .>> skipMany (skipAnyOf " \t\r\n")) blockBody (fun parameters body -> Lambda(parameters, body))
+    let lambdaNoParams = blockBody |>> (fun body -> Lambda([], body))
     
     // Shorthand lambda: { * } means { x, y -> x * y }
     let shorthandBinaryOp =
@@ -202,13 +258,13 @@ do
     
     lambdaRef :=
         between (pstring "{") (pstring "}") (
-            ws >>. choice [
+            skipMany (skipAnyOf " \t\r\n") >>. choice [
                 attempt shorthandUnaryOp
                 attempt shorthandBinaryOp
                 attempt shorthandPropertyAccess
                 attempt lambdaWithParams
                 lambdaNoParams
-            ] .>> ws
+            ] .>> skipMany (skipAnyOf " \t\r\n")
         )
         <?> "lambda expression"
 

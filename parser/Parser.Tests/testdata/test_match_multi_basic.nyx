@@ -1,0 +1,5 @@
+def test = match x, y
+  | 0, 0 -> "both zero"
+  | 1, _ -> "x is one"
+  | _, 2 -> "y is two"
+  | else -> "other"

@@ -1,0 +1,13 @@
+def singleValue = match x | 1 -> "one" | 2 -> "two" | else -> "other"
+
+def twoValues = match x, y | 0, 0 -> "origin" | 1, 2 -> "one-two" | else -> "other"
+
+def threeValues = match a, b, c | 1, 2, 3 -> "sequence" | _, _, _ -> "any" | else -> "default"
+
+def withWildcards = match x, y | 0, _ -> "x is zero" | _, 0 -> "y is zero" | else -> "neither"
+
+def withRanges = match score, level | 0..50, 1 -> "low beginner" | 51..100, 2 -> "high intermediate" | else -> "other"
+
+def withTuples = match p1, p2 | (0, 0), _ -> "first at origin" | _, (1, 1) -> "second at one-one" | else -> "other"
+
+def withOneTag = match result, status | #some(x), _ -> "has value" | else -> "other"

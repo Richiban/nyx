@@ -21,7 +21,7 @@ type Expression =
     | BinaryOp of string * Expression * Expression
     | Pipe of Expression * Identifier * Expression list  // expr \func or expr \func(args)
     | Block of Statement list
-    | Match of Expression * MatchArm list
+    | Match of Expression list * MatchArm list  // Can match on multiple values
     | TupleExpr of Expression list
     | ListExpr of Expression list
 
@@ -39,7 +39,7 @@ and Pattern =
     | GuardPattern of string * Expression  // operator (>, <, >=, <=, ==, !=) and value
     | TagPattern of Identifier * Pattern option  // #tagName or #tagName(pattern)
 
-and MatchArm = Pattern * Expression
+and MatchArm = Pattern list * Expression  // Multiple patterns for multi-value match
 
 and Statement =
     | DefStatement of Identifier * Expression
@@ -305,14 +305,14 @@ do patternRef :=
 // Match expression parser
 do
     let matchArm =
-        pstring "|" >>. ws >>. pattern .>>. (pstring "->" >>. ws >>. expression)
+        pstring "|" >>. ws >>. sepBy1 pattern (pstring "," .>> ws) .>>. (pstring "->" >>. ws >>. expression)
         <?> "match arm"
     
     matchExprRef :=
         pipe2
-            (pstring "match" >>. ws >>. expression)
+            (pstring "match" >>. ws >>. sepBy1 expression (pstring "," .>> ws))  // Multiple expressions
             (many1 (ws >>. matchArm))
-            (fun scrutinee arms -> Match(scrutinee, arms))
+            (fun scrutinees arms -> Match(scrutinees, arms))
         <?> "match expression"
 
 // Operator precedence parser

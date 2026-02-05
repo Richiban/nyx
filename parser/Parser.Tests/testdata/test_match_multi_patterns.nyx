@@ -1,0 +1,5 @@
+def rangeMatch = match x, y | 1..5, 10..20 -> "in ranges" | > 100, _ -> "x huge" | else -> "other"
+
+def tagMatch = match optVal, status | #some(val), #ok -> "has value and ok" | #none, _ -> "no value" | else -> "other"
+
+def tupleMatch = match pair1, pair2 | (0, 0), (1, 1) -> "origins and ones" | (a, b), _ -> "first is tuple" | else -> "other"

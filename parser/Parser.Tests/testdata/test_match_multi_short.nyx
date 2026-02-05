@@ -1,0 +1,1 @@
+def test = match a, b | 1, 2 -> "ok" | else -> "other"

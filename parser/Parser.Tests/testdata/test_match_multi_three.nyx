@@ -1,0 +1,1 @@
+def triple = match a, b, c | 1, 2, 3 -> "sequence" | _, _, _ -> "other" | else -> "default"

@@ -1,0 +1,1 @@
+def point = match x, y | 0, 0 -> "origin" | 0, _ -> "on y-axis" | _, 0 -> "on x-axis" | else -> "other"

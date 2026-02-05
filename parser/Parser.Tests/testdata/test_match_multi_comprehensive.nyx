@@ -1,0 +1,17 @@
+def point = match x, y
+  | 0, 0 -> "origin"
+  | 0, _ -> "on y-axis"
+  | _, 0 -> "on x-axis"
+  | x, y -> "point at coords"
+
+def triple = match a, b, c
+  | 1, 2, 3 -> "sequence"
+  | _, _, _ -> "other"
+  | else -> "default"
+
+def mixed = match value, tag
+  | 0, #nil -> "zero and nil"
+  | 1..10, #some(x) -> "small with some"
+  | > 100, _ -> "huge with anything"
+  | _, #error(msg) -> "any value with error"
+  | else -> "fallback"

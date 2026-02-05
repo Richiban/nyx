@@ -1,0 +1,1 @@
+def tupleMatch = match pair1, pair2 | (0, 0), (1, 1) -> "origins and ones" | else -> "other"

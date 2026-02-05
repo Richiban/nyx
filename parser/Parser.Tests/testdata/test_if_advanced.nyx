@@ -1,0 +1,10 @@
+def inPipe = x \f \g \h
+
+def asFuncArg = map(numbers, if useDouble then double else identity)
+
+def multiline = 
+  if condition 
+  then longExpression + anotherLongExpression 
+  else fallbackValue
+
+def withMatch = if flag then match x | 1 -> "one" | _ -> "other" else "none"

@@ -1,0 +1,11 @@
+def simple = if true then 1 else 2
+
+def withComparison = if x > 10 then "big" else "small"
+
+def nested = if a then if b then 1 else 2 else 3
+
+def withBinaryOp = if x + y > 10 then x else y
+
+def inBlock =
+  def condition = true
+  if condition then 42 else 0

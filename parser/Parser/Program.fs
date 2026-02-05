@@ -25,6 +25,7 @@ type Expression =
     | TupleExpr of Expression list
     | ListExpr of Expression list
     | TagExpr of Identifier * Expression option  // #tagName or #tagName(expr)
+    | IfExpr of Expression * Expression * Expression  // if condition then trueExpr else falseExpr
 
 and Pattern =
     | LiteralPattern of Literal
@@ -105,7 +106,7 @@ let stringLiteralNoWs: Parser<Literal, unit> =
     |>> StringLit
     <?> "string literal"
 
-let stringLiteral: Parser<Literal, unit> = stringLiteralNoWs .>> ws
+let stringLiteral: Parser<Literal, unit> = stringLiteralNoWs  // Don't consume ws
 
 let intLiteralNoWs: Parser<Literal, unit> =
     // Allow parsing int even if followed by dots (for range operator "..")
@@ -114,19 +115,19 @@ let intLiteralNoWs: Parser<Literal, unit> =
     pint32 .>> notFloat |>> IntLit
     <?> "integer literal"
 
-let intLiteral: Parser<Literal, unit> = intLiteralNoWs .>> ws
+let intLiteral: Parser<Literal, unit> = intLiteralNoWs  // Don't consume ws - let caller decide
 
 let floatLiteralNoWs: Parser<Literal, unit> =
     pfloat |>> FloatLit
     <?> "float literal"
 
-let floatLiteral: Parser<Literal, unit> = floatLiteralNoWs .>> ws
+let floatLiteral: Parser<Literal, unit> = floatLiteralNoWs  // Don't consume ws - let caller decide
 
 let boolLiteralNoWs: Parser<Literal, unit> =
     (stringReturn "true" (BoolLit true) <|> stringReturn "false" (BoolLit false))
     <?> "boolean literal"
 
-let boolLiteral: Parser<Literal, unit> = boolLiteralNoWs .>> ws
+let boolLiteral: Parser<Literal, unit> = boolLiteralNoWs  // Don't consume ws - let caller decide
 
 let literalNoWs: Parser<Literal, unit> =
     choice [
@@ -356,10 +357,20 @@ let tagExpr =
     | Some [single] -> preturn (TagExpr(tagName, Some single))  // Single value
     | Some multiple -> preturn (TagExpr(tagName, Some (TupleExpr multiple)))  // Multiple values as tuple
 
+// If-expression parser: if condition then trueExpr else falseExpr
+let ifExpr =
+    pipe3
+        (pstring "if" >>. ws >>. expression)
+        (ws >>. pstring "then" >>. ws >>. expression)
+        (ws >>. pstring "else" >>. ws >>. expression)
+        (fun cond thenExpr elseExpr -> IfExpr(cond, thenExpr, elseExpr))
+    <?> "if expression"
+
 // Primary expression (literals, identifiers, function calls, lambdas, parenthesized expressions)
 // Version without trailing whitespace consumption (for use in block contexts)
 let primaryExprNoWs =
     choice [
+        attempt ifExpr  // if-then-else must be early to avoid partial matches
         attempt matchExpr
         attempt lambda
         attempt functionCall
@@ -370,7 +381,7 @@ let primaryExprNoWs =
         identifierNoWs |>> IdentifierExpr
     ]
 
-let primaryExpr = primaryExprNoWs .>> ws
+let primaryExpr = primaryExprNoWs .>> ws  // Consume trailing ws for operator parsing
 
 opp.TermParser <- primaryExpr
 
@@ -534,42 +545,25 @@ let statement, statementRef = createParserForwardedToRef<Statement, unit>()
 
 // Block parser - parses indented statements after a newline
 let blockExpr() : Parser<Expression, unit> =
-    // After '=', if there's a newline followed by indentation, parse a block
-    getPosition >>= fun startPos ->
-        newline >>.
-        many (pchar ' ' <|> pchar '\t') >>= fun indentChars ->
-            let indentLevel = indentChars.Length
-            if indentLevel > 0 then
-                // We have indentation, parse statements at this level
-                let rec parseIndentedStatements acc =
-                    (attempt (
-                        // Check if we're at the right indentation
-                        many (pchar ' ' <|> pchar '\t') >>= fun currentIndent ->
-                            if currentIndent.Length = indentLevel then
-                                statement >>= fun stmt ->
-                                    (attempt newline >>. parseIndentedStatements (stmt :: acc))
-                                    <|> preturn (stmt :: acc)
-                            else if currentIndent.Length < indentLevel then
-                                // Less indented, end the block
-                                preturn acc
-                            else
-                                // More indented than expected, error
-                                pzero
-                    )) <|> preturn acc
-                
-                parseIndentedStatements [] |>> (List.rev >> Block)
-            else
-                pzero
+    newline >>.
+    many (pchar ' ' <|> pchar '\t') >>= fun indentChars ->
+        let indentLevel = indentChars.Length
+        if indentLevel > 0 then
+            // Simple approach: parse as many statements as we can
+            // Rely on statement parser failing when we leave the indented block
+            many1 statement |>> Block
+        else
+            pzero
 
 // Wire up statement parser
 do
     let defStatement = 
         pipe2
-            (pstring "def" >>. ws >>. identifier .>> ws .>> pstring "=" .>> ws)
-            (attempt (blockExpr()) <|> expression)
+            (pstring "def" >>. ws >>. identifier .>> wsNoNl() .>> pstring "=" .>> wsNoNl())
+            (attempt (blockExpr()) <|> (wsNoNl() >>. expression))  // Don't consume newlines before expression
             (fun name expr -> DefStatement(name, expr))
     
-    let exprStatement = expression |>> ExprStatement
+    let exprStatement = wsNoNl() >>. expression |>> ExprStatement  // Only consume spaces/tabs, not newlines
     
     statementRef := (attempt defStatement <|> exprStatement) <?> "statement"
 
@@ -581,8 +575,8 @@ let moduleDecl: Parser<TopLevelItem, unit> =
 // Parser for value definition (top-level)
 let valueDef: Parser<TopLevelItem, unit> =
     pipe2
-        (pstring "def" >>. ws >>. identifier .>> ws .>> pstring "=" .>> ws)
-        (attempt (blockExpr()) <|> expression)
+        (pstring "def" >>. ws >>. identifier .>> wsNoNl() .>> pstring "=")  // Don't consume newlines after =
+        (attempt (blockExpr()) <|> (ws >>. expression))
         (fun name expr -> Def(ValueDef(name, expr)))
     <?> "value definition"
 

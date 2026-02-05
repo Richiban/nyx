@@ -270,12 +270,31 @@ do
 
 // Wire up the function call parser
 do 
-    functionCallRef :=
-        pipe2
+    // Trailing lambda: function can be called with a lambda after parentheses
+    // Examples: f(a, b) { x -> x + 1 } or f { x -> x + 1 } (no parens needed if only lambda arg)
+    
+    let callWithParensAndTrailing =
+        pipe3
             identifier
             (between (pstring "(") (pstring ")") 
                 (sepBy expression (pstring "," .>> ws)))
-            (fun name args -> FunctionCall(name, args))
+            (opt (attempt (skipMany (skipAnyOf " \t") >>. lambda)))
+            (fun name args trailingLambdaOpt ->
+                match trailingLambdaOpt with
+                | Some lambdaExpr -> FunctionCall(name, args @ [lambdaExpr])
+                | None -> FunctionCall(name, args))
+    
+    let callWithOnlyTrailing =
+        attempt (
+            identifier >>= fun name ->
+                skipMany (skipAnyOf " \t") >>.
+                lookAhead (pchar '{') >>.
+                lambda |>> fun lambdaExpr ->
+                    FunctionCall(name, [lambdaExpr])
+        )
+    
+    functionCallRef :=
+        callWithOnlyTrailing <|> callWithParensAndTrailing
         <?> "function call"
 
 // Forward reference for statement parsing

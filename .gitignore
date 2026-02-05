@@ -45,3 +45,10 @@ out
 *.vsix
 
 .ionide/symbolCache.db
+
+# .NET build outputs
+**/bin/
+**/obj/
+**/Debug/
+**/Release/
+parser/Parser/bin/Debug/

@@ -1,0 +1,8 @@
+module Test
+
+def message = "Hello world"
+def count = 42
+def pi = 3.14159
+def flag = true
+def enabled = false
+def name = "Nyx"

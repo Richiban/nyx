@@ -1,136 +1,126 @@
-﻿open System
-open System.IO
+﻿module Parser.Program
+
+open System
 open FParsec
 
-// AST Types
+// AST Types - Simplified for basic parsing
+type Identifier = string
 type ModuleName = string
 
-type Identifier = string
-
-type Pattern = 
-    | IdentifierPattern of Identifier
+type Literal =
+    | StringLit of string
+    | IntLit of int
+    | FloatLit of float
+    | BoolLit of bool
 
 type Expression =
-    | Literal of string
-    | Variable of Identifier
-    | FunctionCall of Identifier * Expression list
-    | Lambda of Pattern list * Body
-    | IdentifierExpression of Identifier
+    | LiteralExpr of Literal
+    | IdentifierExpr of Identifier
 
-and BodyStatement =
+type Definition =
     | ValueDef of Identifier * Expression
-    | Expression of Expression
 
-and Body = BodyStatement list
-
-type ModuleContent =
+type TopLevelItem =
     | ModuleDecl of ModuleName
-    | TopLevelStatement of BodyStatement
+    | Def of Definition
+
+type Module = TopLevelItem list
+
+// Helper: whitespace and comment handling
+let ws = spaces
+let comment () = pstring "--" >>. skipRestOfLine true
+let wsWithComments () = skipMany (skipMany1 spaces1 <|> comment ())
 
 // Parser for identifiers
-let identifierPattern: Parser<Pattern, unit> =
-    let isIdentStart c = System.Char.IsLetter(c) || c = '_'
-    let isIdentContinue c = System.Char.IsLetterOrDigit(c) || c = '_'
-    pipe2 (satisfy isIdentStart) (manyChars (satisfy isIdentContinue)) (fun c s -> string c + s |> IdentifierPattern)
-    .>> spaces
-    <?> "Identifier pattern"
+let identifier: Parser<Identifier, unit> =
+    let isIdentStart c = isLetter c || c = '_'
+    let isIdentContinue c = isLetter c || isDigit c || c = '_'
+    many1Satisfy2 isIdentStart isIdentContinue .>> ws
+    <?> "identifier"
 
-let pattern: Parser<Pattern, unit> =
-    identifierPattern .>> spaces <?> "Pattern"
-
-// Forward declaration for recursive expressions
-let expression, expressionRef = createParserForwardedToRef<Expression, unit>()
-let bodyStatement, bodyStatementRef = createParserForwardedToRef<BodyStatement, unit>()
-let body, bodyStatementsRef = createParserForwardedToRef<Body, unit>()
-
-// Parser for identifiers
-let identifier': Parser<Identifier, unit> =
-    let isIdentStart c = System.Char.IsLetter(c) || c = '_'
-    let isIdentContinue c = System.Char.IsLetterOrDigit(c) || c = '_'
-    pipe2 (satisfy isIdentStart) (manyChars (satisfy isIdentContinue)) (fun c s -> string c + s |> Identifier)
-    .>> spaces
-    <?> "Identifier"
-
-let moduleName: Parser<ModuleName, unit> =
-    let isModuleNameStart c = System.Char.IsLetter(c) || c = '_'
-    let isModuleNameContinue c = System.Char.IsLetterOrDigit(c) || c = '_'
-    pipe2 (satisfy isModuleNameStart) (manyChars (satisfy isModuleNameContinue)) (fun c s -> string c + s)
-    .>> spaces
-    <?> "Module name"
-
-// Parser for string literals (very simple)
-let stringLiteral: Parser<Expression, unit> =
+// Parser for literals
+let stringLiteral: Parser<Literal, unit> =
     between (pstring "\"") (pstring "\"") (manyChars (noneOf "\""))
-    |>> Literal
-    .>> spaces
-    <?> "String literal"
+    |>> StringLit
+    .>> ws
+    <?> "string literal"
 
-    // Update lambda to use the forward reference
-let lambda: Parser<Expression, unit> =
-    between (pstring "{") (pstring "}") (
-        pipe2
-            (newline |>> (fun _ -> []) <|> (sepBy pattern (pstring "," .>> spaces) .>> pstring "->" .>> spaces) )
-            body
-            (fun parameters body -> Lambda(parameters, body))
-    )
-    .>> spaces
-    <?> "Lambda expression"
+let intLiteral: Parser<Literal, unit> =
+    pint32 .>> notFollowedBy (pchar '.') .>> ws |>> IntLit
+    <?> "integer literal"
 
-// Update functionCall to use the forward reference
-let functionCall: Parser<Expression, unit> =
+let floatLiteral: Parser<Literal, unit> =
+    pfloat .>> ws |>> FloatLit
+    <?> "float literal"
+
+let boolLiteral: Parser<Literal, unit> =
+    (stringReturn "true" (BoolLit true) <|> stringReturn "false" (BoolLit false))
+    .>> ws
+    <?> "boolean literal"
+
+let literal: Parser<Literal, unit> =
+    choice [
+        attempt intLiteral
+        attempt floatLiteral
+        boolLiteral
+        stringLiteral
+    ]
+    <?> "literal"
+
+// Parser for expressions
+let expression: Parser<Expression, unit> =
+    choice [
+        literal |>> LiteralExpr
+        identifier |>> IdentifierExpr
+    ]
+    <?> "expression"
+
+// Parser for module declaration
+let moduleDecl: Parser<TopLevelItem, unit> =
+    pstring "module" >>. ws >>. identifier |>> ModuleDecl
+    <?> "module declaration"
+
+// Parser for value definition
+let valueDef: Parser<TopLevelItem, unit> =
     pipe2
-        identifier'
-        (between (pstring "(") (pstring ")") (sepBy (lambda <|> stringLiteral <|> expression) (pstring "," .>> spaces)))
-        (fun name args -> FunctionCall(name, args))
-    .>> spaces
-    <?> "Function call"
+        (pstring "def" >>. ws >>. identifier .>> ws .>> pstring "=" .>> ws)
+        expression
+        (fun name expr -> Def(ValueDef(name, expr)))
+    <?> "value definition"
 
-let identifierExpression: Parser<Expression, unit> =
-    identifier' |>> IdentifierExpression .>> spaces
-    <?> "Identifier expression"
+// Parser for top-level items
+let topLevelItem: Parser<TopLevelItem, unit> =
+    ws >>. choice [
+        moduleDecl
+        valueDef
+    ] .>> ws
+    <?> "top-level item"
 
-let moduleDecl: Parser<ModuleContent, unit> =
-    pstring "module" >>. spaces >>. moduleName |>> ModuleDecl .>> spaces
-    <?> "Module declaration"
+// Parser for a complete module
+let moduleParser: Parser<Module, unit> =
+    ws >>. many topLevelItem .>> ws .>> eof
+    <?> "module"
 
-let valueDefinition: Parser<BodyStatement, unit> =
-    pipe2
-        (pstring "def" >>. spaces >>. identifier' .>> spaces .>> pstring "=" .>> spaces)
-        (lambda <|> stringLiteral <|> functionCall <|> (identifier' |>> IdentifierExpression))
-        (fun name expr -> ValueDef(name, expr))
-    <?> "Value definition"
+// Public API for parsing
+let parseModule (input: string) : Result<Module, string> =
+    match run moduleParser input with
+    | ParserResult.Success(result, _, _) -> Result.Ok result
+    | ParserResult.Failure(errorMsg, _, _) -> Result.Error errorMsg
 
-let moduleContent: Parser<ModuleContent list, unit> =
-    many (moduleDecl <|> (bodyStatement |>> TopLevelStatement)) .>> eof <?> "Module content"
-
-// Assign the actual implementation to the forward reference
-do 
-    expressionRef :=
-        choice [
-            attempt lambda
-            attempt functionCall
-            attempt stringLiteral
-            attempt identifierExpression
-        ]
-        <?> "Expression"
-
-    bodyStatementRef := 
-        (valueDefinition <|> (expression |>> Expression))
-        <?> "Body statement"
-
-    bodyStatementsRef :=
-        many (bodyStatement .>> spaces)
-        <?> "Body statements"
-
-// Parse a file and print the AST or error
+// Main entry point for standalone testing
 [<EntryPoint>]
 let main argv =
-    let file = @"C:\Users\RichardGibson\Source\Richiban\nyx\parser\sample.nyx"
-    let text = File.ReadAllText(file)
-    match run moduleContent text with
-    | Success(result, _, _) ->
-        printfn "Parsed successfully: %A" result
-        0
-    | Failure(_, err, _) ->
-        printfn "Error: %A" err
+    if argv.Length > 0 then
+        let file = argv.[0]
+        let text = System.IO.File.ReadAllText(file)
+        match parseModule text with
+        | Result.Ok ast ->
+            printfn "Parsed successfully:"
+            ast |> List.iter (printfn "  %A")
+            0
+        | Result.Error err ->
+            printfn "Parse error: %s" err
+            1
+    else
+        printfn "Usage: NyxParser <file.nyx>"
         1

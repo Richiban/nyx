@@ -1,9 +1,0 @@
-module RecordTests
-
-def myTuple = (1, 2)
-def myPoint = (x = 10, y = 20)
-def mixedRecord = (1, 2, x = 3, y = 4)
-def singleValue = (42)
-def singleNamedField = (name = "Alice")
-def nested = (outer = (inner = 5))
-def computed = (x = 1 + 2, y = 3 * 4)

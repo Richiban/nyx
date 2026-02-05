@@ -353,12 +353,13 @@ let ``Parse function call with multiple arguments`` () =
         | Def (ValueDef (name, FunctionCall (funcName, args))) ->
             name |> should equal "result"
             funcName |> should equal "add"
-            args |> should haveLength 2
-            match args.[0], args.[1] with
-            | LiteralExpr (IntLit v1), LiteralExpr (IntLit v2) -> 
+            // With comma operator, f(x, y) creates a single tuple argument
+            args |> should haveLength 1
+            match args.[0] with
+            | TupleExpr [LiteralExpr (IntLit v1); LiteralExpr (IntLit v2)] -> 
                 v1 |> should equal 1
                 v2 |> should equal 2
-            | _ -> failwith "Expected int literal arguments"
+            | _ -> failwith "Expected tuple of int literal arguments"
         | _ -> failwith "Expected Def with FunctionCall"
     | Result.Error err -> failwith $"Parse should succeed, got: {err}"
 
@@ -493,12 +494,13 @@ let ``Parse lambda as function argument`` () =
         | Def (ValueDef (name, FunctionCall (funcName, args))) ->
             name |> should equal "x"
             funcName |> should equal "map"
-            args |> should haveLength 2
+            // With comma operator, f(x, y) creates a single tuple argument
+            args |> should haveLength 1
             match args.[0] with
-            | Lambda (parameters, _) ->
+            | TupleExpr [Lambda (parameters, _); IdentifierExpr "items"] ->
                 parameters |> should haveLength 1
                 parameters.[0] |> should equal "x"
-            | _ -> failwith "Expected lambda as first argument"
+            | _ -> failwith "Expected tuple with lambda and identifier"
         | _ -> failwith "Expected Def with FunctionCall"
     | Result.Error err -> failwith $"Parse should succeed, got: {err}"
 
@@ -606,9 +608,10 @@ let ``Parse shorthand lambda as function argument`` () =
         | Def (ValueDef (name, FunctionCall (funcName, args))) ->
             name |> should equal "doubled"
             funcName |> should equal "map"
-            args |> should haveLength 2
+            // With comma operator, f(x, y) creates a single tuple argument
+            args |> should haveLength 1
             match args.[0] with
-            | Lambda (parameters, body) ->
+            | TupleExpr [Lambda (parameters, body); IdentifierExpr "numbers"] ->
                 parameters |> should haveLength 1
                 parameters.[0] |> should equal "x"
                 match body with
@@ -656,12 +659,13 @@ let ``Parse pipe with arguments`` () =
             | IdentifierExpr id -> id |> should equal "x"
             | _ -> failwith "Expected identifier"
             funcName |> should equal "f"
-            args |> should haveLength 2
-            match args.[0], args.[1] with
-            | IdentifierExpr y, IdentifierExpr z ->
+            // With comma operator, \f(x, y) creates a single tuple argument
+            args |> should haveLength 1
+            match args.[0] with
+            | TupleExpr [IdentifierExpr y; IdentifierExpr z] ->
                 y |> should equal "y"
                 z |> should equal "z"
-            | _ -> failwith "Expected identifiers as arguments"
+            | _ -> failwith "Expected tuple of identifiers as arguments"
         | _ -> failwith "Expected Def with Pipe"
     | Result.Error err -> failwith $"Parse should succeed, got: {err}"
 
@@ -890,9 +894,14 @@ let ``Parse shorthand-lambdas.nyx file`` () =
             match def with
             | Def (ValueDef (_, Lambda _)) -> ()
             | Def (ValueDef (_, FunctionCall (_, args))) ->
-                // Should have at least one lambda in args
-                let hasLambda = args |> List.exists (fun arg -> match arg with | Lambda _ -> true | _ -> false)
-                hasLambda |> should equal true
+                // With comma operator, args may be wrapped in TupleExpr
+                let rec hasLambda arg = 
+                    match arg with 
+                    | Lambda _ -> true 
+                    | TupleExpr exprs -> exprs |> List.exists hasLambda
+                    | _ -> false
+                let foundLambda = args |> List.exists hasLambda
+                foundLambda |> should equal true
             | _ -> failwith "Expected lambda or function call with lambda"
     | Result.Error err -> failwith $"Parse failed: {err}"
 

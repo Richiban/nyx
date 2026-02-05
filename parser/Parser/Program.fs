@@ -427,18 +427,31 @@ opp.AddOperator(InfixOperator(">", ws, 4, Associativity.Left, fun x y -> BinaryO
 opp.AddOperator(InfixOperator("<=", ws, 4, Associativity.Left, fun x y -> BinaryOp("<=", x, y)))
 opp.AddOperator(InfixOperator(">=", ws, 4, Associativity.Left, fun x y -> BinaryOp(">=", x, y)))
 
-// Equality operators (lowest precedence)
+// Equality operators 
 opp.AddOperator(InfixOperator("==", ws, 3, Associativity.Left, fun x y -> BinaryOp("==", x, y)))
 opp.AddOperator(InfixOperator("!=", ws, 3, Associativity.Left, fun x y -> BinaryOp("!=", x, y)))
 
+// Comma operator (very low precedence - creates tuples)
+// This allows: def x = 1, 2 to create a tuple without parens
+// In function calls like f(x, y), the comma creates a single tuple argument
+opp.AddOperator(InfixOperator(",", ws, 1, Associativity.Left, fun x y -> 
+    // Only flatten if left side is already a TupleExpr from a comma operation
+    // This way: 1, 2, 3 becomes TupleExpr [1; 2; 3]
+    // But: (1, 2), 3 stays TupleExpr [TupleExpr [1; 2]; 3]
+    match x with
+    | TupleExpr xs -> TupleExpr (xs @ [y])
+    | _ -> TupleExpr [x; y]
+))
+
 // Pipe parser - handles expr \func or expr \func(args)
+// Note: With comma operator, \f(x, y) parses as Pipe(expr, "f", [TupleExpr[x, y]])
 let pipeTarget =
     pipe2
         identifier
-        (opt (between (pstring "(") (pstring ")") (sepBy (opp.ExpressionParser) (pstring "," .>> ws))))
-        (fun funcName args ->
-            match args with
-            | Some argList -> (funcName, argList)
+        (opt (between (pstring "(") (pstring ")") (ws >>. expression)))
+        (fun funcName argOpt ->
+            match argOpt with
+            | Some arg -> (funcName, [arg])
             | None -> (funcName, [])
         )
 
@@ -542,17 +555,19 @@ do
 do 
     // Trailing lambda: function can be called with a lambda after parentheses
     // Examples: f(a, b) { x -> x + 1 } or f { x -> x + 1 } (no parens needed if only lambda arg)
+    // Note: With comma operator, f(a, b) parses as f(TupleExpr[a, b]) - single tuple argument
     
     let callWithParensAndTrailing =
         pipe3
             identifier
             (between (pstring "(") (pstring ")") 
-                (sepBy expression (pstring "," .>> ws)))
+                (opt (ws >>. expression .>> ws)))  // Parse optional expression (may be tuple from comma op)
             (opt (attempt (skipMany (skipAnyOf " \t") >>. lambda)))
-            (fun name args trailingLambdaOpt ->
+            (fun name exprOpt trailingLambdaOpt ->
+                let baseArgs = match exprOpt with Some e -> [e] | None -> []
                 match trailingLambdaOpt with
-                | Some lambdaExpr -> FunctionCall(name, args @ [lambdaExpr])
-                | None -> FunctionCall(name, args))
+                | Some lambdaExpr -> FunctionCall(name, baseArgs @ [lambdaExpr])
+                | None -> FunctionCall(name, baseArgs))
     
     let callWithOnlyTrailing =
         attempt (

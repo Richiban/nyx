@@ -22,10 +22,16 @@ type Expression =
     | Pipe of Expression * Identifier * Expression list  // expr \func or expr \func(args)
     | Block of Statement list
     | Match of Expression list * MatchArm list  // Can match on multiple values
-    | TupleExpr of Expression list
+    | TupleExpr of Expression list  // Positional-only tuple (for backward compat with existing tests)
+    | RecordExpr of RecordField list  // Mixed tuple/record with named and/or positional fields
     | ListExpr of Expression list
     | TagExpr of Identifier * Expression option  // #tagName or #tagName(expr)
     | IfExpr of Expression * Expression * Expression  // if condition then trueExpr else falseExpr
+
+// Record field: either named (x = expr) or positional (expr)
+and RecordField =
+    | NamedField of Identifier * Expression
+    | PositionalField of Expression
 
 and Pattern =
     | LiteralPattern of Literal
@@ -325,16 +331,37 @@ do
 // Operator precedence parser
 let opp = new OperatorPrecedenceParser<Expression, unit, unit>()
 
-// Tuple or parenthesized expression parser
+// Record field parser: either "name = expr" or just "expr"
+let recordField =
+    (attempt (
+        pipe2
+            (identifierNoWs .>> ws .>> pstring "=" .>> ws)
+            expression
+            (fun name expr -> NamedField(name, expr))
+    ) <|> (expression |>> PositionalField))
+    <?> "record field"
+
+// Tuple/Record or parenthesized expression parser
+// Handles: (x), (x, y), (x = 1), (x = 1, y = 2), (x = 1, 2), etc.
 let tupleOrParenExpr =
-    between
+    (between
         (pstring "(")
         (pstring ")")
-        (sepBy1 (ws >>. expression) (pstring "," .>> ws))
-    |>> fun exprs ->
-        match exprs with
-        | [single] -> single  // Single expression in parens is just that expression
-        | multiple -> TupleExpr multiple
+        (sepBy1 (ws >>. recordField) (pstring "," .>> ws))
+    |>> fun fields ->
+        match fields with
+        | [PositionalField single] -> single  // Single expression in parens: (x) is just x
+        | _ ->
+            // Check if all fields are positional (for backward compat)
+            let allPositional = fields |> List.forall (function PositionalField _ -> true | _ -> false)
+            if allPositional then
+                // Pure tuple: extract expressions
+                let exprs = fields |> List.map (function PositionalField e -> e | _ -> failwith "unexpected")
+                TupleExpr exprs
+            else
+                // Has named fields: use RecordExpr
+                RecordExpr fields)
+    <?> "tuple or record"
 
 // List expression parser
 let listExpr =

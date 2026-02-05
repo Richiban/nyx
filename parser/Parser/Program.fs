@@ -22,12 +22,16 @@ type Expression =
     | Pipe of Expression * Identifier * Expression list  // expr \func or expr \func(args)
     | Block of Statement list
     | Match of Expression * MatchArm list
+    | TupleExpr of Expression list
 
 and Pattern =
     | LiteralPattern of Literal
     | IdentifierPattern of Identifier
     | WildcardPattern
     | ElsePattern
+    | TuplePattern of Pattern list
+    | RecordPattern of Identifier * Pattern list  // Type name and patterns by position
+    | RecordMemberPattern of (Identifier * Pattern) list  // Patterns by member name
 
 and MatchArm = Pattern * Expression
 
@@ -141,10 +145,47 @@ let wildcardPattern = pstring "_" >>% WildcardPattern
 let elsePattern = pstring "else" >>% ElsePattern
 let identifierPattern = identifierNoWs |>> IdentifierPattern
 
+// Tuple pattern: (pat1, pat2, ...)
+let tuplePattern =
+    between
+        (pstring "(")
+        (pstring ")")
+        (sepBy1 (ws >>. pattern) (pstring "," .>> ws))
+    |>> fun patterns ->
+        match patterns with
+        | [single] -> single  // Single pattern in parens is just that pattern, not a tuple
+        | multiple -> TuplePattern multiple
+
+// Record pattern by position: TypeName(pat1, pat2, ...)
+let recordPatternByPosition =
+    pipe2
+        identifierNoWs
+        (between
+            (pstring "(")
+            (pstring ")")
+            (sepBy1 (ws >>. pattern) (pstring "," .>> ws)))
+        (fun typeName patterns -> RecordPattern(typeName, patterns))
+
+// Record pattern by member: (member1 = pat1, member2 = pat2, ...)
+let recordMemberPattern =
+    between
+        (pstring "(")
+        (pstring ")")
+        (sepBy1
+            (pipe2
+                (ws >>. identifierNoWs .>> ws)
+                (pstring "=" >>. ws >>. pattern)
+                (fun name pat -> (name, pat)))
+            (pstring "," .>> ws))
+    |>> RecordMemberPattern
+
 do patternRef := 
     choice [
         attempt literalPattern
         attempt elsePattern
+        attempt recordPatternByPosition  // Must come before identifierPattern
+        attempt recordMemberPattern
+        attempt tuplePattern
         attempt wildcardPattern
         identifierPattern
     ] .>> ws
@@ -166,6 +207,17 @@ do
 // Operator precedence parser
 let opp = new OperatorPrecedenceParser<Expression, unit, unit>()
 
+// Tuple or parenthesized expression parser
+let tupleOrParenExpr =
+    between
+        (pstring "(")
+        (pstring ")")
+        (sepBy1 (ws >>. expression) (pstring "," .>> ws))
+    |>> fun exprs ->
+        match exprs with
+        | [single] -> single  // Single expression in parens is just that expression
+        | multiple -> TupleExpr multiple
+
 // Primary expression (literals, identifiers, function calls, lambdas, parenthesized expressions)
 // Version without trailing whitespace consumption (for use in block contexts)
 let primaryExprNoWs =
@@ -174,7 +226,7 @@ let primaryExprNoWs =
         attempt lambda
         attempt functionCall
         literalNoWs |>> LiteralExpr
-        between (pstring "(") (pstring ")") (ws >>. expression .>> ws)
+        tupleOrParenExpr
         identifierNoWs |>> IdentifierExpr
     ]
 

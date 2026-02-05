@@ -1,0 +1,13 @@
+def value = (5, "hello")
+
+def process = match value
+  | (0, _) -> "zero"
+  | (x, "hello") -> "greeting {x}"
+  | (_, s) -> "string: {s}"
+  | else -> "other"
+
+def coords = (10, 20, 30)
+
+def get_x = match coords
+  | (x, _, _) -> x
+  | else -> 0

@@ -1,0 +1,13 @@
+def john = Person("John", 28)
+
+def greet = match john
+  | Person("John", age) -> "Hello John, age {age}"
+  | Person(name, 28) -> "Hello 28-year-old {name}"
+  | Person(name, age) -> "Hello {name}, age {age}"
+  | else -> "Unknown person"
+
+def describe = match john
+  | (name = "John", age = a) -> "John is {a}"
+  | (name = n, age = 28) -> "{n} is 28"
+  | (name = n, age = a) -> "{n} is {a}"
+  | else -> "Unknown"

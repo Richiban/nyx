@@ -1,0 +1,13 @@
+def point = (3, 4)
+
+def describe = match point
+  | (0, 0) -> "origin"
+  | (x, 0) -> "on x-axis"
+  | (0, y) -> "on y-axis"
+  | (x, y) -> "at {x}, {y}"
+
+def pair = ((1, 2), (3, 4))
+
+def sumPair = match pair
+  | ((a, b), (c, d)) -> a + b + c + d
+  | else -> 0

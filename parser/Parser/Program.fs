@@ -19,6 +19,11 @@ type Expression =
     | FunctionCall of Identifier * Expression list
     | Lambda of Identifier list * Expression
     | BinaryOp of string * Expression * Expression
+    | Block of Statement list
+
+and Statement =
+    | DefStatement of Identifier * Expression
+    | ExprStatement of Expression
 
 type Definition =
     | ValueDef of Identifier * Expression
@@ -31,8 +36,33 @@ type Module = TopLevelItem list
 
 // Helper: whitespace and comment handling
 let ws = spaces
+let wsNoNl() = skipMany (skipAnyOf " \t") // whitespace without newlines
 let comment () = pstring "--" >>. skipRestOfLine true
 let wsWithComments () = skipMany (skipMany1 spaces1 <|> comment ())
+
+// Indentation helpers
+let getIndentation () = 
+    getPosition |>> (fun pos -> int pos.Column - 1)
+
+let skipToColumn (col: int64) =
+    getPosition >>= fun pos ->
+        let currentCol = pos.Column
+        if currentCol < col then
+            skipManyTill (pchar ' ') (getPosition >>= fun p -> if p.Column >= col then preturn () else pzero)
+        else if currentCol = col then
+            preturn ()
+        else
+            pzero
+
+let atIndentation (refCol: int64) =
+    getPosition >>= fun pos ->
+        if pos.Column = refCol then preturn ()
+        else pzero
+
+let greaterIndentation (refCol: int64) =
+    getPosition >>= fun pos ->
+        if pos.Column > refCol then preturn ()
+        else pzero
 
 // Parser for identifiers
 let identifier: Parser<Identifier, unit> =
@@ -135,16 +165,60 @@ do
             (fun name args -> FunctionCall(name, args))
         <?> "function call"
 
+// Forward reference for statement parsing
+let statement, statementRef = createParserForwardedToRef<Statement, unit>()
+
+// Block parser - parses indented statements after a newline
+let blockExpr() : Parser<Expression, unit> =
+    // After '=', if there's a newline followed by indentation, parse a block
+    getPosition >>= fun startPos ->
+        newline >>.
+        many (pchar ' ' <|> pchar '\t') >>= fun indentChars ->
+            let indentLevel = indentChars.Length
+            if indentLevel > 0 then
+                // We have indentation, parse statements at this level
+                let rec parseIndentedStatements acc =
+                    (attempt (
+                        // Check if we're at the right indentation
+                        many (pchar ' ' <|> pchar '\t') >>= fun currentIndent ->
+                            if currentIndent.Length = indentLevel then
+                                statement >>= fun stmt ->
+                                    (attempt newline >>. parseIndentedStatements (stmt :: acc))
+                                    <|> preturn (stmt :: acc)
+                            else if currentIndent.Length < indentLevel then
+                                // Less indented, end the block
+                                preturn acc
+                            else
+                                // More indented than expected, error
+                                pzero
+                    )) <|> preturn acc
+                
+                parseIndentedStatements [] |>> (List.rev >> Block)
+            else
+                pzero
+
+// Wire up statement parser
+do
+    let defStatement = 
+        pipe2
+            (pstring "def" >>. ws >>. identifier .>> ws .>> pstring "=" .>> ws)
+            (attempt (blockExpr()) <|> expression)
+            (fun name expr -> DefStatement(name, expr))
+    
+    let exprStatement = expression |>> ExprStatement
+    
+    statementRef := (attempt defStatement <|> exprStatement) <?> "statement"
+
 // Parser for module declaration
 let moduleDecl: Parser<TopLevelItem, unit> =
     pstring "module" >>. ws >>. identifier |>> ModuleDecl
     <?> "module declaration"
 
-// Parser for value definition
+// Parser for value definition (top-level)
 let valueDef: Parser<TopLevelItem, unit> =
     pipe2
         (pstring "def" >>. ws >>. identifier .>> ws .>> pstring "=" .>> ws)
-        expression
+        (attempt (blockExpr()) <|> expression)
         (fun name expr -> Def(ValueDef(name, expr)))
     <?> "value definition"
 

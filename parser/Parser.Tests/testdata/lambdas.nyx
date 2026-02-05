@@ -1,0 +1,8 @@
+module Lambdas
+
+def constant = { 42 }
+def identity = { x -> x }
+def add = { x, y -> x + y }
+def multiply = { a, b -> a * b }
+def greet = { name -> println(name) }
+def complex = { x, y -> multiply(add(x, 1), y) }

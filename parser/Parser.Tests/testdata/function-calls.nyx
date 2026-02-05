@@ -1,0 +1,8 @@
+module FunctionCalls
+
+def noArgs = getCurrentTime()
+def oneArg = println("Hello")
+def twoArgs = add(1, 2)
+def threeArgs = makeColor(255, 128, 0)
+def nested = outer(inner(42))
+def withIdentifier = process(data)

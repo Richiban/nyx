@@ -1,0 +1,15 @@
+module Comprehensive
+
+def greeting = "Hello"
+def name = "World"
+def message = println(greeting)
+
+def identity = { x -> x }
+def add = { x, y -> x + y }
+def result = add(5, 3)
+
+def calculation = (10 + 5) * 2 - 8 / 4
+def comparison = result > 10
+
+def mapped = map({ x -> x * 2 }, numbers)
+def filtered = filter({ n -> n > 0 }, values)

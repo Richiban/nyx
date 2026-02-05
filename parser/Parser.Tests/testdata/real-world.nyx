@@ -1,0 +1,21 @@
+module RealWorld
+
+def config = (host = "localhost", port = 8080)
+
+def sum = { xs -> reduce(xs, { a, b -> a + b }) }
+
+def processUser = { user ->
+  def name = user.name
+  def email = user.email
+  validate(email)
+}
+
+def pipeline = data
+  
+def filterPositive = filter({ x -> x > 0 }, numbers)
+
+def complexCalculation = ((10 + 20) * 3) / (5 - 2)
+
+def greetAll = { names ->
+  map({ name -> println("Hello " + name) }, names)
+}

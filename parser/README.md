@@ -22,13 +22,20 @@ Currently supports parsing:
 
 ```
 parser/
-├── Parser/               # Main parser library (F#)
-│   ├── Program.fs       # Parser implementation and AST
+├── Parser/                    # Main parser library (F#)
+│   ├── Program.fs            # Parser implementation and AST
 │   └── NyxParser.fsproj
-├── Parser.Tests/        # Unit tests (F#)
-│   ├── ParserTests.fs   # 23 comprehensive tests
-│   └── Parser.Tests.fsproj
-└── sample.nyx           # Sample Nyx file
+├── Parser.Tests/             # Unit tests (F#)
+│   ├── ParserTests.fs        # 44 comprehensive tests
+│   ├── Parser.Tests.fsproj
+│   └── testdata/             # Test .nyx files
+│       ├── literals.nyx
+│       ├── function-calls.nyx
+│       ├── lambdas.nyx
+│       ├── binary-operators.nyx
+│       └── comprehensive.nyx
+├── sample-*.nyx              # Sample Nyx files
+└── parser.sln
 ```
 
 ## Building
@@ -45,16 +52,19 @@ cd parser
 dotnet test
 ```
 
-All 33 tests should pass:
-- Literal parsing (strings, ints, floats, booleans)
-- Module declarations
-- Value definitions
-- Identifier handling (underscores, digits)
-- Function calls (no args, single arg, multiple args, nested)
-- Lambda expressions (no params, single param, multiple params, as arguments)
-- Whitespace handling (leading, trailing, extra)
-- Error cases (missing equals, missing value, unterminated strings)
-- Complex scenarios (multiple definitions, blank lines)
+All 44 tests should pass:
+- **Unit tests** (39): Literal parsing, identifiers, function calls, lambdas, binary operators, whitespace, errors
+- **Integration tests** (5): Full .nyx file parsing from `testdata/` directory
+  - `literals.nyx`: String, int, float, boolean literals
+  - `function-calls.nyx`: Various function call patterns
+  - `lambdas.nyx`: Lambda expressions with different parameter counts
+  - `binary-operators.nyx`: Arithmetic, comparison, and equality operators
+  - `comprehensive.nyx`: Mix of all features
+
+Run specific test files:
+```powershell
+dotnet test --filter "Parse literals.nyx"
+```
 
 ## Running the Parser
 

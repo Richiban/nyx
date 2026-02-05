@@ -1,5 +1,6 @@
 module ParserTests
 
+open System.IO
 open Xunit
 open FsUnit.Xunit
 open Parser.Program
@@ -15,6 +16,16 @@ let isError result =
     match result with
     | Result.Ok _ -> false
     | Result.Error _ -> true
+
+// Helper to load test file
+let loadTestFile filename =
+    let testDataDir = Path.Combine(__SOURCE_DIRECTORY__, "testdata")
+    let filePath = Path.Combine(testDataDir, filename)
+    File.ReadAllText(filePath)
+
+// Helper to parse test file
+let parseTestFile filename =
+    loadTestFile filename |> parseModule
 
 // Literal Tests
 [<Fact>]
@@ -576,3 +587,125 @@ let ``Parse equality operators`` () =
             ()
         | _ -> failwith "Expected equality operator"
     | Result.Error err -> failwith $"Parse should succeed, got: {err}"
+
+// File-based Integration Tests
+[<Fact>]
+let ``Parse literals.nyx file`` () =
+    let result = parseTestFile "literals.nyx"
+    
+    result |> isOk |> should equal true
+    match result with
+    | Result.Ok module' ->
+        module' |> should haveLength 6  // 1 module + 5 defs
+        match module'.[0] with
+        | ModuleDecl name -> name |> should equal "Literals"
+        | _ -> failwith "Expected ModuleDecl"
+        
+        // Check that we have string, int, float, and bool literals
+        let defs = module' |> List.tail
+        defs |> should haveLength 5
+    | Result.Error err -> failwith $"Parse failed: {err}"
+
+[<Fact>]
+let ``Parse function-calls.nyx file`` () =
+    let result = parseTestFile "function-calls.nyx"
+    
+    result |> isOk |> should equal true
+    match result with
+    | Result.Ok module' ->
+        module' |> should haveLength 7  // 1 module + 6 function call defs
+        match module'.[0] with
+        | ModuleDecl name -> name |> should equal "FunctionCalls"
+        | _ -> failwith "Expected ModuleDecl"
+        
+        // Verify all are function calls
+        let defs = module' |> List.tail
+        for def in defs do
+            match def with
+            | Def (ValueDef (_, FunctionCall _)) -> ()
+            | _ -> failwith "Expected all definitions to contain function calls"
+    | Result.Error err -> failwith $"Parse failed: {err}"
+
+[<Fact>]
+let ``Parse lambdas.nyx file`` () =
+    let result = parseTestFile "lambdas.nyx"
+    
+    result |> isOk |> should equal true
+    match result with
+    | Result.Ok module' ->
+        module' |> should haveLength 7  // 1 module + 6 lambda defs
+        match module'.[0] with
+        | ModuleDecl name -> name |> should equal "Lambdas"
+        | _ -> failwith "Expected ModuleDecl"
+        
+        // Verify all are lambdas
+        let defs = module' |> List.tail
+        for def in defs do
+            match def with
+            | Def (ValueDef (_, Lambda _)) -> ()
+            | _ -> failwith "Expected all definitions to contain lambdas"
+    | Result.Error err -> failwith $"Parse failed: {err}"
+
+[<Fact>]
+let ``Parse binary-operators.nyx file`` () =
+    let result = parseTestFile "binary-operators.nyx"
+    
+    result |> isOk |> should equal true
+    match result with
+    | Result.Ok module' ->
+        module' |> List.length |> should be (greaterThan 10)
+        match module'.[0] with
+        | ModuleDecl name -> name |> should equal "BinaryOperators"
+        | _ -> failwith "Expected ModuleDecl"
+        
+        // Check for specific operators
+        let hasBinaryOp op module' =
+            module' |> List.exists (fun item ->
+                match item with
+                | Def (ValueDef (_, BinaryOp (operator, _, _))) -> operator = op
+                | _ -> false
+            )
+        
+        module' |> hasBinaryOp "+" |> should equal true
+        module' |> hasBinaryOp "-" |> should equal true
+        module' |> hasBinaryOp "*" |> should equal true
+        module' |> hasBinaryOp "/" |> should equal true
+        module' |> hasBinaryOp "==" |> should equal true
+        module' |> hasBinaryOp "!=" |> should equal true
+    | Result.Error err -> failwith $"Parse failed: {err}"
+
+[<Fact>]
+let ``Parse comprehensive.nyx file`` () =
+    let result = parseTestFile "comprehensive.nyx"
+    
+    result |> isOk |> should equal true
+    match result with
+    | Result.Ok module' ->
+        module' |> List.length |> should be (greaterThan 5)
+        match module'.[0] with
+        | ModuleDecl name -> name |> should equal "Comprehensive"
+        | _ -> failwith "Expected ModuleDecl"
+        
+        // Should have a mix of literals, function calls, lambdas, and binary ops
+        let hasLiteral = module' |> List.exists (fun item ->
+            match item with
+            | Def (ValueDef (_, LiteralExpr _)) -> true
+            | _ -> false
+        )
+        
+        let hasFunctionCall = module' |> List.exists (fun item ->
+            match item with
+            | Def (ValueDef (_, FunctionCall _)) -> true
+            | _ -> false
+        )
+        
+        let hasLambda = module' |> List.exists (fun item ->
+            match item with
+            | Def (ValueDef (_, Lambda _)) -> true
+            | _ -> false
+        )
+        
+        hasLiteral |> should equal true
+        hasFunctionCall |> should equal true
+        hasLambda |> should equal true
+    | Result.Error err -> failwith $"Parse failed: {err}"

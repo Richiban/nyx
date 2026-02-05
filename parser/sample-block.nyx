@@ -1,0 +1,8 @@
+module BlockTest
+
+def simple = 42
+
+def withBlock =
+  def x = 1
+  def y = 2
+  x

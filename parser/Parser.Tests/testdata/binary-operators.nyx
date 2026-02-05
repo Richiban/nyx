@@ -1,0 +1,18 @@
+module BinaryOperators
+
+def sum = 1 + 2
+def difference = 10 - 5
+def product = 3 * 4
+def quotient = 20 / 4
+
+def precedence = 1 + 2 * 3
+def parens = (1 + 2) * 3
+def chained = 1 + 2 + 3 + 4
+
+def lessThan = 5 < 10
+def greaterThan = x > 0
+def lessOrEqual = a <= b
+def greaterOrEqual = c >= d
+
+def equal = foo == bar
+def notEqual = x != y

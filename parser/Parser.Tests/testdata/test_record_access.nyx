@@ -1,0 +1,3 @@
+module Test
+
+def test = (x = 1).field

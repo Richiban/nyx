@@ -1,0 +1,7 @@
+module TestFieldAccess
+
+def x = point.x
+def y = point.y
+def nested = outer.inner.value
+def direct = (x = 1, y = 2).x
+def computed = point.x + point.y

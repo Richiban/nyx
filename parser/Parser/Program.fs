@@ -27,6 +27,7 @@ type Expression =
     | ListExpr of Expression list
     | TagExpr of Identifier * Expression option  // #tagName or #tagName(expr)
     | IfExpr of Expression * Expression * Expression  // if condition then trueExpr else falseExpr
+    | MemberAccess of Expression * Identifier  // expr.field
 
 // Record field: either named (x = expr) or positional (expr)
 and RecordField =
@@ -408,7 +409,14 @@ let primaryExprNoWs =
         identifierNoWs |>> IdentifierExpr
     ]
 
-let primaryExpr = primaryExprNoWs .>> ws  // Consume trailing ws for operator parsing
+// Member access: parse base expression, then chain .field.field.field...
+let memberAccessChain =
+    let dotField = pstring "." >>. identifierNoWs
+    primaryExprNoWs >>= fun baseExpr ->
+        many dotField |>> fun fields ->
+            List.fold (fun expr field -> MemberAccess(expr, field)) baseExpr fields
+
+let primaryExpr = memberAccessChain .>> ws  // Consume trailing ws for operator parsing
 
 opp.TermParser <- primaryExpr
 
@@ -431,24 +439,18 @@ opp.AddOperator(InfixOperator(">=", ws, 4, Associativity.Left, fun x y -> Binary
 opp.AddOperator(InfixOperator("==", ws, 3, Associativity.Left, fun x y -> BinaryOp("==", x, y)))
 opp.AddOperator(InfixOperator("!=", ws, 3, Associativity.Left, fun x y -> BinaryOp("!=", x, y)))
 
-// Comma operator (very low precedence - creates tuples)
-// This allows: def x = 1, 2 to create a tuple without parens
-// In function calls like f(x, y), the comma creates a single tuple argument
-opp.AddOperator(InfixOperator(",", ws, 1, Associativity.Left, fun x y -> 
-    // Only flatten if left side is already a TupleExpr from a comma operation
-    // This way: 1, 2, 3 becomes TupleExpr [1; 2; 3]
-    // But: (1, 2), 3 stays TupleExpr [TupleExpr [1; 2]; 3]
-    match x with
-    | TupleExpr xs -> TupleExpr (xs @ [y])
-    | _ -> TupleExpr [x; y]
-))
+// Note: Comma is NOT an operator in the OPP
+// Commas are handled explicitly in tuple/record literals and function calls
+// For bare tuple expressions (def x = 1, 2), we handle it in defStatement
 
 // Pipe parser - handles expr \func or expr \func(args)
-// Note: With comma operator, \f(x, y) parses as Pipe(expr, "f", [TupleExpr[x, y]])
 let pipeTarget =
     pipe2
         identifier
-        (opt (between (pstring "(") (pstring ")") (ws >>. expression)))
+        (opt (between (pstring "(") (pstring ")") (ws >>. (sepBy1 expression (pstring "," .>> ws) |>> fun exprs ->
+            match exprs with
+            | [single] -> single
+            | multiple -> TupleExpr multiple))))
         (fun funcName argOpt ->
             match argOpt with
             | Some arg -> (funcName, [arg])
@@ -555,13 +557,16 @@ do
 do 
     // Trailing lambda: function can be called with a lambda after parentheses
     // Examples: f(a, b) { x -> x + 1 } or f { x -> x + 1 } (no parens needed if only lambda arg)
-    // Note: With comma operator, f(a, b) parses as f(TupleExpr[a, b]) - single tuple argument
+    // Note: f(a, b) creates single tuple argument: FunctionCall("f", [TupleExpr[a; b]])
     
     let callWithParensAndTrailing =
         pipe3
             identifier
             (between (pstring "(") (pstring ")") 
-                (opt (ws >>. expression .>> ws)))  // Parse optional expression (may be tuple from comma op)
+                (opt (ws >>. (sepBy1 expression (pstring "," .>> ws) |>> fun exprs ->
+                    match exprs with
+                    | [single] -> single
+                    | multiple -> TupleExpr multiple) .>> ws)))
             (opt (attempt (skipMany (skipAnyOf " \t") >>. lambda)))
             (fun name exprOpt trailingLambdaOpt ->
                 let baseArgs = match exprOpt with Some e -> [e] | None -> []
@@ -602,7 +607,10 @@ do
     let defStatement = 
         pipe2
             (pstring "def" >>. ws >>. identifier .>> wsNoNl() .>> pstring "=" .>> wsNoNl())
-            (attempt (blockExpr()) <|> (wsNoNl() >>. expression))  // Don't consume newlines before expression
+            (attempt (blockExpr()) <|> (wsNoNl() >>. (sepBy1 expression (pstring "," .>> ws) |>> fun exprs ->
+                match exprs with
+                | [single] -> single
+                | multiple -> TupleExpr multiple)))
             (fun name expr -> DefStatement(name, expr))
     
     let exprStatement = wsNoNl() >>. expression |>> ExprStatement  // Only consume spaces/tabs, not newlines
@@ -618,7 +626,10 @@ let moduleDecl: Parser<TopLevelItem, unit> =
 let valueDef: Parser<TopLevelItem, unit> =
     pipe2
         (pstring "def" >>. ws >>. identifier .>> wsNoNl() .>> pstring "=")  // Don't consume newlines after =
-        (attempt (blockExpr()) <|> (ws >>. expression))
+        (attempt (blockExpr()) <|> (ws >>. (sepBy1 expression (pstring "," .>> ws) |>> fun exprs ->
+            match exprs with
+            | [single] -> single
+            | multiple -> TupleExpr multiple)))
         (fun name expr -> Def(ValueDef(name, expr)))
     <?> "value definition"
 

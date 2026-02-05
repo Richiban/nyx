@@ -35,8 +35,8 @@ seq {
   yield "world"
 }
 
---  Note that, while `yield` is included here for learning purposes, it's not actually required and the above is 
---  equivalent to:
+--  Note that, while `yield` is included here for learning purposes, it's not actually required
+--  and the above could be written as:
 
 seq {
   "hello"
@@ -90,7 +90,7 @@ def greetingAsync =
 
 --  It's also possible to write a function that executes in the context of the workflow
 --  you want to use, although it's normally recommended to use the helper functions
-def greetingAsync: [AsyncWorkflow] = {
+def greetingAsync: <AsyncWorkflow> = {
   def name = await getName()
 
   return "Hello, {name}"

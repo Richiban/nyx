@@ -16,6 +16,6 @@ def id: α -> α = { x -> x }
 --  to the concept of 'generics' in other languages). 
 
 def head
-  : (list(α)) -> #some(α) | #emptyList
+  : list(α) -> #some(α) | #emptyList
   = { | []      -> #emptyList
       | [x, ..] -> #some(x) }

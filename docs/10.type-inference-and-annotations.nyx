@@ -61,8 +61,8 @@ def personObj: Person = obj
 
 --  Target-typing is also used for collections:
 def myItems = [1, 2, 3] -- `list(int)` is inferred as the "natural type" for the collection
-def myItems = [1, 2, 3]: MutList(string) --  The type can be specified explicitly
-def myItems = MutList[1, 2, 3] --  This form is also supported
+def myItems = [1, 2, 3]: MList(string) --  The type can be specified explicitly
+def myItems = MList[1, 2, 3] --  This form is also supported
 
 def myMap = [1 => "one", 2 => "two"] -- `int -> string` is inferred as the "natural type" for the collection
 

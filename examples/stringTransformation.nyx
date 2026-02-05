@@ -27,7 +27,7 @@ export def rejoin: List(string), Casing -> string = { words, casing ->
         \String.join
     | #camel ->
       mut first = true
-      def newWords = MutList[]
+      def newWords = MList[]
 
       for words 
       | word if first ->
@@ -45,7 +45,7 @@ export def rejoin: List(string), Casing -> string = { words, casing ->
         \String.join(" ")
     | #sentence:
       mut first = true
-      def newWords = MutList[]
+      def newWords = MList[]
 
       for words 
         | word if first ->

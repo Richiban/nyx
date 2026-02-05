@@ -106,7 +106,7 @@ type MapBuilder = (
 
 type Map = ...
     
-def Map.apply(block: [MapBuilder] () -> ()) ->
+def Map.apply(block: <MapBuilder> () -> ()) ->
   def map = HashMap()
 
   use `=>` = { k, v -> map.add(k, v) }

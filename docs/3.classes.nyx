@@ -20,14 +20,15 @@
 
 --  Can be represented in Nyx with:
 
-type Point { x: int, y: int ->
+type Point = { x: int, y: int ->
   ( x
     y
-    def move(dx: int, dy: int) ->
+    move = { dx: int, dy: int ->
       Point (
         x = x + dx
         y = y + dy
       )
+    }
   )
 }
 

@@ -1,0 +1,15 @@
+{
+  "version": 2,
+  "dgSpecHash": "nt1MiDQKnqs=",
+  "success": true,
+  "projectFilePath": "C:\\Users\\RichardGibson\\Source\\Richiban\\nyx\\parser\\Parser\\NyxParser.fsproj",
+  "expectedPackageFiles": [
+    "C:\\Users\\RichardGibson\\.nuget\\packages\\fparsec\\1.1.1\\fparsec.1.1.1.nupkg.sha512",
+    "C:\\Users\\RichardGibson\\.nuget\\packages\\fsharp.core\\10.0.102\\fsharp.core.10.0.102.nupkg.sha512",
+    "C:\\Users\\RichardGibson\\.nuget\\packages\\microsoft.netcore.app.ref\\9.0.12\\microsoft.netcore.app.ref.9.0.12.nupkg.sha512",
+    "C:\\Users\\RichardGibson\\.nuget\\packages\\microsoft.windowsdesktop.app.ref\\9.0.12\\microsoft.windowsdesktop.app.ref.9.0.12.nupkg.sha512",
+    "C:\\Users\\RichardGibson\\.nuget\\packages\\microsoft.aspnetcore.app.ref\\9.0.12\\microsoft.aspnetcore.app.ref.9.0.12.nupkg.sha512",
+    "C:\\Users\\RichardGibson\\.nuget\\packages\\microsoft.netcore.app.host.win-x64\\9.0.12\\microsoft.netcore.app.host.win-x64.9.0.12.nupkg.sha512"
+  ],
+  "logs": []
+}

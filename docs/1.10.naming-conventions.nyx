@@ -19,7 +19,7 @@ type Greeter = ( greet: () -> () )
 
 --  Generates a type _and_ a function, both called 'Greeter'
 def Greeter() =
-  ( greet[Console] = { println("Hello!") } )
+  ( greet<@Console> = { println("Hello!") } )
 
 type Thing = #newThing | #oldThing
 

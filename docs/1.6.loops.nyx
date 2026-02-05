@@ -51,7 +51,7 @@ for data, 0.. | item, i ->
     -- two iterables runs out of items.
 
 -- If you prefer using functions, the above code is exactly equivalent to the following:
-data \iteri { item, i ->  print "Item number {i} is {item}" }
+data \iteri { item, i ->  print("Item number {i} is {item}") }
 
 --	When looping over a dictionary, the loop variable is a record of the key and the value.
 --  Since the loop construct allows for immediate pattern matching of the loop variable it

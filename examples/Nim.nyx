@@ -41,12 +41,12 @@ context Move = (
   ctl move: (Player, sticks: int) -> int
 )
 
-def [Move] aliceTurn = {
+def <Move> aliceTurn = {
   | { <= 0 } -> #bob
   | _        -> bobTurn(n - move(#alice, n))
 }
 
-def [Move] bobTurn = {
+def <Move> bobTurn = {
   | { <= 0 } -> #alice 
   | _        -> aliceTurn(n - move(#bob, n))
 }
@@ -133,7 +133,7 @@ context Cheat = (
   cheat: Player -> a
 )
 
-def [Throws] cheatReport: Cheat = (
+def <Throws> cheatReport: Cheat = (
   cheat = { p ->
     throw(p.show ++ " cheated!")
   }
@@ -194,7 +194,7 @@ context Choose = (
   choose: () -> bool
 )
 
-def bobChooses: [Choose] = { m ->
+def bobChooses: <Choose> = { m ->
   if choose() -> pc(m) 
   else -> perfect(m)
 }
@@ -211,11 +211,11 @@ export def exampleChoose = {
   [game(7)]   -- [bob,alice]
 }
 
-impl coin: [Random] Choose = (
+impl coin: <Random> Choose = (
   choose = { Random.coinToss() }
 )
 
-export def exampleCoin: [Random] = {
+export def exampleCoin: <Random> = {
   use coin, bobChooses
   game(7)
 }
@@ -260,11 +260,11 @@ def updateScore: Player, GameState -> GameState
     }
   }
 
-impl printer: [Console] State = (
+impl printer: <@Console> State = (
   ctl return = { x -> printBoard(get()); x }
 )
 
-def printBoard: [Console] GameState -> () 
+def printBoard: <@Console> GameState -> () 
   = { gs ->
     def scores = gs \map { p, s -> "{p} -> {s}" }
     scores \String.join("\n") \println
@@ -280,7 +280,7 @@ export def examplePrint1 = {
   game(7)
 }
 
-def replay: [e] int, ([e] () -> a) -> a
+def replay: <e> int, (<e> () -> a) -> a
   = { n, action ->
     use (
       ctl return = { x -> 

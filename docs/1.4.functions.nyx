@@ -23,17 +23,16 @@ def add = { x, y -> x + y }
 --  In Nyx, if your function returns unit, you don't need to explicitly return it. This makes it feel like a `void`
 --  function from other languages:
 
-def printHello() -> 
+def printHello = {
   println("Hello")
     -- `printHello` has the type `() -> ()`. Notice that we don't need to write `return ()` in 
     -- the function body
+}
 
 --  Since Nyx contains many concepts from functional programming, it is useful to be able to easily
 --  write a function literal. This is done with braces:
 def print1 = { print("1") }
 
---  which ends up being the same as the normal definition form:
-def print1() -> print("1")
 
 --  The braces form creates a lamda, which facilitates higher-order functions. For example:
 def names = data \map { item -> item.name }
@@ -45,16 +44,19 @@ def add = { + }
 
 Web.makeRequest(
   url = "http://some.api.com/"
-  def success(error?, response?, data?) ->
-    println("There was an error -> {error}. The response was {data}")
-  def failure(error) ->
-    println("There was an error -> {error}")
+  success = { error?, response?, data? ->
+    println("The response was {data}")
+  }
+  failure = { error ->
+    println("There was an error: {error}")
+  }
 )
 
 --	This sumList example defines a function making use of a match expression.
-rec sumList(xs: list(int)) -> match xs
+rec sumList = { (xs: list(int)) -> match xs
   | []              -> 0
   | [head, ...tail] -> head + sumList tail
+}
 
 rec sumList
   : list(int) -> int
@@ -75,16 +77,20 @@ rec sumList = {
 --  If you feel that the function definition has suffered from the loss of the argument name, you can
 --  use a type annotation to reinstate it. Note: type annotations are always recommended for exported functions
 rec sumList 
-  : (xs: list(int)) -> int
-  = { | []              -> 0
-      | [head, ...tail] -> head + sumList(tail) }
+  : list(int) -> int 
+  = { 
+    | []              -> 0
+    | [head, ...tail] -> head + sumList(tail) 
+  }
 
 --  Also note that, since functions in Nyx are defined in record form, it's possible to pattern match immediately
 --  on multiple arguments:
 def divide
-  : (x: int, y: int) -> int | Err(#divideByZero)
-  = { | _, 0 -> Err(#divideByZero)
-      | x, y -> x / y }
+  : int, int -> Result(int, #divideByZero)
+  = { 
+    | _, 0 -> Err(#divideByZero)
+    | x, y -> x / y 
+  }
 
 --  An equivalent form exists for lamdas consisting solely of a single pattern match:
 def count = {
@@ -115,7 +121,7 @@ def printMessage = { ?message -> 		--	"message" is of type `string?` (short for 
   \match
     | #nil       ->  "You didn't say anything"
     | #some, msg ->  "You said -> {msg}" 
-  \println()
+  \println
 }
 
 ---
@@ -159,8 +165,8 @@ def longNames = names \filter { length > 5 } 	--	=> ["Alexander"]
 
 
 --  Functions can be composed. Think of it as pre-preparing a pipe
-def firstThree(str: string) -> str.substring(0, 3)
-def reverse(str: string) -> str.reverse()
+def firstThree = { (str: string) -> str.substring(0, 3) }
+def reverse = { (str: string) -> str.reverse() }
 
 def lastThree = reverse >> firstThree >> reverse
 
@@ -180,7 +186,7 @@ def lastThree = reverse >> firstThree >> reverse
 --  just functions. Dictionaries are an example, as are strings. Any object of type
 --  `map` is considered 'applicable', and can be 'called' just like a function
 
-def f : int -> int = { * 2 }
+def f: int -> int = { * 2 }
 
 f(2)					--  4
 
@@ -192,5 +198,27 @@ def greeting = "Hello, "
 
 greeting("John")		-- "Hello, John"
 
---  Note: there is no overloading in Nyx. With optional/named parameters and union types 
---  there is so little need for overloading that it's not worth the considerable complication to the compiler
+--  Note: there is no overloading in Nyx. With optional/named parameters and tag unions 
+--  there is so little need for overloading that it's not worth the considerable 
+--  complication to the compiler and type system
+
+
+-- Notice that we have the option of putting parameter names in our function signatures
+-- but we don't have to. It's the choice of the function author as to whether they want
+-- their parameter names to form part of the signature and become named parameters rather
+-- than positional
+
+-- for example: 
+
+def replace: (string, string, string) -> string = { source, origin, replacement -> ??? }
+
+replace("Hello world", "world", "Nyx")
+
+
+-- If we switch to named parameters in our signature then callers now must use named 
+-- parameters as well:
+
+def replace: (string, replace: string, with: string) -> string = { s, o, r -> ??? }
+
+replace("Hello world", replace = "world", with = "Nyx")
+

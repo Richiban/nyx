@@ -2,7 +2,7 @@
 Piping
 ======
 
-Normally functions are called using the familiar brackets: `f(x)`
+Normally functions are called using the familiar brackets syntax: `f(x)`
 
 You can 'pipe' the argument to the function using a special character,
 with the function first: `x \f(..)`. Writing function calls in this way

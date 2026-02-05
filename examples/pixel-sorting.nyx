@@ -32,7 +32,7 @@ context AppCtx =
 -- Create dataframe and save it as an excel file
 
 def createDataSet
-  : [AppCtx] int, list(???) -> ()
+  : <AppCtx> int, list(???) -> ()
   = { val = 0, data = [] ->
     set dict(len(data)) = data
 

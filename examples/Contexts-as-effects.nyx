@@ -1,6 +1,6 @@
 def encode2: string, int -> string 
   = { s, shift ->
-    s \map { c ->
+    s\map { c ->
       if c !in 'a'..'z' -> return c
 
       def base = c - 'a' \int
@@ -16,8 +16,8 @@ def sublist: List(a), int, int -> List(a)
     if start <= 0 -> return xs.take(len)
 
     match xs
-      | []        -> []
-      | [_, ..xx] -> xx \sublist(start - 1, len)
+      | []         -> []
+      | [_, ...xx] -> xx\sublist(start - 1, len)
   }
 
 
@@ -33,36 +33,37 @@ def percent: int, int -> float = { n, m ->
 }
 
 def rotate: List(a), int -> List(a) = { xs, n ->
-  xs.drop(n) ++ xs.take(n)
+  xs\drop(n) ++ xs\take(n)
 }
 
 -- Calculate a frequency table for a string
 def freqs: string -> List(float64) = { s ->
   def lowers = list('a', 'z')
-  def occurs = lowers \map { c -> s \count(c \string) }
-  def total  = occurs \sum
+  def occurs = lowers\map { c -> s\count(c\string) }
+  def total  = occurs\sum
   
-  occurs \map { i -> percent(i, total) }
+  occurs\map { i -> percent(i, total) }
 }
 
 -- Calculate how well two frequency tables match according
 -- to the _chi-square_ statistic.
 def chisqr: List(float64), List(float64) -> float64 = { xs, ys ->
   (xs, ys)
-  \map { x, y -> ((x - y) ^ 2.0) / y}
-  \foldr(0.0) { + }
+  \map { x, y -> ((x - y) ^ 2.0) / y }
+  \fold(0.0) { + }
 }
 
 -- Crack a Caesar encoded string
 def uncaesar: string -> string = { s ->
   def table  = freqs(s)                         -- build a frequency table for `s`
-  def chitab = [0..25] \map { n ->           -- build a list of chisqr numbers for each shift between 0 and 25
-                 chisqr(table \rotate(n), english) }
+  def chitab = [0..25]\map { n ->           -- build a list of chisqr numbers for each shift between 0 and 25
+    chisqr(table\rotate(n), english) 
+  }
 
-  def min    = chitab \min                      -- find the mininal element
-  def shift  = chitab \indexOf { == min } \negate  -- and use its position as our shift
+  def min    = chitab\min                      -- find the mininal element
+  def shift  = chitab\indexOf { == min } \negate  -- and use its position as our shift
   
-  s \encode(shift)
+  s\encode(shift)
 }
 
 def testUncaesar = {
@@ -74,10 +75,10 @@ def testUncaesar = {
 ------------------------------------
 
 context type Raise = (
-  raise: (msg: string) -> a
+  ctx raise: (msg: string) -> a
 )
 
-def safeDivide: [Raise] int, int -> int
+def safeDivide: <Raise> int, int -> int
   = { x, y ->
     if y == 0 -> raise("divide by zero")
     else -> x / y
@@ -86,7 +87,7 @@ def safeDivide: [Raise] int, int -> int
 def raiseConst: () -> int
   = {
     use Raise (                 -- The `use` construct puts the relevant record into the context
-      raise = { _ -> 42 }
+      ctx raise = { _ -> 42 }
     )
 
     8 + safeDivide(1, 0)          -- Returns 42, not 50
@@ -95,8 +96,8 @@ def raiseConst: () -> int
 
 def raiseConst2: () -> int
   = {
-    use: Raise = (                 -- The `use` construct puts the relevant record into the context
-      raise = { _ -> resume 42 }
+    use Raise (                 -- The `use` construct puts the relevant record into the context
+      ctx raise = { _ -> resume 42 }
     )
 
     8 + safeDivide(1, 0)          -- Returns 50
@@ -106,23 +107,23 @@ context type Ask(a) = (
   ask: () -> a
 )
 
-def addTwice: [Ask(int)] () -> int
+def addTwice: <Ask(int)> () -> int
   = {
     ask() + ask()
   }
 
 def askConst: () -> int
   = {
-    use: Ask(int) = (
+    use Ask(int) (
       ask = { 21 }
     )
 
     addTwice()
   }
 
-def askRandom: [Random] () -> int
+def askRandom: <Random> () -> int
   = {
-    use: Ask(int) = (
+    use Ask(int) (
       ask = { randomInt() }
     )
 
@@ -137,7 +138,7 @@ context type State(a) = (
   set: a -> ()
 )
 
-def sumdown: [State(int)] int -> int 
+def sumdown: <State(int)> int -> int 
   = { sum = 0 ->
     def i = get()
 
@@ -147,7 +148,7 @@ def sumdown: [State(int)] int -> int
       sumdown(sum + i)
   }
 
-def state: [c] a, ([State(a) + c] () -> b) -> b
+def state: <c> a, (<State(a) + c> () -> b) -> b
   = { init, action ->
     memory {
       mut st = init

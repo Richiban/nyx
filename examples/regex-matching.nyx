@@ -16,7 +16,7 @@ pattern Phone | _ = { s ->
   else -> #nil
 }
 
-def saveContactInformation: [Console] string -> () = {
+def saveContactInformation: <@Console> string -> () = {
   | Email(localPart, domainName) ->
       println(s"Hi $localPart, we have saved your email address.")
   | Phone(phoneNumber) ->

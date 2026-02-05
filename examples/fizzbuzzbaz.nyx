@@ -5,7 +5,7 @@
 --  	with "fizzbaz" etc.
 
 --  OO style
-def NumberGame: ([MapBuilder] () -> ()) -> NumberGame
+def NumberGame: (<MapBuilder> () -> ()) -> NumberGame
   = { ruleBuilder ->
     def rules = dict { ruleBuilder() }
 

@@ -39,13 +39,13 @@ def add
 ### What Are Contexts?
 
 * Contexts represent capabilities a function requires.
-* Declared with `[ContextName]` after the function name.
+* Declared with `<ContextName>` after the function name.
 * Multiple contexts are comma-separated.
 
 Example:
 
 ```nyx
-def logMessage [Console]
+def logMessage <@Console>
   : (String) -> ()
   = { msg -> print(msg) }
 ```
@@ -55,7 +55,7 @@ def logMessage [Console]
 A function with contexts desugars into a **curried function** capturing the context:
 
 ```nyx
-def f [ctx]
+def f <ctx>
   : (A) -> B
   = { x -> body }
 ```
@@ -89,10 +89,10 @@ def f
 
 ### Explicit Context Application at Call Site
 
-You can **explicitly provide** a context using `[ContextInstance]` syntax:
+You can **explicitly provide** a context using `<ContextInstance>` syntax:
 
 ```nyx
-def x = f[ctx](arg)
+def x = f<ctx>(arg)
 ```
 
 Desugars to:
@@ -107,7 +107,7 @@ def x = (f(ctx))(arg)
 Example:
 
 ```nyx
-def greet = logMessage[console]
+def greet = logMessage<@Console>
 greet("Hello!")
 ```
 
@@ -251,7 +251,7 @@ xs \map { x -> x + 1 }
 * Use backticks to define custom operator functions.
 
 ```nyx
-def Point.`+` [Grid]
+def Point.`+` <Grid>
   : (Point, Point) -> Point
 ```
 

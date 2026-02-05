@@ -82,22 +82,6 @@ def classifyNumber: int -> string = {
 }
 
 ---
-# Patterns: Type patterns
----
-
-def f(x: string | number) ->
-  match x
-  | string s -> s.length
-  | number n -> n
-
-
-type Point = (x: number, y: number)
-
-def f(p: Point?) -> match p
-  | Point(x, y) -> x + y
-  | #nil -> 0
-
----
 #  Patterns: Object patterns
 ---
 
@@ -125,7 +109,7 @@ pattern MyPattern = ...
 
 --  or
 
-pattern MyPattern(x) -> ...
+pattern MyPattern = { x -> ??? }
 
 ---
 Imagine a function that returns a Colour
@@ -181,7 +165,7 @@ pattern Some = not #nil
 
 --  Note that the above is a simple pattern alias; it could have been written as 
 
-pattern Some { s -> match s
+pattern Some = { s -> match s
   | (not #nil) s -> (true, s)
   | _ -> false
 }
@@ -196,7 +180,7 @@ match someFunction()
 
 --  Some patterns can have both inputs and outputs; e.g. this regex pattern:
 
-pattern Regex { r, s ->
+pattern Regex = { r, s ->
   if Regex(r).match(s) ->
     s
   else ->
@@ -206,10 +190,10 @@ pattern Regex { r, s ->
 def fizzbuzz { range ->
   range \map { i ->
     match i % 3, i % 5
-      | 0, 0 -> "fizzbuzz"
-      | 0, _ -> "fizz"
-      | _, 0 -> "buzz"
-      | else   -> string(i)
+    | 0, 0 -> "fizzbuzz"
+    | 0, _ -> "fizz"
+    | _, 0 -> "buzz"
+    | else   -> string(i)
   }
 }
 
@@ -222,7 +206,7 @@ pattern DivisibleBy | _ = { divisor, x ->
 
 def fizzbuzz { range ->
   range \map {
-    | DivisibleBy(3) and DivisibleBy(5) -> "fizzbuzz"
+    | DivisibleBy(3) & DivisibleBy(5) -> "fizzbuzz"
     | DivisibleBy(3) -> "fizz"
     | DivisibleBy(5) -> "buzz"
     | else -> "{i}"
@@ -232,11 +216,25 @@ def fizzbuzz { range ->
 --  There is also an `except` keyword, which works like `match` except that it does
 --  not necessarily need to match all cases; any unmatched values are simply returned
 
-def f(x: #a | #b | #c | #d) ->
+def f = { (x: #a | #b | #c | #d) ->
   x except 
     | #a -> "a"
     | #b -> "b" -- Since we've only matched #a and #b, #c and #d will be returned as-is
                 -- The whole function now has a return value of `string | #c | #d`
+}
+
+--  When using `except`, if the result has been narrowed down to a single tag from a tag union
+--  then it is automatically unwrapped:
+
+def f = { (x: #a(string) | #b) ->
+
+  let s =
+    x except 
+      | #b -> "No string" 
+
+  -- s is of type string
+  -- Notice how the #a has disappeared because it was the only tag remaining
+}
 
 
 --  The `except` keyword is especially useful for handling errors. For example, given the function
@@ -248,12 +246,12 @@ def getCustomer
   }
 
 --  we can use `except` to handle the error case in a more functional way:
-def f() ->
+def f = {
   def customer = getCustomer("some_id") except
-    | #not_found -> return #customer_does_not_exist
+    | #not_found -> return #customerDoesNotExist
 
   ... -- Do something with `customer`
-
+}
 
 --  Pattern matching is a powerful tool for working with data. It allows you to both test an expression to see if it contains
 --  certain data and, at the same, to extract other pieces of data from the expression.
@@ -304,3 +302,40 @@ match someInt()
 | { < 5 }         -> "small"
 | { in 5..10 }    -> "medium"
 | { x -> x > 10 } -> "big"
+
+---
+  It's possible in Nyx to pattern match on a partial tag union. This is what allows many of
+  the standard library functions to act on both an optional value and a result. There's a 
+  convention that any tag union that includes a #some(t) variant is considered an 
+  "optional T" value and there are many functions that operate on these:
+
+def maybeString: (#some(string) | _) -> string = {
+  | #some(s) -> s
+  | _ -> "Nothing was found"
+}
+
+---
+  In the above function the "rest" parameter that represents the rest of the union is unused
+  so we can use the discard syntax `_`.
+
+  We can give it a proper type parameter if we'd like to use it elsewhere in the function 
+  signature. For example, in this optional map function:
+
+def mapOptional: (#some(a) | r), (a -> b) -> (#some(b) | r) = {
+  | #some(v), f -> #some(f(v))
+  | other -> other
+}
+
+def x: #some(string) | #nil = ???
+def x' = x \mapOptional { s -> s.length } -- x': #some(int) | #nil
+
+def y: #some(int) | #noValue | #infinity = ???
+def y' = y \mapOptional { \float } -- y': #some(float) | #noValue | #infinity
+
+def z: #some(Customer) | #err(string) = ???
+def z' = z \mapOptional { .id } -- z': #some(CustomerId) | #err(string)
+
+---
+  Notice how we have specified that the union of the first argument should include #some(a)
+  but we have placed no limits on what the other tags in the union can be. That allows us
+  to map one of the tags whilst leaving all others as-is.

@@ -26,11 +26,11 @@ def f = {
 -- A value's context forms part of its type. You can specify a context only, still leaving 
 -- the rest of the type to be inferred
 
-def g: [Console] = {
+def g: <@Console> = {
   println("Hello, world!") --  OK
 }
 -- Equivalent to:
-def g: [Console] () -> () = {
+def g: <@Console> () -> () = {
   println("Hello, world!") --  OK
 }
 
@@ -49,21 +49,22 @@ context MyState(α) = (
   set: α -> ()
 )
 
-impl myState: int -> MyState(int) 
-  = {
-    mut x = 0
+def myState: <@Memory> int -> MyState(int) = {
+  mut x = 0
 
-    ( get = { x }
-      set = { x' -> set x = x' } )
-  }
+  ( get = { x }
+    set = { x' -> set x = x' } )
+}
 
 def stateSum = { xs -> 
-  use myState(0)
+  memory {
+    use myState(0)
 
-  for xs | x ->
-    set(get() + x)
+    for xs | x ->
+      set(get() + x)
 
-  get()
+    get()
+  }
 }
 
 stateSum([1, 2, 3]) -- prints 6
@@ -155,7 +156,7 @@ def r = use PointSum in points \sum
 
 
 def addPoundsAndDollars
-  : [CurrencyConversionTable] Pounds, Dollars -> Dollars
+  : <CurrencyConversionTable> Pounds, Dollars -> Dollars
   = { p, d ->
     convert(p, #dollars) + d -- `convert` is a function on the `CurrencyConversionTable` context
   }
@@ -170,8 +171,7 @@ def main = {
 --  Functions can be annotated with a context. The functions on that context are now available to call within that function, and functions
 --  that in turn require that context can be called
 
-def sayHello
-  : [Console] () -> ()
+def sayHello: <@Console> () -> ()
   = {
     println("Hello world!")
   }
@@ -206,7 +206,7 @@ default Write(Person) = (
   write = { p -> "{p.name} is {p.age} years old" }
 )
 
-def [Write(α) + Console] someFunction
+def someFunction: [Write(α) + Console]
   = { x ->
     println(write(x)) --  Since we're in the context of Write(α), the function `write` is in scope
   }
@@ -221,7 +221,7 @@ context MyContext = (
   m: string -> ()
 )
 
-def [MyContext] g = {
+def g: <MyContext> = {
   m("Hello world") -- `m` is in scope from context `MyContext`
 }
 
@@ -229,7 +229,7 @@ def f = {
   g() --  Error: `g` requires `MyContext` in the context
 }
 
-def f: [MyContext] = {
+def f: <MyContext> = {
   g() --  This works because we have added the context to `f`'s signature, passing the context
       --  requirement on to our caller
 }
@@ -241,11 +241,11 @@ context Emit = (
 )
 
 -- emit a standard greeting.
-def hello: [Emit]
+def hello: <Emit>
   = { emit("hello world!") }
 
 -- emit a standard greeting to the console.
-export def helloConsole1: [Console]
+export def helloConsole1: <@Console>
   use Emit = (
     emit = { msg -> println(msg) }
   )

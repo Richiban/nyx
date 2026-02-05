@@ -81,3 +81,14 @@ def myFunction() ->
     file.open("/somefile.txt")
 
 
+--  When it comes to writing a library, you will want to have at least one exported module:
+
+export module myModule
+
+export def message = "Hello world"
+
+--  Or, if you want to keep the auto-naming behaviour, simply:
+
+export module
+
+export def message = ???

@@ -54,7 +54,7 @@ def parseArguments: CliConfigM(bool) = {
   return true
 }
 
-def main: [Console] List(string) -> () = { args ->
+def main: <@Console> List(string) -> () = { args ->
   def config: Config = ( input = "default" )
 
   match parseArguments \run(config) \run(args)

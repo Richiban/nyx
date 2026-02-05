@@ -50,7 +50,7 @@ export def rangeWithoutIndentation
   }
 
 export def getNextLineOfChangeOfIndentation
-  : [Document] Change, Direction, TextLine -> #some(TextLine) | #nil
+  : <Document> Change, Direction, TextLine -> #some(TextLine) | #nil
   = { change, direction, currentLine ->
     def diff = changeToDiff(change)
 
@@ -116,7 +116,7 @@ export def lineIsSignificant: TextLine -> bool
   = { line -> !lineIsStopLine(line) }
 
 def moveToChangeOfIndentation
-: [TextEditor] Position, common.Change, common.DirectionOrNearest -> ()
+: <TextEditor> Position, common.Change, common.DirectionOrNearest -> ()
 = { cursorPosition, change, direction ->
   if cursorPosition and document ->
     mut line: TextLine? = #nil
@@ -149,7 +149,7 @@ def directionToDelta: Direction -> (number -> number)
       | #backwards -> { - 1 } }
 
 export def iterLines
-  : [TextDocument] IterationOptions -> Source(TextLine)
+  : <TextDocument> IterationOptions -> Source(TextLine)
   = { options ->
     def advance = directionToDelta(options.direction)
     mut currentLineNumber = wordRangeToPosition(
@@ -176,7 +176,7 @@ export def iterLines
 
 
 def getNearestLineOfChangeOfIndentation
-  : [TextDocument] TextLine, common.Change -> TextLine
+  : <TextDocument> TextLine, common.Change -> TextLine
   = { currentLine, change ->
     def diff = changeToDiff(change)
 

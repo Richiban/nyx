@@ -149,9 +149,40 @@ do
     let lambdaWithParams = pipe2 (paramList .>> arrow) expression (fun parameters body -> Lambda(parameters, body))
     let lambdaNoParams = expression |>> (fun body -> Lambda([], body))
     
+    // Shorthand lambda: { * } means { x, y -> x * y }
+    let shorthandBinaryOp =
+        let operators = ["*"; "/"; "+"; "-"; "<"; ">"; "<="; ">="; "=="; "!="]
+        choice (operators |> List.map (fun op ->
+            pstring op >>. ws >>. notFollowedBy (skipAnyOf "0123456789.\"'([{") >>% Lambda(["x"; "y"], BinaryOp(op, IdentifierExpr "x", IdentifierExpr "y"))
+        ))
+    
+    // Shorthand lambda: { * 2 } means { x -> x * 2 }
+    let shorthandUnaryOp =
+        let operators = [("*", "*"); ("/", "/"); ("+", "+"); ("-", "-")]
+        choice (operators |> List.map (fun (op, opStr) ->
+            pstring op >>. ws >>. primaryExpr |>> (fun rightExpr ->
+                Lambda(["x"], BinaryOp(opStr, IdentifierExpr "x", rightExpr))
+            )
+        ))
+    
+    // Shorthand lambda: { .name } means { x -> x.name } (property access - for now just parse as identifier)
+    // Note: We'll need proper member access syntax later, for now treat .name as accessing a field
+    let shorthandPropertyAccess =
+        pstring "." >>. identifier |>> (fun propName ->
+            // For now, we'll represent this as a function call to a getter
+            // Later we can add proper member access to the AST
+            Lambda(["x"], FunctionCall(propName, [IdentifierExpr "x"]))
+        )
+    
     lambdaRef :=
         between (pstring "{") (pstring "}") (
-            ws >>. (attempt lambdaWithParams <|> lambdaNoParams) .>> ws
+            ws >>. choice [
+                attempt shorthandUnaryOp
+                attempt shorthandBinaryOp
+                attempt shorthandPropertyAccess
+                attempt lambdaWithParams
+                lambdaNoParams
+            ] .>> ws
         )
         <?> "lambda expression"
 

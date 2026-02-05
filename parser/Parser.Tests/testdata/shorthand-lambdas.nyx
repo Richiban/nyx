@@ -1,0 +1,19 @@
+module ShorthandLambdas
+
+def multiply = { * }
+def divide = { / }
+def add = { + }
+def subtract = { - }
+
+def double = { * 2 }
+def halve = { / 2 }
+def addTen = { + 10 }
+def minusOne = { - 1 }
+
+def getName = { .name }
+def getId = { .id }
+def getEmail = { .email }
+
+def doubledNumbers = map({ * 2 }, numbers)
+def names = map({ .name }, people)
+def sums = reduce({ + }, 0, values)

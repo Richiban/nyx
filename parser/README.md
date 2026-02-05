@@ -15,7 +15,15 @@ Currently supports parsing:
   - Booleans: `true`, `false`
 - **Identifiers**: Variable references like `someValue`
 - **Function calls**: `println("Hello")`, `add(1, 2)`, nested calls
-- **Lambda expressions**: `{ x -> x }`, `{ x, y -> add(x, y) }`, `{ 42 }`
+- **Lambda expressions**: 
+  - Standard: `{ x -> x }`, `{ x, y -> add(x, y) }`, `{ 42 }`
+  - **Shorthand lambdas**:
+    - Binary operators: `{ * }` → `{ x, y -> x * y }`
+    - Unary operations: `{ * 2 }` → `{ x -> x * 2 }`
+    - Property access: `{ .name }` → `{ x -> x.name }`
+- **Binary operators**: `+`, `-`, `*`, `/`, `<`, `>`, `<=`, `>=`, `==`, `!=`
+  - With correct precedence (multiplication/division before addition/subtraction)
+- **Parenthesized expressions**: `(1 + 2) * 3`
 - **Whitespace handling**: Flexible whitespace and newlines
 
 ## Project Structure
@@ -26,12 +34,13 @@ parser/
 │   ├── Program.fs            # Parser implementation and AST
 │   └── NyxParser.fsproj
 ├── Parser.Tests/             # Unit tests (F#)
-│   ├── ParserTests.fs        # 44 comprehensive tests
+│   ├── ParserTests.fs        # 50 comprehensive tests
 │   ├── Parser.Tests.fsproj
 │   └── testdata/             # Test .nyx files
 │       ├── literals.nyx
 │       ├── function-calls.nyx
 │       ├── lambdas.nyx
+│       ├── shorthand-lambdas.nyx
 │       ├── binary-operators.nyx
 │       └── comprehensive.nyx
 ├── sample-*.nyx              # Sample Nyx files
@@ -52,12 +61,13 @@ cd parser
 dotnet test
 ```
 
-All 44 tests should pass:
-- **Unit tests** (39): Literal parsing, identifiers, function calls, lambdas, binary operators, whitespace, errors
-- **Integration tests** (5): Full .nyx file parsing from `testdata/` directory
+All 50 tests should pass:
+- **Unit tests** (44): Literal parsing, identifiers, function calls, lambdas (standard & shorthand), binary operators, whitespace, errors
+- **Integration tests** (6): Full .nyx file parsing from `testdata/` directory
   - `literals.nyx`: String, int, float, boolean literals
   - `function-calls.nyx`: Various function call patterns
   - `lambdas.nyx`: Lambda expressions with different parameter counts
+  - `shorthand-lambdas.nyx`: Shorthand lambda syntax (binary ops, unary ops, property access)
   - `binary-operators.nyx`: Arithmetic, comparison, and equality operators
   - `comprehensive.nyx`: Mix of all features
 

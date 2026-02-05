@@ -502,6 +502,125 @@ let ``Parse lambda as function argument`` () =
         | _ -> failwith "Expected Def with FunctionCall"
     | Result.Error err -> failwith $"Parse should succeed, got: {err}"
 
+// Shorthand Lambda Tests
+[<Fact>]
+let ``Parse shorthand lambda with binary operator`` () =
+    let result = parseModule "def multiply = { * }"
+    
+    result |> isOk |> should equal true
+    match result with
+    | Result.Ok module' ->
+        module' |> should haveLength 1
+        match module'.[0] with
+        | Def (ValueDef (name, Lambda (parameters, body))) ->
+            name |> should equal "multiply"
+            parameters |> should haveLength 2
+            parameters.[0] |> should equal "x"
+            parameters.[1] |> should equal "y"
+            match body with
+            | BinaryOp (op, IdentifierExpr left, IdentifierExpr right) ->
+                op |> should equal "*"
+                left |> should equal "x"
+                right |> should equal "y"
+            | _ -> failwith "Expected binary operation in shorthand lambda body"
+        | _ -> failwith "Expected Def with Lambda"
+    | Result.Error err -> failwith $"Parse should succeed, got: {err}"
+
+[<Fact>]
+let ``Parse shorthand lambda with unary operation`` () =
+    let result = parseModule "def double = { * 2 }"
+    
+    result |> isOk |> should equal true
+    match result with
+    | Result.Ok module' ->
+        module' |> should haveLength 1
+        match module'.[0] with
+        | Def (ValueDef (name, Lambda (parameters, body))) ->
+            name |> should equal "double"
+            parameters |> should haveLength 1
+            parameters.[0] |> should equal "x"
+            match body with
+            | BinaryOp (op, IdentifierExpr left, LiteralExpr (IntLit right)) ->
+                op |> should equal "*"
+                left |> should equal "x"
+                right |> should equal 2
+            | _ -> failwith "Expected binary operation with literal in shorthand lambda body"
+        | _ -> failwith "Expected Def with Lambda"
+    | Result.Error err -> failwith $"Parse should succeed, got: {err}"
+
+[<Fact>]
+let ``Parse shorthand lambda with property access`` () =
+    let result = parseModule "def getName = { .name }"
+    
+    result |> isOk |> should equal true
+    match result with
+    | Result.Ok module' ->
+        module' |> should haveLength 1
+        match module'.[0] with
+        | Def (ValueDef (name, Lambda (parameters, body))) ->
+            name |> should equal "getName"
+            parameters |> should haveLength 1
+            parameters.[0] |> should equal "x"
+            match body with
+            | FunctionCall (funcName, args) ->
+                funcName |> should equal "name"
+                args |> should haveLength 1
+                match args.[0] with
+                | IdentifierExpr arg -> arg |> should equal "x"
+                | _ -> failwith "Expected identifier argument"
+            | _ -> failwith "Expected function call in shorthand property lambda body"
+        | _ -> failwith "Expected Def with Lambda"
+    | Result.Error err -> failwith $"Parse should succeed, got: {err}"
+
+[<Fact>]
+let ``Parse shorthand lambda with addition`` () =
+    let result = parseModule "def addFive = { + 5 }"
+    
+    result |> isOk |> should equal true
+    match result with
+    | Result.Ok module' ->
+        module' |> should haveLength 1
+        match module'.[0] with
+        | Def (ValueDef (name, Lambda (parameters, body))) ->
+            name |> should equal "addFive"
+            parameters |> should haveLength 1
+            parameters.[0] |> should equal "x"
+            match body with
+            | BinaryOp (op, IdentifierExpr left, LiteralExpr (IntLit right)) ->
+                op |> should equal "+"
+                left |> should equal "x"
+                right |> should equal 5
+            | _ -> failwith "Expected addition operation in shorthand lambda body"
+        | _ -> failwith "Expected Def with Lambda"
+    | Result.Error err -> failwith $"Parse should succeed, got: {err}"
+
+[<Fact>]
+let ``Parse shorthand lambda as function argument`` () =
+    let result = parseModule "def doubled = map({ * 2 }, numbers)"
+    
+    result |> isOk |> should equal true
+    match result with
+    | Result.Ok module' ->
+        module' |> should haveLength 1
+        match module'.[0] with
+        | Def (ValueDef (name, FunctionCall (funcName, args))) ->
+            name |> should equal "doubled"
+            funcName |> should equal "map"
+            args |> should haveLength 2
+            match args.[0] with
+            | Lambda (parameters, body) ->
+                parameters |> should haveLength 1
+                parameters.[0] |> should equal "x"
+                match body with
+                | BinaryOp (op, IdentifierExpr left, LiteralExpr (IntLit right)) ->
+                    op |> should equal "*"
+                    left |> should equal "x"
+                    right |> should equal 2
+                | _ -> failwith "Expected multiplication in lambda"
+            | _ -> failwith "Expected shorthand lambda as first argument"
+        | _ -> failwith "Expected Def with FunctionCall"
+    | Result.Error err -> failwith $"Parse should succeed, got: {err}"
+
 // Binary Operator Tests
 [<Fact>]
 let ``Parse addition`` () =
@@ -644,6 +763,30 @@ let ``Parse lambdas.nyx file`` () =
             match def with
             | Def (ValueDef (_, Lambda _)) -> ()
             | _ -> failwith "Expected all definitions to contain lambdas"
+    | Result.Error err -> failwith $"Parse failed: {err}"
+
+[<Fact>]
+let ``Parse shorthand-lambdas.nyx file`` () =
+    let result = parseTestFile "shorthand-lambdas.nyx"
+    
+    result |> isOk |> should equal true
+    match result with
+    | Result.Ok module' ->
+        module' |> should haveLength 15  // 1 module + 14 shorthand lambda defs
+        match module'.[0] with
+        | ModuleDecl name -> name |> should equal "ShorthandLambdas"
+        | _ -> failwith "Expected ModuleDecl"
+        
+        // Verify all are lambdas (some within function calls)
+        let defs = module' |> List.tail
+        for def in defs do
+            match def with
+            | Def (ValueDef (_, Lambda _)) -> ()
+            | Def (ValueDef (_, FunctionCall (_, args))) ->
+                // Should have at least one lambda in args
+                let hasLambda = args |> List.exists (fun arg -> match arg with | Lambda _ -> true | _ -> false)
+                hasLambda |> should equal true
+            | _ -> failwith "Expected lambda or function call with lambda"
     | Result.Error err -> failwith $"Parse failed: {err}"
 
 [<Fact>]

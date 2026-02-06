@@ -1,31 +1,9 @@
-module ParserTests
+module ParserTests.Core
 
-open System.IO
 open Xunit
 open FsUnit.Xunit
 open Parser.Program
-
-// Helper to check if Result is Ok
-let isOk result =
-    match result with
-    | Result.Ok _ -> true
-    | Result.Error _ -> false
-
-// Helper to check if Result is Error
-let isError result =
-    match result with
-    | Result.Ok _ -> false
-    | Result.Error _ -> true
-
-// Helper to load test file
-let loadTestFile filename =
-    let testDataDir = Path.Combine(__SOURCE_DIRECTORY__, "testdata")
-    let filePath = Path.Combine(testDataDir, filename)
-    File.ReadAllText(filePath)
-
-// Helper to parse test file
-let parseTestFile filename =
-    loadTestFile filename |> parseModule
+open ParserTestHelpers
 
 // Literal Tests
 [<Fact>]

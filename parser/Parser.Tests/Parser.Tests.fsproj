@@ -8,11 +8,37 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <Compile Include="TestHelpers.fs" />
     <Compile Include="ParserTests.fs" />
+    <Compile Include="Features\Blocks\BlockTests.fs" />
+    <Compile Include="Features\Bindings\BindingTests.fs" />
+    <Compile Include="Features\FieldAccess\FieldAccessTests.fs" />
+    <Compile Include="Features\Functions\FunctionCallTests.fs" />
+    <Compile Include="Features\If\IfTests.fs" />
+    <Compile Include="Features\Integration\IntegrationTests.fs" />
+    <Compile Include="Features\Lambdas\LambdaTests.fs" />
+    <Compile Include="Features\Literals\LiteralsTests.fs" />
+    <Compile Include="Features\Matches\MatchTests.fs" />
+    <Compile Include="Features\Misc\MiscTests.fs" />
+    <Compile Include="Features\Multiline\MultilineTests.fs" />
+    <Compile Include="Features\Operators\OperatorTests.fs" />
+    <Compile Include="Features\Phases\PhaseTests.fs" />
+    <Compile Include="Features\Pipes\PipeTests.fs" />
+    <Compile Include="Features\Ranges\RangeTests.fs" />
+    <Compile Include="Features\Records\RecordTests.fs" />
+    <Compile Include="Features\Samples\SampleTests.fs" />
+    <Compile Include="Features\Tags\TagTests.fs" />
+    <Compile Include="Features\Tuples\TupleTests.fs" />
   </ItemGroup>
 
   <ItemGroup>
     <Content Include="testdata\**\*.nyx">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
+    <Content Include="Features\**\*.nyx">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
+    <Content Include="Features\**\*.txt">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </Content>
   </ItemGroup>

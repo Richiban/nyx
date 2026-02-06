@@ -6,7 +6,32 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <Compile Include="Tests.fs" />
+    <Compile Include="TestHelpers.fs" />
+    <Compile Include="Features\Core\LiteralTests.fs" />
+    <Compile Include="Features\Core\ExpressionTests.fs" />
+    <Compile Include="Features\Core\CollectionTests.fs" />
+    <Compile Include="Features\Core\FunctionTests.fs" />
+    <Compile Include="Features\Core\PipeTests.fs" />
+    <Compile Include="Features\Core\ControlFlowTests.fs" />
+    <Compile Include="Features\Match\MatchTests.fs" />
+    <Compile Include="Features\Blocks\BlocksFileTests.fs" />
+    <Compile Include="Features\Chaining\ChainingFileTests.fs" />
+    <Compile Include="Features\Lambdas\LambdaFileTests.fs" />
+    <Compile Include="Features\Lists\ListFileTests.fs" />
+    <Compile Include="Features\Operators\OperatorFileTests.fs" />
+    <Compile Include="Features\Pipes\PipeFileTests.fs" />
+    <Compile Include="Features\Records\RecordFileTests.fs" />
+    <Compile Include="Features\Tags\TagFileTests.fs" />
+    <Compile Include="Features\Transpile\TranspileFileTests.fs" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Content Include="Features\**\*.nyx">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
+    <Content Include="Features\**\*.js">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
   </ItemGroup>
 
   <ItemGroup>

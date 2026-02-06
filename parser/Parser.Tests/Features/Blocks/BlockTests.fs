@@ -38,3 +38,20 @@ let ``Parse sample-block.nyx file`` () =
         | ModuleDecl name -> name |> should equal "BlockTest"
         | _ -> failwith "Expected ModuleDecl"
     | Result.Error err -> failwith $"Parse failed: {err}"
+
+[<Fact>]
+let ``Parse sibling blocks`` () =
+    let result = parseTestFile "test_block_sibling_blocks.nyx"
+
+    result |> isOk |> should equal true
+    match result with
+    | Result.Ok module' ->
+        module' |> should haveLength 2
+        match module'.[0], module'.[1] with
+        | Def (ValueDef (firstName, Block firstStatements)), Def (ValueDef (secondName, Block secondStatements)) ->
+            firstName |> should equal "first"
+            secondName |> should equal "second"
+            firstStatements |> should haveLength 2
+            secondStatements |> should haveLength 2
+        | _ -> failwith "Expected two sibling block definitions"
+    | Result.Error err -> failwith $"Parse failed: {err}"

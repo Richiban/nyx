@@ -1,0 +1,7 @@
+def first =
+  def x = 1
+  x
+
+def second =
+  def y = 2
+  y

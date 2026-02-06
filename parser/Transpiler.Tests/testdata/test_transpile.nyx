@@ -1,0 +1,12 @@
+module TestTranspile
+
+def x = 42
+def y = "hello"
+def sum = 1 + 2
+def point = (x = 10, y = 20)
+def accessField = point.x
+def tuple = 1, 2, 3
+def nested = outer.inner.value
+def ifTest = if true then 1 else 2
+def funcCall = add(5, 10)
+def piped = value \double

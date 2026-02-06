@@ -1,0 +1,11 @@
+module MatchBasic
+
+def byLiteral = match 3
+  | 1 -> 10
+  | 3 -> 30
+  | else -> 0
+
+def byTag = match value
+  | #Some(42) -> 1
+  | #None -> 0
+  | else -> -1

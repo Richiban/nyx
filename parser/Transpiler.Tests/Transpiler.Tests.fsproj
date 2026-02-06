@@ -14,6 +14,7 @@
     <Compile Include="Features\Core\PipeTests.fs" />
     <Compile Include="Features\Core\ControlFlowTests.fs" />
     <Compile Include="Features\Match\MatchTests.fs" />
+  <Compile Include="Features\Match\MatchFileTests.fs" />
     <Compile Include="Features\Blocks\BlocksFileTests.fs" />
     <Compile Include="Features\Chaining\ChainingFileTests.fs" />
     <Compile Include="Features\Lambdas\LambdaFileTests.fs" />

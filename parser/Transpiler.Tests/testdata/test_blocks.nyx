@@ -1,0 +1,17 @@
+module TestBlocks
+
+def blockSimple =
+    def x = 1
+    x
+
+def blockTwoStmts =
+    def x = 1
+    def y = 2
+    x + y
+
+def blockNested =
+    def outer = 10
+    def inner =
+        def nested = 20
+        nested * 2
+    outer + inner

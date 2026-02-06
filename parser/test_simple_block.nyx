@@ -1,0 +1,5 @@
+module Test
+
+def simple =
+    def x = 1
+    x

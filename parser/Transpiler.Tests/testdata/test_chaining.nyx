@@ -1,0 +1,11 @@
+module TestChaining
+
+def value = 10
+def double = { x -> x * 2 }
+def addFive = { x -> x + 5 }
+def square = { x -> x * x }
+
+def chain1 = value \double
+def chain2 = value \double \addFive
+def chain3 = 3 \double \double \addFive
+def chain4 = 2 \square \double

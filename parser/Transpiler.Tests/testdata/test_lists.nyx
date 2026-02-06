@@ -1,0 +1,8 @@
+module TestLists
+
+def empty = []
+def numbers = [1, 2, 3, 4, 5]
+def strings = ["hello", "world"]
+def mixed = [1, "two", 3]
+def nested = [[1, 2], [3, 4]]
+def withExprs = [1 + 1, 2 * 2, 3 - 1]

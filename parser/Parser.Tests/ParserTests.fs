@@ -1007,6 +1007,27 @@ let ``Parse piping.nyx file`` () =
     | Result.Error err -> failwith $"Parse failed: {err}"
 
 [<Fact>]
+let ``Parse block with two literals`` () =
+    let result = parseTestFile "test_block_two_literals.nyx"
+
+    result |> isOk |> should equal true
+    match result with
+    | Result.Ok module' ->
+        module' |> should haveLength 1
+        match module'.[0] with
+        | Def (ValueDef (name, Block statements)) ->
+            name |> should equal "test"
+            statements |> should haveLength 2
+            match statements.[0] with
+            | ExprStatement (LiteralExpr (IntLit 1)) -> ()
+            | _ -> failwith "Expected first statement to be literal 1"
+            match statements.[1] with
+            | ExprStatement (LiteralExpr (IntLit 2)) -> ()
+            | _ -> failwith "Expected second statement to be literal 2"
+        | _ -> failwith "Expected a block with two literal statements"
+    | Result.Error err -> failwith $"Parse failed: {err}"
+
+[<Fact>]
 let ``Parse comprehensive.nyx file`` () =
     let result = parseTestFile "comprehensive.nyx"
     

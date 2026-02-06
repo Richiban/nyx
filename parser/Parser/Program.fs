@@ -70,6 +70,8 @@ type Module = TopLevelItem list
 
 // Helper: whitespace and comment handling
 let ws = spaces
+let wsAll = spaces
+let wsInline = skipMany (skipAnyOf " \t")
 let wsNoNl() = skipMany (skipAnyOf " \t") // whitespace without newlines
 let comment () = pstring "--" >>. skipRestOfLine true
 let wsWithComments () = skipMany (skipMany1 spaces1 <|> comment ())
@@ -416,7 +418,7 @@ let memberAccessChain =
         many dotField |>> fun fields ->
             List.fold (fun expr field -> MemberAccess(expr, field)) baseExpr fields
 
-let primaryExpr = memberAccessChain .>> ws  // Consume trailing ws for operator parsing
+let primaryExpr = memberAccessChain .>> wsInline  // Consume trailing inline ws for operator parsing
 
 opp.TermParser <- primaryExpr
 
@@ -458,10 +460,13 @@ let pipeTarget =
         )
 
 let pipeExpr =
-    let pipeOp = pstring "\\" >>. ws >>. pipeTarget
+    let pipeLeadingWs =
+        skipMany (skipAnyOf " \t") >>.
+        skipMany (attempt (newline >>. skipMany (skipAnyOf " \t")))
+    let pipeOp = pipeLeadingWs >>. pstring "\\" >>. wsInline >>. pipeTarget
     pipe2
         opp.ExpressionParser
-        (many (pipeOp .>> ws))
+        (many (attempt (pipeOp .>> wsInline)))
         (fun expr pipes ->
             pipes |> List.fold (fun acc (funcName, args) -> Pipe(acc, funcName, args)) expr
         )
@@ -596,9 +601,13 @@ let blockExpr() : Parser<Expression, unit> =
     many (pchar ' ' <|> pchar '\t') >>= fun indentChars ->
         let indentLevel = indentChars.Length
         if indentLevel > 0 then
-            // Simple approach: parse as many statements as we can
-            // Rely on statement parser failing when we leave the indented block
-            many1 statement |>> Block
+            let statementAtIndent =
+                attempt (manyMinMaxSatisfy indentLevel indentLevel (fun c -> c = ' ' || c = '\t') >>. statement)
+
+            pipe2
+                statement
+                (many (attempt (newline >>. statementAtIndent)))
+                (fun first rest -> Block (first :: rest))
         else
             pzero
 
@@ -626,7 +635,7 @@ let moduleDecl: Parser<TopLevelItem, unit> =
 let valueDef: Parser<TopLevelItem, unit> =
     pipe2
         (pstring "def" >>. ws >>. identifier .>> wsNoNl() .>> pstring "=")  // Don't consume newlines after =
-        (attempt (blockExpr()) <|> (ws >>. (sepBy1 expression (pstring "," .>> ws) |>> fun exprs ->
+        (attempt (blockExpr()) <|> (wsInline >>. (sepBy1 expression (pstring "," .>> ws) |>> fun exprs ->
             match exprs with
             | [single] -> single
             | multiple -> TupleExpr multiple)))

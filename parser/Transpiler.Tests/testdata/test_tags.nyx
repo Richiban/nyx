@@ -1,0 +1,8 @@
+module TestTags
+
+def none = #None
+def someInt = #Some(42)
+def someStr = #Some("hello")
+def ok = #Ok(100)
+def err = #Error("failed")
+def nested = #Result(#Some(42))

@@ -69,8 +69,8 @@ type TopLevelItem =
 type Module = TopLevelItem list
 
 // Helper: whitespace and comment handling
-let ws = spaces
-let wsAll = spaces
+let ws: Parser<unit, unit> = skipMany (skipAnyOf " \t\r\n")
+let wsAll: Parser<unit, unit> = skipMany (skipAnyOf " \t\r\n")
 let wsInline = skipMany (skipAnyOf " \t")
 let wsNoNl() = skipMany (skipAnyOf " \t") // whitespace without newlines
 let comment () = pstring "--" >>. skipRestOfLine true
@@ -107,7 +107,7 @@ let identifierNoWs: Parser<Identifier, unit> =
     many1Satisfy2 isIdentStart isIdentContinue
     <?> "identifier"
 
-let identifier: Parser<Identifier, unit> = identifierNoWs .>> ws
+let identifier: Parser<Identifier, unit> = identifierNoWs .>> wsInline
 
 // Parser for literals
 let stringLiteralNoWs: Parser<Literal, unit> =
@@ -158,9 +158,13 @@ let literal: Parser<Literal, unit> =
 
 // Forward references for recursive expression parsing
 let expression, expressionRef = createParserForwardedToRef<Expression, unit>()
+let exprWithoutCrossingNewlines, exprWithoutCrossingNewlinesRef = createParserForwardedToRef<Expression, unit>()
+let inlineExpression, inlineExpressionRef = createParserForwardedToRef<Expression, unit>()
+let simpleExpression, simpleExpressionRef = createParserForwardedToRef<Expression, unit>()
 let lambda, lambdaRef = createParserForwardedToRef<Expression, unit>()
 let functionCall, functionCallRef = createParserForwardedToRef<Expression, unit>()
 let matchExpr, matchExprRef = createParserForwardedToRef<Expression, unit>()
+let statement, statementRef = createParserForwardedToRef<Statement, unit>()
 
 // Pattern parsers
 let pattern, patternRef = createParserForwardedToRef<Pattern, unit>()
@@ -321,12 +325,12 @@ do patternRef :=
 // Match expression parser
 do
     let matchArm =
-        pstring "|" >>. ws >>. sepBy1 pattern (pstring "," .>> ws) .>>. (pstring "->" >>. ws >>. expression)
+        pstring "|" >>. ws >>. sepBy1 pattern (pstring "," .>> ws) .>>. (pstring "->" >>. ws >>. simpleExpression)
         <?> "match arm"
     
     matchExprRef :=
         pipe2
-            (pstring "match" >>. ws >>. sepBy1 expression (pstring "," .>> ws))  // Multiple expressions
+            (pstring "match" >>. ws >>. sepBy1 simpleExpression (pstring "," .>> ws))  // Multiple expressions
             (many1 (ws >>. matchArm))
             (fun scrutinees arms -> Match(scrutinees, arms))
         <?> "match expression"
@@ -411,6 +415,8 @@ let primaryExprNoWs =
         identifierNoWs |>> IdentifierExpr
     ]
 
+do simpleExpressionRef := primaryExprNoWs
+
 // Member access: parse base expression, then chain .field.field.field...
 let memberAccessChain =
     let dotField = pstring "." >>. identifierNoWs
@@ -459,6 +465,24 @@ let pipeTarget =
             | None -> (funcName, [])
         )
 
+// Inline operator precedence parser (no newlines in operator whitespace)
+let oppInline = new OperatorPrecedenceParser<Expression, unit, unit>()
+oppInline.TermParser <- primaryExpr
+
+oppInline.AddOperator(InfixOperator("*", wsInline, 7, Associativity.Left, fun x y -> BinaryOp("*", x, y)))
+oppInline.AddOperator(InfixOperator("/", wsInline, 7, Associativity.Left, fun x y -> BinaryOp("/", x, y)))
+
+oppInline.AddOperator(InfixOperator("+", wsInline, 6, Associativity.Left, fun x y -> BinaryOp("+", x, y)))
+oppInline.AddOperator(InfixOperator("-", wsInline, 6, Associativity.Left, fun x y -> BinaryOp("-", x, y)))
+
+oppInline.AddOperator(InfixOperator("<", wsInline, 4, Associativity.Left, fun x y -> BinaryOp("<", x, y)))
+oppInline.AddOperator(InfixOperator(">", wsInline, 4, Associativity.Left, fun x y -> BinaryOp(">", x, y)))
+oppInline.AddOperator(InfixOperator("<=", wsInline, 4, Associativity.Left, fun x y -> BinaryOp("<=", x, y)))
+oppInline.AddOperator(InfixOperator(">=", wsInline, 4, Associativity.Left, fun x y -> BinaryOp(">=", x, y)))
+
+oppInline.AddOperator(InfixOperator("==", wsInline, 3, Associativity.Left, fun x y -> BinaryOp("==", x, y)))
+oppInline.AddOperator(InfixOperator("!=", wsInline, 3, Associativity.Left, fun x y -> BinaryOp("!=", x, y)))
+
 let pipeExpr =
     let pipeLeadingWs =
         skipMany (skipAnyOf " \t") >>.
@@ -471,8 +495,19 @@ let pipeExpr =
             pipes |> List.fold (fun acc (funcName, args) -> Pipe(acc, funcName, args)) expr
         )
 
+let inlinePipeExpr =
+    let pipeOp = pstring "\\" >>. wsInline >>. pipeTarget
+    pipe2
+        oppInline.ExpressionParser
+        (many (attempt (pipeOp .>> wsInline)))
+        (fun expr pipes ->
+            pipes |> List.fold (fun acc (funcName, args) -> Pipe(acc, funcName, args)) expr
+        )
+
+do inlineExpressionRef := inlinePipeExpr
+
 // Expression parser that stops at newlines (for use in blocks)
-let exprWithoutCrossingNewlines =
+do exprWithoutCrossingNewlinesRef :=
     let pipeOp = pstring "\\" >>. skipMany (skipAnyOf " \t") >>. pipeTarget
     pipe2
         opp.ExpressionParser
@@ -482,35 +517,28 @@ let exprWithoutCrossingNewlines =
         )
 
 // Wire up the expression parser with piping support
-do expressionRef := pipeExpr
+// Prefer match expressions first to avoid parsing "match" as an identifier.
+do expressionRef := (attempt matchExpr <|> pipeExpr)
 
 // Wire up the lambda parser
 do 
     let paramList = sepBy identifier (pstring "," .>> ws)
     let arrow = pstring "->" .>> ws
     
-    // Block lambda body: two strategies depending on whether there are newlines
-    // - Single line: use full expression parser with operators and pipes
-    // - Multi-line: parse each line as primary expression only (simplified for now)
+    // Lambda body: allow multi-line statement blocks or a single expression
     let blockBody =
-        // Try multi-line first (has newlines between expressions)
+        let lineEnd = skipMany1 newline >>. skipMany (skipAnyOf " \t\r")
         let multiLine =
-            let lineExpr = primaryExprNoWs .>> skipMany (skipAnyOf " \t\r")
-            let lineEnd = skipMany1 newline >>. skipMany (skipAnyOf " \t\r")
-            
             skipMany (skipAnyOf " \t\r\n") >>.
-            lineExpr .>>. (attempt (lineEnd >>. sepEndBy1 lineExpr lineEnd)) .>>
+            statement .>>. (attempt (lineEnd >>. sepEndBy1 statement lineEnd)) .>>
             skipMany (skipAnyOf " \t\r\n")
-            |>> (fun (first, rest) ->
-                Block ((first :: rest) |> List.map ExprStatement)
-            )
-        
-        // Single line: just parse full expression
+            |>> (fun (first, rest) -> Block (first :: rest))
+
         let singleLine =
             skipMany (skipAnyOf " \t\r\n") >>.
             expression .>>
             skipMany (skipAnyOf " \t\r\n")
-        
+
         attempt multiLine <|> singleLine
     
     let lambdaWithParams = pipe2 (paramList .>> arrow .>> skipMany (skipAnyOf " \t\r\n")) blockBody (fun parameters body -> Lambda(parameters, body))
@@ -592,9 +620,6 @@ do
         callWithOnlyTrailing <|> callWithParensAndTrailing
         <?> "function call"
 
-// Forward reference for statement parsing
-let statement, statementRef = createParserForwardedToRef<Statement, unit>()
-
 // Block parser - parses indented statements after a newline
 let blockExpr() : Parser<Expression, unit> =
     newline >>.
@@ -657,7 +682,9 @@ let moduleParser: Parser<Module, unit> =
 
 // Public API for parsing
 let parseModule (input: string) : Result<Module, string> =
-    match run moduleParser input with
+    let normalized =
+        input.Replace("\r\n", "\n").Replace("\r", "\n").TrimEnd()
+    match run moduleParser normalized with
     | ParserResult.Success(result, _, _) -> Result.Ok result
     | ParserResult.Failure(errorMsg, _, _) -> Result.Error errorMsg
 

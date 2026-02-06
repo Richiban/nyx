@@ -14,10 +14,10 @@ const byLiteral = (() => {
 })();
 const byTag = (() => {
   const _match0 = value;
-  if (_match0.tag === "Some" && _match0.value === 42) {
+  if (_match0 && typeof _match0 === "object" && _match0.tag === "Some" && _match0.value === 42) {
     return 1;
   }
-  else if (_match0.tag === "None") {
+  else if (_match0 && typeof _match0 === "object" && _match0.tag === "None") {
     return 0;
   }
   else if (true) {

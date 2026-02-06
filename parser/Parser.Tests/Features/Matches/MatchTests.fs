@@ -5,9 +5,9 @@ open FsUnit.Xunit
 open ParserTestHelpers
 open System.IO
 
-[<Fact(Skip="Match samples include syntax not yet supported by the parser")>]
+[<Fact(Skip="Match fixtures include patterns and lambda forms not yet parsed")>]
 let ``Parse match feature files`` () =
-    let unsupported = set [ "test_match_basic.nyx" ]
+    let unsupported = set [ "test_match_basic.nyx"; "test_match_binding.nyx"; "test_match_guard.nyx"; "test_match_lambda.nyx" ]
 
     parseFeatureNyxFiles "Matches"
     |> Array.filter (fun (filePath, _) -> not (unsupported.Contains(Path.GetFileName(filePath))))

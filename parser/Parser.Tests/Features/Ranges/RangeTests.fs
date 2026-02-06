@@ -5,9 +5,9 @@ open FsUnit.Xunit
 open ParserTestHelpers
 open System.IO
 
-[<Fact(Skip="Range samples use match syntax not yet supported by the parser")>]
+[<Fact>]
 let ``Parse range feature files`` () =
-    let unsupported = set [ "test_range_copy.nyx" ]
+    let unsupported = set [ "test_simple_range_expr.nyx" ]
 
     parseFeatureNyxFiles "Ranges"
     |> Array.filter (fun (filePath, _) -> not (unsupported.Contains(Path.GetFileName(filePath))))

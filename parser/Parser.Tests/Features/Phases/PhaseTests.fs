@@ -5,12 +5,9 @@ open FsUnit.Xunit
 open ParserTestHelpers
 open System.IO
 
-[<Fact(Skip="Phase samples use match syntax not yet supported by the parser")>]
+[<Fact(Skip="Phase fixtures include inline match forms not yet parsed")>]
 let ``Parse phase feature files`` () =
-    let unsupported = set [ "test_phase5_complete.nyx" ]
-
     parseFeatureNyxFiles "Phases"
-    |> Array.filter (fun (filePath, _) -> not (unsupported.Contains(Path.GetFileName(filePath))))
     |> Array.iter (fun (filePath, result) ->
         match result with
         | Result.Ok _ -> ()

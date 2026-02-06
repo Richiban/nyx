@@ -119,12 +119,13 @@ let rec transpileExpression (expr: Expression) : string =
             | GuardPattern (op, guardExpr) ->
                 ([sprintf "%s %s %s" scrutinee (jsComparisonOp op) (transpileExpression guardExpr)], [])
             | TagPattern (tagName, payloadOpt) ->
+                let baseConds = [sprintf "%s && typeof %s === \"object\"" scrutinee scrutinee]
                 let tagCheck = sprintf "%s.tag === \"%s\"" scrutinee tagName
                 match payloadOpt with
-                | None -> ([tagCheck], [])
+                | None -> (baseConds @ [tagCheck], [])
                 | Some inner ->
                     let innerConds, innerBinds = patternToJs (sprintf "%s.value" scrutinee) inner
-                    (tagCheck :: innerConds, innerBinds)
+                    (baseConds @ (tagCheck :: innerConds), innerBinds)
             | TuplePattern patterns ->
                 let baseConds =
                     [sprintf "Array.isArray(%s)" scrutinee

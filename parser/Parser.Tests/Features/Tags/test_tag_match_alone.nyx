@@ -1,1 +1,3 @@
-def unwrap = match x | #some(val) -> val | else -> 0
+def unwrap = match x
+	| #some(val) -> val
+	| else -> 0

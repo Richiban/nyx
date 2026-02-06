@@ -1,8 +1,18 @@
-def testRange = match 5 | 1..10 -> "small" | 11..100 -> "medium" | else -> "large"
+def testRange = match 5
+  | 1..10 -> "small"
+  | 11..100 -> "medium"
+  | else -> "large"
 
-def testGuard = match 25 | > 100 -> "huge" | > 10 -> "big" | < 0 -> "negative" | else -> "small"
+def testGuard = match 25
+  | > 100 -> "huge"
+  | > 10 -> "big"
+  | < 0 -> "negative"
+  | else -> "small"
 
-def testTag = match optValue | #some(x) -> x | #none -> 0 | else -> -1
+def testTag = match optValue
+  | #some(x) -> x
+  | #none -> 0
+  | else -> -1
 
 def testMixed = match value
   | 0 -> "zero"

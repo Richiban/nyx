@@ -15,3 +15,7 @@ module TypeEnv =
 
     let tryFind (name: string) (env: TypeEnv) =
         env |> Map.tryFind name
+
+    let mono (ty: Ty) : TypeScheme =
+        { Quantified = Set.empty
+          Type = ty }

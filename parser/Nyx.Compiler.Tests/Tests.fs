@@ -12,6 +12,13 @@ let ``Compile returns typed module for valid source`` () =
     Assert.True(result.Typed.IsSome)
 
 [<Fact>]
+let ``Typecheck infers literal types`` () =
+    let source = "def message = \"Hello\""
+    let result = Compiler.compile source
+    let typed = result.Typed.Value
+    Assert.Equal(TyPrimitive "string", typed.Types.["message"])
+
+[<Fact>]
 let ``Compile reports diagnostics on parse error`` () =
     let source = "def message = "
     let result = Compiler.compile source

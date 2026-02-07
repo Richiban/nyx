@@ -10,6 +10,6 @@ let ``Parse import feature files`` () =
     |> Array.iter (fun (filePath, result) ->
         result |> isOk |> should equal true
         match result with
-        | Result.Error err -> failwith $"Parse failed for {filePath}: {err}"
-        | _ -> ()
+        | Error err -> failwith $"Parse failed for {filePath}: {err}"
+        | Ok r -> printfn "%A" r
     )

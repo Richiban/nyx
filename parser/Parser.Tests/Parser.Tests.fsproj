@@ -15,6 +15,7 @@
     <Compile Include="Features\FieldAccess\FieldAccessTests.fs" />
     <Compile Include="Features\Functions\FunctionCallTests.fs" />
     <Compile Include="Features\If\IfTests.fs" />
+    <Compile Include="Features\Imports\ImportTests.fs" />
     <Compile Include="Features\Integration\IntegrationTests.fs" />
     <Compile Include="Features\Lambdas\LambdaTests.fs" />
     <Compile Include="Features\Literals\LiteralsTests.fs" />

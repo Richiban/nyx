@@ -2,15 +2,6 @@
 
 open Parser.Program
 
-type Severity =
-    | ErrorSeverity
-    | WarningSeverity
-
-type Diagnostic =
-    { Severity: Severity
-      Message: string
-      Range: (int * int) option }
-
 type CompilationPhase =
     | Parsed
     | Desugared
@@ -23,17 +14,6 @@ type CompileResult =
       Diagnostics: Diagnostic list
       Typed: TypedModule option }
 
-module Diagnostics =
-    let error message =
-        { Severity = ErrorSeverity
-          Message = message
-          Range = None }
-
-    let warning message =
-        { Severity = WarningSeverity
-          Message = message
-          Range = None }
-
 module Compiler =
     let parse (source: string) : Result<Module, Diagnostic list> =
         match parseModule source with
@@ -44,14 +24,18 @@ module Compiler =
         module'
 
     let typecheck (desugared: Module) : Result<TypedModule, Diagnostic list> =
-        // TODO: type inference / checking
-        let constraints : ConstraintSet = []
-        match Unifier.unify constraints with
-        | Ok _ ->
-            Ok { Module = desugared
-                 Types = Map.empty }
-        | Error message ->
-            Error [ Diagnostics.error message ]
+        match NyxCompiler.Infer.inferModule desugared with
+        | Error diagnostics -> Error diagnostics
+        | Ok (types, (state: NyxCompiler.Infer.InferState)) ->
+            match Unifier.unify state.Constraints with
+            | Ok subst ->
+                let resolvedTypes =
+                    types
+                    |> Map.map (fun _ ty -> Unifier.apply subst ty)
+                Ok { Module = desugared
+                     Types = resolvedTypes }
+            | Error message ->
+                Error [ Diagnostics.error message ]
 
     let compile (source: string) : CompileResult =
         match parse source with

@@ -30,6 +30,16 @@ let ``Typecheck supports polymorphic let`` () =
     Assert.Equal(TyPrimitive "string", typed.Types.["b"])
 
 [<Fact>]
+let ``Typecheck match arms agree`` () =
+    let source =
+        "def result = match 1\n" +
+        "  | 1 -> \"one\"\n" +
+        "  | _ -> \"other\""
+    let result = Compiler.compile source
+    let typed = result.Typed.Value
+    Assert.Equal(TyPrimitive "string", typed.Types.["result"])
+
+[<Fact>]
 let ``Compile reports diagnostics on parse error`` () =
     let source = "def message = "
     let result = Compiler.compile source

@@ -22,6 +22,13 @@ let private addConstraint left right (state: InferState) =
 let private primitiveType name =
     TyPrimitive name
 
+let private literalType literal =
+    match literal with
+    | StringLit _ -> primitiveType "string"
+    | IntLit _ -> primitiveType "int"
+    | FloatLit _ -> primitiveType "float"
+    | BoolLit _ -> primitiveType "bool"
+
 let private lookupPrimitive (name: string) =
     match name with
     | "int" | "Int" -> Some (primitiveType "int")
@@ -138,13 +145,7 @@ let private instantiate (state: InferState) (scheme: TypeScheme) : Ty * InferSta
 let rec private inferExpr (env: TypeEnv) (state: InferState) (expr: Expression) : Result<Ty * InferState, Diagnostic list> =
     match expr with
     | LiteralExpr literal ->
-        let ty =
-            match literal with
-            | StringLit _ -> primitiveType "string"
-            | IntLit _ -> primitiveType "int"
-            | FloatLit _ -> primitiveType "float"
-            | BoolLit _ -> primitiveType "bool"
-        Ok (ty, state)
+        Ok (literalType literal, state)
     | IdentifierExpr name ->
         match TypeEnv.tryFind name env with
         | Some scheme ->
@@ -302,25 +303,89 @@ let rec private inferExpr (env: TypeEnv) (state: InferState) (expr: Expression) 
                 | Ok (elseTy, finalState) ->
                     let constrained = addConstraint thenTy elseTy finalState
                     Ok (thenTy, constrained)
-    | Match(_, arms) ->
+    | Match(scrutinees, arms) ->
         let mutable current = state
-        let armResults =
-            arms
-            |> List.map (fun (_, expr) ->
+        let scrutineeResults =
+            scrutinees
+            |> List.map (fun expr ->
                 match inferExpr env current expr with
                 | Ok (ty, next) ->
                     current <- next
                     Ok ty
                 | Error err -> Error err)
-        let errors = armResults |> List.choose (function Error err -> Some err | _ -> None) |> List.concat
-        if errors.IsEmpty then
-            match armResults |> List.choose (function Ok ty -> Some ty | _ -> None) with
-            | [] -> Ok (TyPrimitive "unit", current)
-            | head :: tail ->
-                let constrained = tail |> List.fold (fun st ty -> addConstraint head ty st) current
-                Ok (head, constrained)
+        let scrutineeErrors = scrutineeResults |> List.choose (function Error err -> Some err | _ -> None) |> List.concat
+        if not scrutineeErrors.IsEmpty then
+            Error scrutineeErrors
         else
-            Error errors
+            let scrutineeTypes = scrutineeResults |> List.choose (function Ok ty -> Some ty | _ -> None)
+            let rec inferPattern (env': TypeEnv) (state': InferState) (scrutineeTy: Ty) (pattern: Pattern) =
+                match pattern with
+                | WildcardPattern
+                | ElsePattern -> Ok (env', state')
+                | IdentifierPattern name ->
+                    let scheme = TypeEnv.mono scrutineeTy
+                    Ok (TypeEnv.extend name scheme env', state')
+                | LiteralPattern literal ->
+                    let constrained = addConstraint scrutineeTy (literalType literal) state'
+                    Ok (env', constrained)
+                | TuplePattern patterns ->
+                    let mutable currentState = state'
+                    let itemTypes, nextState =
+                        patterns
+                        |> List.map (fun _ ->
+                            let ty, next = freshVar currentState
+                            currentState <- next
+                            ty)
+                        |> fun tys -> tys, currentState
+                    let constrained = addConstraint scrutineeTy (TyTuple itemTypes) nextState
+                    let mutable innerEnv = env'
+                    let mutable innerState = constrained
+                    let mutable innerErrors: Diagnostic list = []
+                    for (pat, ty) in List.zip patterns itemTypes do
+                        match inferPattern innerEnv innerState ty pat with
+                        | Ok (nextEnv, nextState) ->
+                            innerEnv <- nextEnv
+                            innerState <- nextState
+                        | Error err -> innerErrors <- err
+                    if innerErrors.IsEmpty then Ok (innerEnv, innerState) else Error innerErrors
+                | TagPattern(tagName, payloadOpt) ->
+                    match payloadOpt with
+                    | None ->
+                        let constrained = addConstraint scrutineeTy (TyTag(tagName, None)) state'
+                        Ok (env', constrained)
+                    | Some payload ->
+                        let payloadTy, nextState = freshVar state'
+                        let constrained = addConstraint scrutineeTy (TyTag(tagName, Some payloadTy)) nextState
+                        inferPattern env' constrained payloadTy payload
+                | _ -> Ok (env', state')
+
+            let mutable armTypes: Ty list = []
+            let mutable errors: Diagnostic list = []
+            for (patterns, expr) in arms do
+                if errors.IsEmpty then
+                    let mutable env' = env
+                    let mutable state' = current
+                    let patternPairs = List.zip patterns scrutineeTypes
+                    for (pattern, scrutineeTy) in patternPairs do
+                        match inferPattern env' state' scrutineeTy pattern with
+                        | Ok (nextEnv, nextState) ->
+                            env' <- nextEnv
+                            state' <- nextState
+                        | Error err -> errors <- err
+                    if errors.IsEmpty then
+                        match inferExpr env' state' expr with
+                        | Ok (ty, next) ->
+                            current <- next
+                            armTypes <- ty :: armTypes
+                        | Error err -> errors <- err
+            if errors.IsEmpty then
+                match List.rev armTypes with
+                | [] -> Ok (TyPrimitive "unit", current)
+                | head :: tail ->
+                    let constrained = tail |> List.fold (fun st ty -> addConstraint head ty st) current
+                    Ok (head, constrained)
+            else
+                Error errors
     | MemberAccess(_, _) ->
         let ty, next = freshVar state
         Ok (ty, next)

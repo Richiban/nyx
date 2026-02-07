@@ -18,10 +18,12 @@ type Ty =
 
 /// A simple typed expression placeholder for future expansion.
 type TypedExpr =
-    { Expr: Expression
-      Type: Ty
-      Body: TypedExpr option
-      Statements: TypedStatement list option }
+    { Expr: Expression; Type: Ty; Body: TypedExpr option; Statements: TypedStatement list option; MatchArms: TypedMatchArm list option }
+
+and TypedPattern =
+    { Pattern: Pattern; Type: Ty }
+
+and TypedMatchArm = TypedPattern list * TypedExpr
 
 and TypedStatement =
     | TypedDefStatement of Identifier * TypeExpr option * TypedExpr

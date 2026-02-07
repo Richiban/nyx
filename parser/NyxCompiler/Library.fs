@@ -37,10 +37,14 @@ module Compiler =
                     let mappedStatements =
                         typedExpr.Statements
                         |> Option.map (List.map applyTypedStatement)
+                    let mappedMatchArms =
+                        typedExpr.MatchArms
+                        |> Option.map (List.map applyTypedMatchArm)
                     { typedExpr with
                         Type = Unifier.apply subst typedExpr.Type
                         Body = mappedBody
-                        Statements = mappedStatements }
+                        Statements = mappedStatements
+                        MatchArms = mappedMatchArms }
                 and applyTypedStatement statement =
                     match statement with
                     | TypedDefStatement(name, typeOpt, expr) ->
@@ -48,6 +52,12 @@ module Compiler =
                     | TypedExprStatement expr -> TypedExprStatement (applyTypedExpr expr)
                     | TypedImportStatement _
                     | TypedTypeDefStatement _ -> statement
+                and applyTypedMatchArm (patterns, expr) =
+                    let mappedPatterns =
+                        patterns
+                        |> List.map (fun pattern ->
+                            { pattern with Type = Unifier.apply subst pattern.Type })
+                    (mappedPatterns, applyTypedExpr expr)
 
                 let resolvedItems =
                     items

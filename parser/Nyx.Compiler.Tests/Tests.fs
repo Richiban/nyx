@@ -2,6 +2,7 @@
 
 open Xunit
 open NyxCompiler
+open Parser.Program
 
 [<Fact>]
 let ``Compile returns typed module for valid source`` () =
@@ -77,6 +78,31 @@ let ``Typecheck captures typed block statements in lambda`` () =
                 | None -> false
             | _ -> false)
     Assert.True(hasBlockStatements)
+
+[<Fact>]
+let ``Typecheck records typed match patterns`` () =
+    let source =
+        "def result = match 1\n" +
+        "  | 1 -> \"one\"\n" +
+        "  | _ -> \"other\""
+    let result = Compiler.compile source
+    let typed = result.Typed.Value
+    let matchHasPattern =
+        typed.Items
+        |> List.exists (function
+            | TypedDef (TypedValueDef(name, _, typedExpr)) when name = "result" ->
+                match typedExpr.MatchArms with
+                | Some arms ->
+                    arms
+                    |> List.exists (fun (patterns, _) ->
+                        patterns
+                        |> List.exists (fun pattern ->
+                            match pattern.Pattern with
+                            | LiteralPattern (IntLit 1) -> pattern.Type = TyPrimitive "int"
+                            | _ -> false))
+                | None -> false
+            | _ -> false)
+    Assert.True(matchHasPattern)
 
 [<Fact>]
 let ``Compile reports diagnostics on parse error`` () =

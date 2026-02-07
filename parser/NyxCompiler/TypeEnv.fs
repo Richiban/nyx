@@ -19,3 +19,42 @@ module TypeEnv =
     let mono (ty: Ty) : TypeScheme =
         { Quantified = Set.empty
           Type = ty }
+
+    let rec freeTyVars (ty: Ty) : Set<int> =
+        match ty with
+        | TyVar v -> Set.singleton v.Id
+        | TyPrimitive _ -> Set.empty
+        | TyFunc(args, ret) ->
+            args
+            |> List.map freeTyVars
+            |> List.fold Set.union (freeTyVars ret)
+        | TyTuple items ->
+            items
+            |> List.map freeTyVars
+            |> List.fold Set.union Set.empty
+        | TyRecord fields ->
+            fields
+            |> Map.values
+            |> Seq.map freeTyVars
+            |> Seq.fold Set.union Set.empty
+        | TyTag(_, payloadOpt) ->
+            payloadOpt |> Option.map freeTyVars |> Option.defaultValue Set.empty
+        | TyUnion items ->
+            items
+            |> List.map freeTyVars
+            |> List.fold Set.union Set.empty
+
+    let freeSchemeVars (scheme: TypeScheme) : Set<int> =
+        Set.difference (freeTyVars scheme.Type) scheme.Quantified
+
+    let freeEnvVars (env: TypeEnv) : Set<int> =
+        env
+        |> Map.values
+        |> Seq.map freeSchemeVars
+        |> Seq.fold Set.union Set.empty
+
+    let generalize (env: TypeEnv) (ty: Ty) : TypeScheme =
+        let envVars = freeEnvVars env
+        let tyVars = freeTyVars ty
+        { Quantified = Set.difference tyVars envVars
+          Type = ty }

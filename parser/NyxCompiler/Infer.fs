@@ -122,6 +122,19 @@ let rec private typeExprToTy (state: InferState) (typeExpr: TypeExpr) : Ty * Inf
     | TypeWhere(baseType, _) ->
         typeExprToTy state baseType
 
+let private instantiate (state: InferState) (scheme: TypeScheme) : Ty * InferState =
+    if scheme.Quantified.IsEmpty then
+        scheme.Type, state
+    else
+        let mutable current = state
+        let substitutions =
+            scheme.Quantified
+            |> Seq.fold (fun subst id ->
+                let tyVar, next = freshVar current
+                current <- next
+                subst |> Map.add id tyVar) Map.empty
+        Unifier.apply substitutions scheme.Type, current
+
 let rec private inferExpr (env: TypeEnv) (state: InferState) (expr: Expression) : Result<Ty * InferState, Diagnostic list> =
     match expr with
     | LiteralExpr literal ->
@@ -134,13 +147,17 @@ let rec private inferExpr (env: TypeEnv) (state: InferState) (expr: Expression) 
         Ok (ty, state)
     | IdentifierExpr name ->
         match TypeEnv.tryFind name env with
-        | Some scheme -> Ok (scheme.Type, state)
+        | Some scheme ->
+            let ty, next = instantiate state scheme
+            Ok (ty, next)
         | None -> Error [ Diagnostics.error ($"Unknown identifier '{name}'") ]
     | FunctionCall(name, args) ->
         match TypeEnv.tryFind name env with
         | None -> Error [ Diagnostics.error ($"Unknown function '{name}'") ]
         | Some scheme ->
             let mutable current = state
+            let funcTy, nextState = instantiate current scheme
+            current <- nextState
             let argResults =
                 args
                 |> List.map (fun arg ->
@@ -153,7 +170,7 @@ let rec private inferExpr (env: TypeEnv) (state: InferState) (expr: Expression) 
             if errors.IsEmpty then
                 let argTys = argResults |> List.choose (function Ok ty -> Some ty | _ -> None)
                 let retTy, nextState = freshVar current
-                let withConstraint = addConstraint scheme.Type (TyFunc(argTys, retTy)) nextState
+                let withConstraint = addConstraint funcTy (TyFunc(argTys, retTy)) nextState
                 Ok (retTy, withConstraint)
             else
                 Error errors
@@ -329,7 +346,8 @@ and inferBlock (env: TypeEnv) (state: InferState) (statements: Statement list) :
                                 ty, addConstraint exprTy ty st
                             | None -> exprTy, next
                         current <- nextState
-                        env' <- TypeEnv.extend name (TypeEnv.mono declaredTy) env'
+                        let scheme = TypeEnv.generalize env' declaredTy
+                        env' <- TypeEnv.extend name scheme env'
                         lastTy <- declaredTy
                     | Error err -> errors <- err
             | ImportStatement _ -> ()
@@ -361,7 +379,8 @@ let inferModule (module': Module) : Result<Map<string, Ty> * InferState, Diagnos
                         ty, addConstraint exprTy ty st
                     | None -> exprTy, next
                 state <- nextState
-                env <- TypeEnv.extend name (TypeEnv.mono declaredTy) env
+                let scheme = TypeEnv.generalize env declaredTy
+                env <- TypeEnv.extend name scheme env
                 types <- types |> Map.add name declaredTy
             | Error err -> errors <- err
         | Expr expr when errors.IsEmpty ->

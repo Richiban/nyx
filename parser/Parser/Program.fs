@@ -65,6 +65,7 @@ type Definition =
 type TopLevelItem =
     | ModuleDecl of ModuleName
     | Def of Definition
+    | Expr of Expression
 
 type Module = TopLevelItem list
 
@@ -676,11 +677,17 @@ let valueDef: Parser<TopLevelItem, unit> =
         (fun name expr -> Def(ValueDef(name, expr)))
     <?> "value definition"
 
+// Parser for top-level expressions (script-style)
+let topLevelExpr: Parser<TopLevelItem, unit> =
+    exprWithoutCrossingNewlines |>> Expr
+    <?> "top-level expression"
+
 // Parser for top-level items
 let topLevelItem: Parser<TopLevelItem, unit> =
     ws >>. choice [
         moduleDecl
         valueDef
+        topLevelExpr
     ] .>> ws
     <?> "top-level item"
 

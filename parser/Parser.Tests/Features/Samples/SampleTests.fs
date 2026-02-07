@@ -5,7 +5,7 @@ open FsUnit.Xunit
 open ParserTestHelpers
 open System.IO
 
-[<Fact(Skip="Samples contain script-style top-level expressions not yet supported by the parser")>]
+[<Fact>]
 let ``Parse sample feature files`` () =
     let unsupported = set [ "real-world.nyx" ]
 

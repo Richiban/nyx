@@ -5,7 +5,7 @@ open FsUnit.Xunit
 open ParserTestHelpers
 open System.IO
 
-[<Fact(Skip="Tag fixtures include inline match forms not yet parsed")>]
+[<Fact>]
 let ``Parse tag feature files`` () =
     parseFeatureNyxFiles "Tags"
     |> Array.iter (fun (filePath, result) ->

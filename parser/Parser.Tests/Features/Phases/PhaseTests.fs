@@ -5,7 +5,7 @@ open FsUnit.Xunit
 open ParserTestHelpers
 open System.IO
 
-[<Fact(Skip="Phase fixtures include inline match forms not yet parsed")>]
+[<Fact>]
 let ``Parse phase feature files`` () =
     parseFeatureNyxFiles "Phases"
     |> Array.iter (fun (filePath, result) ->

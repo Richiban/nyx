@@ -1,0 +1,6 @@
+def main = {
+    println("Hello")
+    -- commented line in block
+    println("World")
+    -- another comment
+}

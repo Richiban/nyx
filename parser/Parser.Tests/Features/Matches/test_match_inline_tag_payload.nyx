@@ -1,0 +1,6 @@
+def result = someResult
+
+def process = match result
+  | #ok data -> data
+  | #error msg -> "Error: {msg}"
+  | else -> "unexpected"

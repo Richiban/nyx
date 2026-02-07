@@ -10,3 +10,7 @@ let ``Transpile match basic fixture`` () =
 [<Fact>]
 let ``Transpile match patterns fixture`` () =
     assertFixture "Match" "test_match_patterns"
+
+[<Fact>]
+let ``Transpile match more fixture`` () =
+    assertFixture "Match" "test_match_more"

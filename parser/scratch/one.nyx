@@ -3,12 +3,16 @@ module one
 def message = "Hello world"
 
 def main = { x -> 
+    -- This is a comment
     println(message)
+
+    def gt5 = { > 5 }
 
     def myTag = #some("data")
     
     match x
     | "hi" -> "bye"
     | "one" -> "two"
-    | (a = "a", b = "b", c = c) -> c
+    | (a = "a", b = "b", c = c) ->
+        c
 }

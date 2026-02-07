@@ -1,0 +1,4 @@
+def test = match 5
+  | 0 -> "zero"
+  --| 1 -> "one"
+  | else -> "other"

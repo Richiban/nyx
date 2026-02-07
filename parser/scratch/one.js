@@ -2,6 +2,7 @@
 const message = "Hello world";
 const main = (x) => (() => {
   println(message);
+  const gt5 = (x) => (x > 5);
   const myTag = { tag: "some", value: "data" };
   (() => {
   const _match0 = x;

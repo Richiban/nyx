@@ -1,0 +1,22 @@
+module Imports
+
+import nyx.collections.concurrent
+import "../myfile.nyx"
+import io/file as f
+
+import (
+  math
+  io
+)
+
+import(
+  Nyx.Num.Float64
+  Nyx.Num.Random
+)
+
+def main = { x ->
+  import nyx/text/regex
+  import "../local.nyx" as local
+  def file = f.open("/tmp/file.txt")
+  x
+}

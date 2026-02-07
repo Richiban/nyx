@@ -64,9 +64,10 @@ import math
 import io
 
 --  But an import block is preferred
-import
-    math
-    io
+import (
+  math
+  io
+)
 
 --  Imports can be given a local name to avoid name conflicts:
 import io/file as f

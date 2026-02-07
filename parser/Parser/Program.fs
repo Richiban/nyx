@@ -13,6 +13,18 @@ type Literal =
     | FloatLit of float
     | BoolLit of bool
 
+type TypeDefModifier =
+    | Export
+    | Context
+
+type ImportSource =
+    | ModuleImport of string
+    | PathImport of string
+
+type ImportItem =
+    { Source: ImportSource
+      Alias: Identifier option }
+
 type TypeExpr =
     | TypeName of Identifier
     | TypeVar of Identifier
@@ -71,6 +83,8 @@ and MatchArm = Pattern list * Expression  // Multiple patterns for multi-value m
 
 and Statement =
     | DefStatement of Identifier * TypeExpr option * Expression
+    | TypeDefStatement of Identifier * TypeDefModifier list * (Identifier * TypeExpr option) list * TypeExpr
+    | ImportStatement of ImportItem list
     | ExprStatement of Expression
 
 // Helper type for parsing list patterns
@@ -82,13 +96,10 @@ type Definition =
     | ValueDef of Identifier * TypeExpr option * Expression
     | TypeDef of Identifier * TypeDefModifier list * (Identifier * TypeExpr option) list * TypeExpr
 
-and TypeDefModifier =
-    | Export
-    | Context
-
 type TopLevelItem =
     | ModuleDecl of ModuleName
     | Def of Definition
+    | Import of ImportItem list
     | Expr of Expression
 
 type Module = TopLevelItem list
@@ -187,6 +198,43 @@ let literal: Parser<Literal, unit> =
         stringLiteral
     ]
     <?> "literal"
+
+let modulePath: Parser<string, unit> =
+    pipe2
+        identifierNoWs
+        (many (pipe2 (pchar '.' <|> pchar '/') identifierNoWs (fun sep seg -> string sep + seg)))
+        (fun head tail -> head + String.concat "" tail)
+
+let importSource: Parser<ImportSource, unit> =
+    attempt (
+        stringLiteralNoWs |>> function
+            | StringLit s -> PathImport s
+            | _ -> failwith "Expected string literal for import path"
+    ) <|> (modulePath |>> ModuleImport)
+
+let importItem: Parser<ImportItem, unit> =
+    pipe2
+        importSource
+        (opt (attempt (ws >>. pstring "as" >>. ws >>. identifierNoWs)))
+        (fun source alias -> { Source = source; Alias = alias })
+
+let importItems: Parser<ImportItem list, unit> =
+    let importParenItems =
+        between
+            (pstring "(")
+            (ws >>. pstring ")")
+            (pipe2
+                (ws >>. importItem)
+                (many (attempt (ws >>. importItem)))
+                (fun first rest -> first :: rest))
+
+    let importSingleItems =
+        importItem |>> fun item -> [item]
+
+    choice [
+        attempt importParenItems
+        importSingleItems
+    ]
 
 // Forward references for recursive expression parsing
 let expression, expressionRef = createParserForwardedToRef<Expression, unit>()
@@ -507,6 +555,33 @@ let typeParam: Parser<Identifier * TypeExpr option, unit> =
         identifierNoWs
         (opt (attempt (ws >>. pstring "::" >>. ws >>. typeExpr)))
         (fun name typeOpt -> (name, typeOpt))
+
+let typeDefCore: Parser<Definition, unit> =
+    let typeModifiers =
+        many (attempt (
+            choice [
+                pstring "export" >>. ws >>% Export
+                pstring "context" >>. ws >>% Context
+            ]))
+
+    let typeParams =
+        between (pstring "(") (pstring ")") (sepBy1 (ws >>. typeParam) (pstring "," .>> ws))
+
+    let typeExprWithWhere =
+        pipe2 typeExpr (opt (attempt (ws >>. pstring "where" >>. ws >>. expression))) (fun baseType whereOpt ->
+            match whereOpt with
+            | Some predicate -> TypeWhere(baseType, predicate)
+            | None -> baseType)
+
+    pipe4
+        typeModifiers
+        (pstring "type" >>. ws >>. identifierNoWs)
+        (opt (attempt (wsNoNl() >>. typeParams)))
+        (wsNoNl() >>. pstring "=" >>. ws >>. typeExprWithWhere)
+        (fun modifiers name paramsOpt typeValue ->
+            let typeParams = defaultArg paramsOpt []
+            TypeDef(name, modifiers, typeParams, typeValue))
+    <?> "type definition"
 
 // Match expression parser
 do
@@ -830,6 +905,15 @@ let blockExpr() : Parser<Expression, unit> =
 
 // Wire up statement parser
 do
+    let importStatement =
+        pstring "import" >>. wsNoNl() >>. importItems |>> ImportStatement
+
+    let typeDefStatement =
+        typeDefCore |>> function
+            | TypeDef(name, modifiers, typeParams, typeValue) ->
+                TypeDefStatement(name, modifiers, typeParams, typeValue)
+            | _ -> failwith "Expected type definition"
+
     let defStatement = 
         pipe2
             (pstring "def" >>. ws >>. typedIdentifier .>> wsNoNl() .>> pstring "=" .>> wsNoNl())
@@ -841,7 +925,7 @@ do
     
     let exprStatement = wsNoNl() >>. exprWithoutCrossingNewlines |>> ExprStatement  // Only consume spaces/tabs, not newlines
     
-    statementRef := (attempt defStatement <|> exprStatement) <?> "statement"
+    statementRef := (attempt importStatement <|> attempt typeDefStatement <|> attempt defStatement <|> exprStatement) <?> "statement"
 
 // Parser for module declaration
 let moduleDecl: Parser<TopLevelItem, unit> =
@@ -861,31 +945,7 @@ let valueDef: Parser<TopLevelItem, unit> =
 
 // Parser for type definition (top-level)
 let typeDef: Parser<TopLevelItem, unit> =
-    let typeModifiers =
-        many (attempt (
-            choice [
-                pstring "export" >>. ws >>% Export
-                pstring "context" >>. ws >>% Context
-            ]))
-
-    let typeParams =
-        between (pstring "(") (pstring ")") (sepBy1 (ws >>. typeParam) (pstring "," .>> ws))
-
-    let typeExprWithWhere =
-        pipe2 typeExpr (opt (attempt (ws >>. pstring "where" >>. ws >>. expression))) (fun baseType whereOpt ->
-            match whereOpt with
-            | Some predicate -> TypeWhere(baseType, predicate)
-            | None -> baseType)
-
-    pipe4
-        typeModifiers
-        (pstring "type" >>. ws >>. identifierNoWs)
-        (opt (attempt (wsNoNl() >>. typeParams)))
-        (wsNoNl() >>. pstring "=" >>. ws >>. typeExprWithWhere)
-        (fun modifiers name paramsOpt typeValue ->
-            let typeParams = defaultArg paramsOpt []
-            Def(TypeDef(name, modifiers, typeParams, typeValue)))
-    <?> "type definition"
+    typeDefCore |>> Def
 
 // Parser for top-level expressions (script-style)
 let topLevelExpr: Parser<TopLevelItem, unit> =
@@ -896,6 +956,7 @@ let topLevelExpr: Parser<TopLevelItem, unit> =
 let topLevelItem: Parser<TopLevelItem, unit> =
     ws >>. choice [
         moduleDecl
+        (attempt (pstring "import" >>. wsNoNl() >>. importItems) |>> Import)
         typeDef
         valueDef
         topLevelExpr

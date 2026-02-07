@@ -85,7 +85,11 @@ let rec transpileExpression (expr: Expression) : string =
             sprintf "%s(%s, %s)" funcName exprStr argStrs
     
     | Block stmts ->
-        let stmtStrs = stmts |> List.map transpileStatement |> String.concat "\n  "
+        let stmtStrs =
+            stmts
+            |> List.map transpileStatement
+            |> List.filter (fun stmt -> stmt <> "")
+            |> String.concat "\n  "
         sprintf "(() => {\n  %s\n})()" stmtStrs
     
     | IfExpr(cond, thenExpr, elseExpr) ->
@@ -249,6 +253,10 @@ and transpileStatement (stmt: Statement) : string =
     match stmt with
     | DefStatement(name, _, expr) ->
         sprintf "const %s = %s;" name (transpileExpression expr)
+    | TypeDefStatement(_, _, _, _) ->
+        ""
+    | ImportStatement _ ->
+        ""
     | ExprStatement expr ->
         sprintf "%s;" (transpileExpression expr)
 
@@ -259,6 +267,8 @@ let transpileTopLevelItem (item: TopLevelItem) : string =
     | Def(ValueDef(name, _, expr)) ->
         sprintf "const %s = %s;" name (transpileExpression expr)
     | Def(TypeDef(_, _, _, _)) ->
+        ""
+    | Import _ ->
         ""
     | Expr expr ->
         sprintf "%s;" (transpileExpression expr)

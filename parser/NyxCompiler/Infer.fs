@@ -1,6 +1,10 @@
 module NyxCompiler.Infer
 
 open Parser.Program
+open NyxCompiler
+
+type TypedExpr = NyxCompiler.TypedExpr
+type TypedStatement = NyxCompiler.TypedStatement
 
 type InferState =
     { NextId: int
@@ -142,15 +146,18 @@ let private instantiate (state: InferState) (scheme: TypeScheme) : Ty * InferSta
                 subst |> Map.add id tyVar) Map.empty
         Unifier.apply substitutions scheme.Type, current
 
-let rec private inferExpr (env: TypeEnv) (state: InferState) (expr: Expression) : Result<Ty * InferState, Diagnostic list> =
+let private mkTypedExpr expr ty body statements : TypedExpr =
+    { Expr = expr; Type = ty; Body = body; Statements = statements }
+
+let rec private inferExpr (env: TypeEnv) (state: InferState) (expr: Expression) : Result<TypedExpr * InferState, Diagnostic list> =
     match expr with
     | LiteralExpr literal ->
-        Ok (literalType literal, state)
+        Ok (mkTypedExpr expr (literalType literal) None None, state)
     | IdentifierExpr name ->
         match TypeEnv.tryFind name env with
         | Some scheme ->
             let ty, next = instantiate state scheme
-            Ok (ty, next)
+            Ok (mkTypedExpr expr ty None None, next)
         | None -> Error [ Diagnostics.error ($"Unknown identifier '{name}'") ]
     | FunctionCall(name, args) ->
         match TypeEnv.tryFind name env with
@@ -169,10 +176,12 @@ let rec private inferExpr (env: TypeEnv) (state: InferState) (expr: Expression) 
                     | Error err -> Error err)
             let errors = argResults |> List.choose (function Error err -> Some err | _ -> None) |> List.concat
             if errors.IsEmpty then
-                let argTys = argResults |> List.choose (function Ok ty -> Some ty | _ -> None)
+                let argTys =
+                    argResults
+                    |> List.choose (function Ok typedExpr -> Some typedExpr.Type | _ -> None)
                 let retTy, nextState = freshVar current
                 let withConstraint = addConstraint funcTy (TyFunc(argTys, retTy)) nextState
-                Ok (retTy, withConstraint)
+                Ok (mkTypedExpr expr retTy None None, withConstraint)
             else
                 Error errors
     | Lambda(args, body) ->
@@ -189,17 +198,18 @@ let rec private inferExpr (env: TypeEnv) (state: InferState) (expr: Expression) 
                 env' <- TypeEnv.extend name (TypeEnv.mono ty) env'
                 ty)
         match inferExpr env' current body with
-        | Ok (bodyTy, next) -> Ok (TyFunc(argTys, bodyTy), next)
+        | Ok (bodyExpr, next) ->
+            Ok (mkTypedExpr expr (TyFunc(argTys, bodyExpr.Type)) (Some bodyExpr) None, next)
         | Error err -> Error err
     | BinaryOp(_, left, right) ->
         match inferExpr env state left with
         | Error err -> Error err
-        | Ok (leftTy, next) ->
+        | Ok (leftExpr, next) ->
             match inferExpr env next right with
             | Error err -> Error err
-            | Ok (rightTy, nextState) ->
-                let constrained = addConstraint leftTy rightTy nextState
-                Ok (leftTy, constrained)
+            | Ok (rightExpr, nextState) ->
+                let constrained = addConstraint leftExpr.Type rightExpr.Type nextState
+                Ok (mkTypedExpr expr leftExpr.Type None None, constrained)
     | Pipe(value, name, args) ->
         let callArgs = value :: args
         inferExpr env state (FunctionCall(name, callArgs))
@@ -211,14 +221,15 @@ let rec private inferExpr (env: TypeEnv) (state: InferState) (expr: Expression) 
             items
             |> List.map (fun item ->
                 match inferExpr env current item with
-                | Ok (ty, next) ->
+                | Ok (typedExpr, next) ->
                     current <- next
-                    Ok ty
+                    Ok typedExpr
                 | Error err -> Error err)
         let errors = tys |> List.choose (function Error err -> Some err | _ -> None) |> List.concat
         if errors.IsEmpty then
-            let itemTys = tys |> List.choose (function Ok ty -> Some ty | _ -> None)
-            Ok (TyTuple itemTys, current)
+            let itemExprs = tys |> List.choose (function Ok ty -> Some ty | _ -> None)
+            let itemTys = itemExprs |> List.map (fun typedExpr -> typedExpr.Type)
+            Ok (mkTypedExpr expr (TyTuple itemTys) None None, current)
         else
             Error errors
     | RecordExpr fields ->
@@ -236,14 +247,17 @@ let rec private inferExpr (env: TypeEnv) (state: InferState) (expr: Expression) 
                 |> List.rev
                 |> List.map (fun (name, expr) ->
                     match inferExpr env current expr with
-                    | Ok (ty, next) ->
+                    | Ok (typedExpr, next) ->
                         current <- next
-                        Ok (name, ty)
+                        Ok (name, typedExpr)
                     | Error err -> Error err)
             let errors = mapped |> List.choose (function Error err -> Some err | _ -> None) |> List.concat
             if errors.IsEmpty then
-                let fieldMap = mapped |> List.choose (function Ok item -> Some item | _ -> None) |> Map.ofList
-                Ok (TyRecord fieldMap, current)
+                let fieldMap =
+                    mapped
+                    |> List.choose (function Ok (name, typedExpr) -> Some (name, typedExpr.Type) | _ -> None)
+                    |> Map.ofList
+                Ok (mkTypedExpr expr (TyRecord fieldMap) None None, current)
             else
                 Error errors
         | positionalFields, [] ->
@@ -253,14 +267,15 @@ let rec private inferExpr (env: TypeEnv) (state: InferState) (expr: Expression) 
                 |> List.rev
                 |> List.map (fun expr ->
                     match inferExpr env current expr with
-                    | Ok (ty, next) ->
+                    | Ok (typedExpr, next) ->
                         current <- next
-                        Ok ty
+                        Ok typedExpr
                     | Error err -> Error err)
             let errors = itemResults |> List.choose (function Error err -> Some err | _ -> None) |> List.concat
             if errors.IsEmpty then
-                let itemTys = itemResults |> List.choose (function Ok ty -> Some ty | _ -> None)
-                Ok (TyTuple itemTys, current)
+                let itemExprs = itemResults |> List.choose (function Ok ty -> Some ty | _ -> None)
+                let itemTys = itemExprs |> List.map (fun typedExpr -> typedExpr.Type)
+                Ok (mkTypedExpr expr (TyTuple itemTys) None None, current)
             else
                 Error errors
         | _ -> Error [ Diagnostics.error "Mixed positional and named record fields are not supported yet" ]
@@ -270,54 +285,55 @@ let rec private inferExpr (env: TypeEnv) (state: InferState) (expr: Expression) 
             items
             |> List.map (fun item ->
                 match inferExpr env current item with
-                | Ok (ty, next) ->
+                | Ok (typedExpr, next) ->
                     current <- next
-                    Ok ty
+                    Ok typedExpr
                 | Error err -> Error err)
         let errors = itemResults |> List.choose (function Error err -> Some err | _ -> None) |> List.concat
         if errors.IsEmpty then
             match itemResults |> List.choose (function Ok ty -> Some ty | _ -> None) with
-            | [] -> Ok (TyPrimitive "list", current)
+            | [] -> Ok (mkTypedExpr expr (TyPrimitive "list") None None, current)
             | head :: tail ->
-                let constrained = tail |> List.fold (fun st ty -> addConstraint head ty st) current
-                Ok (TyPrimitive "list", constrained)
+                let constrained = tail |> List.fold (fun st ty -> addConstraint head.Type ty.Type st) current
+                Ok (mkTypedExpr expr (TyPrimitive "list") None None, constrained)
         else
             Error errors
     | TagExpr(name, payloadOpt) ->
         match payloadOpt with
-        | None -> Ok (TyTag(name, None), state)
+        | None -> Ok (mkTypedExpr expr (TyTag(name, None)) None None, state)
         | Some payload ->
             match inferExpr env state payload with
-            | Ok (payloadTy, next) -> Ok (TyTag(name, Some payloadTy), next)
+            | Ok (payloadExpr, next) -> Ok (mkTypedExpr expr (TyTag(name, Some payloadExpr.Type)) None None, next)
             | Error err -> Error err
     | IfExpr(condition, thenExpr, elseExpr) ->
         match inferExpr env state condition with
         | Error err -> Error err
-        | Ok (condTy, next) ->
-            let withConstraint = addConstraint condTy (primitiveType "bool") next
+        | Ok (condExpr, next) ->
+            let withConstraint = addConstraint condExpr.Type (primitiveType "bool") next
             match inferExpr env withConstraint thenExpr with
             | Error err -> Error err
-            | Ok (thenTy, nextState) ->
+            | Ok (thenExprTyped, nextState) ->
                 match inferExpr env nextState elseExpr with
                 | Error err -> Error err
-                | Ok (elseTy, finalState) ->
-                    let constrained = addConstraint thenTy elseTy finalState
-                    Ok (thenTy, constrained)
+                | Ok (elseExprTyped, finalState) ->
+                    let constrained = addConstraint thenExprTyped.Type elseExprTyped.Type finalState
+                    Ok (mkTypedExpr expr thenExprTyped.Type None None, constrained)
     | Match(scrutinees, arms) ->
         let mutable current = state
         let scrutineeResults =
             scrutinees
             |> List.map (fun expr ->
                 match inferExpr env current expr with
-                | Ok (ty, next) ->
+                | Ok (typedExpr, next) ->
                     current <- next
-                    Ok ty
+                    Ok typedExpr
                 | Error err -> Error err)
         let scrutineeErrors = scrutineeResults |> List.choose (function Error err -> Some err | _ -> None) |> List.concat
         if not scrutineeErrors.IsEmpty then
             Error scrutineeErrors
         else
-            let scrutineeTypes = scrutineeResults |> List.choose (function Ok ty -> Some ty | _ -> None)
+            let scrutineeExprs = scrutineeResults |> List.choose (function Ok ty -> Some ty | _ -> None)
+            let scrutineeTypes = scrutineeExprs |> List.map (fun typedExpr -> typedExpr.Type)
             let rec inferPattern (env': TypeEnv) (state': InferState) (scrutineeTy: Ty) (pattern: Pattern) =
                 match pattern with
                 | WildcardPattern
@@ -359,7 +375,7 @@ let rec private inferExpr (env: TypeEnv) (state: InferState) (expr: Expression) 
                         inferPattern env' constrained payloadTy payload
                 | _ -> Ok (env', state')
 
-            let mutable armTypes: Ty list = []
+            let mutable armExprs: TypedExpr list = []
             let mutable errors: Diagnostic list = []
             for (patterns, expr) in arms do
                 if errors.IsEmpty then
@@ -374,57 +390,66 @@ let rec private inferExpr (env: TypeEnv) (state: InferState) (expr: Expression) 
                         | Error err -> errors <- err
                     if errors.IsEmpty then
                         match inferExpr env' state' expr with
-                        | Ok (ty, next) ->
+                        | Ok (typedExpr, next) ->
                             current <- next
-                            armTypes <- ty :: armTypes
+                            armExprs <- typedExpr :: armExprs
                         | Error err -> errors <- err
             if errors.IsEmpty then
-                match List.rev armTypes with
-                | [] -> Ok (TyPrimitive "unit", current)
+                match List.rev armExprs with
+                | [] -> Ok (mkTypedExpr expr (TyPrimitive "unit") None None, current)
                 | head :: tail ->
-                    let constrained = tail |> List.fold (fun st ty -> addConstraint head ty st) current
-                    Ok (head, constrained)
+                    let constrained = tail |> List.fold (fun st typedExpr -> addConstraint head.Type typedExpr.Type st) current
+                    Ok (mkTypedExpr expr head.Type None None, constrained)
             else
                 Error errors
     | MemberAccess(_, _) ->
-        let ty, next = freshVar state
-        Ok (ty, next)
+    let ty, next = freshVar state
+    Ok (mkTypedExpr expr ty None None, next)
 
-and inferBlock (env: TypeEnv) (state: InferState) (statements: Statement list) : Result<Ty * InferState, Diagnostic list> =
+and inferBlock (env: TypeEnv) (state: InferState) (statements: Statement list) : Result<TypedExpr * InferState, Diagnostic list> =
     match statements with
-    | [] -> Ok (TyPrimitive "unit", state)
+    | [] -> Ok (mkTypedExpr (Block []) (TyPrimitive "unit") None (Some []), state)
     | _ ->
         let mutable current = state
         let mutable env' = env
-        let mutable lastTy = TyPrimitive "unit"
+        let mutable lastExpr = mkTypedExpr (LiteralExpr (IntLit 0)) (TyPrimitive "unit") None None
+        let mutable typedStatements: TypedStatement list = []
         let mutable errors: Diagnostic list = []
         for statement in statements do
             match statement with
             | DefStatement(name, typeOpt, expr) ->
                 if errors.IsEmpty then
                     match inferExpr env' current expr with
-                    | Ok (exprTy, next) ->
+                    | Ok (typedExpr, next) ->
                         let declaredTy, nextState =
                             match typeOpt with
                             | Some typeExpr ->
                                 let ty, st = typeExprToTy next typeExpr
-                                ty, addConstraint exprTy ty st
-                            | None -> exprTy, next
+                                ty, addConstraint typedExpr.Type ty st
+                            | None -> typedExpr.Type, next
                         current <- nextState
                         let scheme = TypeEnv.generalize env' declaredTy
                         env' <- TypeEnv.extend name scheme env'
-                        lastTy <- declaredTy
+                        typedStatements <- typedStatements @ [ TypedDefStatement(name, typeOpt, typedExpr) ]
+                        lastExpr <- typedExpr
                     | Error err -> errors <- err
-            | ImportStatement _ -> ()
-            | TypeDefStatement _ -> ()
+            | ImportStatement items ->
+                typedStatements <- typedStatements @ [ TypedImportStatement items ]
+            | TypeDefStatement(name, modifiers, parameters, body) ->
+                typedStatements <- typedStatements @ [ TypedTypeDefStatement(name, modifiers, parameters, body) ]
             | ExprStatement expr ->
                 if errors.IsEmpty then
                     match inferExpr env' current expr with
-                    | Ok (exprTy, next) ->
+                    | Ok (typedExpr, next) ->
                         current <- next
-                        lastTy <- exprTy
+                        typedStatements <- typedStatements @ [ TypedExprStatement typedExpr ]
+                        lastExpr <- typedExpr
                     | Error err -> errors <- err
-        if errors.IsEmpty then Ok (lastTy, current) else Error errors
+        if errors.IsEmpty then
+            let blockExpr = mkTypedExpr (Block statements) lastExpr.Type (Some lastExpr) (Some typedStatements)
+            Ok (blockExpr, current)
+        else
+            Error errors
 
 let inferModule (module': Module) : Result<Map<string, Ty> * TypedTopLevelItem list * InferState, Diagnostic list> =
     let mutable env = TypeEnv.empty
@@ -437,24 +462,24 @@ let inferModule (module': Module) : Result<Map<string, Ty> * TypedTopLevelItem l
         match item with
         | Def (ValueDef(name, typeOpt, expr)) when errors.IsEmpty ->
             match inferExpr env state expr with
-            | Ok (exprTy, next) ->
+            | Ok (typedExpr, next) ->
                 let declaredTy, nextState =
                     match typeOpt with
                     | Some typeExpr ->
                         let ty, st = typeExprToTy next typeExpr
-                        ty, addConstraint exprTy ty st
-                    | None -> exprTy, next
+                        ty, addConstraint typedExpr.Type ty st
+                    | None -> typedExpr.Type, next
                 state <- nextState
                 let scheme = TypeEnv.generalize env declaredTy
                 env <- TypeEnv.extend name scheme env
                 types <- types |> Map.add name declaredTy
-                items <- items @ [ TypedDef (TypedValueDef(name, typeOpt, { Expr = expr; Type = declaredTy })) ]
+                items <- items @ [ TypedDef (TypedValueDef(name, typeOpt, typedExpr)) ]
             | Error err -> errors <- err
         | Expr expr when errors.IsEmpty ->
             match inferExpr env state expr with
-            | Ok (exprTy, next) ->
+            | Ok (typedExpr, next) ->
                 state <- next
-                items <- items @ [ TypedExprItem { Expr = expr; Type = exprTy } ]
+                items <- items @ [ TypedExprItem typedExpr ]
             | Error err -> errors <- err
         | Expr _ -> ()
         | Import itemsList -> items <- items @ [ TypedImport itemsList ]

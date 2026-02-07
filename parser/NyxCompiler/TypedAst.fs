@@ -19,7 +19,15 @@ type Ty =
 /// A simple typed expression placeholder for future expansion.
 type TypedExpr =
     { Expr: Expression
-      Type: Ty }
+      Type: Ty
+      Body: TypedExpr option
+      Statements: TypedStatement list option }
+
+and TypedStatement =
+    | TypedDefStatement of Identifier * TypeExpr option * TypedExpr
+    | TypedExprStatement of TypedExpr
+    | TypedImportStatement of ImportItem list
+    | TypedTypeDefStatement of Identifier * TypeDefModifier list * (Identifier * TypeExpr option) list * TypeExpr
 
 type TypedDefinition =
     | TypedValueDef of Identifier * TypeExpr option * TypedExpr

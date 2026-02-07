@@ -32,15 +32,30 @@ module Compiler =
                 let resolvedTypes =
                     types
                     |> Map.map (fun _ ty -> Unifier.apply subst ty)
+                let rec applyTypedExpr (typedExpr: TypedExpr) =
+                    let mappedBody = typedExpr.Body |> Option.map applyTypedExpr
+                    let mappedStatements =
+                        typedExpr.Statements
+                        |> Option.map (List.map applyTypedStatement)
+                    { typedExpr with
+                        Type = Unifier.apply subst typedExpr.Type
+                        Body = mappedBody
+                        Statements = mappedStatements }
+                and applyTypedStatement statement =
+                    match statement with
+                    | TypedDefStatement(name, typeOpt, expr) ->
+                        TypedDefStatement(name, typeOpt, applyTypedExpr expr)
+                    | TypedExprStatement expr -> TypedExprStatement (applyTypedExpr expr)
+                    | TypedImportStatement _
+                    | TypedTypeDefStatement _ -> statement
+
                 let resolvedItems =
                     items
                     |> List.map (fun item ->
-                        let applyExpr (typedExpr: TypedExpr) =
-                            { typedExpr with Type = Unifier.apply subst typedExpr.Type }
                         match item with
-                        | TypedExprItem expr -> TypedExprItem (applyExpr expr)
+                        | TypedExprItem expr -> TypedExprItem (applyTypedExpr expr)
                         | TypedDef (TypedValueDef(name, typeOpt, expr)) ->
-                            TypedDef (TypedValueDef(name, typeOpt, applyExpr expr))
+                            TypedDef (TypedValueDef(name, typeOpt, applyTypedExpr expr))
                         | TypedDef (TypedTypeDef _)
                         | TypedImport _
                         | TypedModuleDecl _ -> item)

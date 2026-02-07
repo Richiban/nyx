@@ -53,6 +53,32 @@ let ``Typecheck populates typed AST items`` () =
     Assert.True(hasMessage)
 
 [<Fact>]
+let ``Typecheck captures typed block statements in lambda`` () =
+    let source =
+        "def f = { x ->\n" +
+        "  def y = x\n" +
+        "  y\n" +
+        "}"
+    let result = Compiler.compile source
+    let typed = result.Typed.Value
+    let hasBlockStatements =
+        typed.Items
+        |> List.exists (function
+            | TypedDef (TypedValueDef(name, _, typedExpr)) when name = "f" ->
+                match typedExpr.Body with
+                | Some bodyExpr ->
+                    match bodyExpr.Statements with
+                    | Some statements ->
+                        statements
+                        |> List.exists (function
+                            | TypedDefStatement(defName, _, _) -> defName = "y"
+                            | _ -> false)
+                    | None -> false
+                | None -> false
+            | _ -> false)
+    Assert.True(hasBlockStatements)
+
+[<Fact>]
 let ``Compile reports diagnostics on parse error`` () =
     let source = "def message = "
     let result = Compiler.compile source

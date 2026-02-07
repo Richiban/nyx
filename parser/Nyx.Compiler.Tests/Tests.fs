@@ -130,6 +130,25 @@ let ``Typecheck types list and guard patterns`` () =
     Assert.True(hasListPattern)
 
 [<Fact>]
+let ``Typecheck infers list element type`` () =
+    let source = "def numbers = [1, 2, 3]"
+    let result = Compiler.compile source
+    let typed = result.Typed.Value
+    Assert.Equal(TyTag("list", Some (TyPrimitive "int")), typed.Types.["numbers"])
+
+[<Fact>]
+let ``Typecheck infers operator results`` () =
+    let source =
+        "def sum = 1 + 2\n" +
+        "def lt = 1 < 2\n" +
+        "def eq = \"a\" == \"b\""
+    let result = Compiler.compile source
+    let typed = result.Typed.Value
+    Assert.Equal(TyPrimitive "int", typed.Types.["sum"])
+    Assert.Equal(TyPrimitive "bool", typed.Types.["lt"])
+    Assert.Equal(TyPrimitive "bool", typed.Types.["eq"])
+
+[<Fact>]
 let ``Compile reports diagnostics on parse error`` () =
     let source = "def message = "
     let result = Compiler.compile source

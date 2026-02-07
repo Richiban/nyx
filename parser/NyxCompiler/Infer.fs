@@ -33,6 +33,12 @@ let private literalType literal =
     | FloatLit _ -> primitiveType "float"
     | BoolLit _ -> primitiveType "bool"
 
+let private listType elementTy =
+    TyTag("list", Some elementTy)
+
+let private numericType =
+    TyPrimitive "int"
+
 let private lookupPrimitive (name: string) =
     match name with
     | "int" | "Int" -> Some (primitiveType "int")
@@ -209,7 +215,20 @@ let rec private inferExpr (env: TypeEnv) (state: InferState) (expr: Expression) 
             | Error err -> Error err
             | Ok (rightExpr, nextState) ->
                 let constrained = addConstraint leftExpr.Type rightExpr.Type nextState
-                Ok (mkTypedExpr expr leftExpr.Type None None None, constrained)
+                match expr with
+                | BinaryOp(op, _, _) when ["+"; "-"; "*"; "/"] |> List.contains op ->
+                    let numericConstrained =
+                        constrained
+                        |> addConstraint leftExpr.Type numericType
+                    Ok (mkTypedExpr expr leftExpr.Type None None None, numericConstrained)
+                | BinaryOp(op, _, _) when ["<"; ">"; "<="; ">="] |> List.contains op ->
+                    let numericConstrained =
+                        constrained
+                        |> addConstraint leftExpr.Type numericType
+                    Ok (mkTypedExpr expr (TyPrimitive "bool") None None None, numericConstrained)
+                | BinaryOp(op, _, _) when ["=="; "!="] |> List.contains op ->
+                    Ok (mkTypedExpr expr (TyPrimitive "bool") None None None, constrained)
+                | _ -> Ok (mkTypedExpr expr leftExpr.Type None None None, constrained)
     | Pipe(value, name, args) ->
         let callArgs = value :: args
         inferExpr env state (FunctionCall(name, callArgs))
@@ -292,10 +311,12 @@ let rec private inferExpr (env: TypeEnv) (state: InferState) (expr: Expression) 
         let errors = itemResults |> List.choose (function Error err -> Some err | _ -> None) |> List.concat
         if errors.IsEmpty then
             match itemResults |> List.choose (function Ok ty -> Some ty | _ -> None) with
-            | [] -> Ok (mkTypedExpr expr (TyPrimitive "list") None None None, current)
+            | [] ->
+                let elementTy, nextState = freshVar current
+                Ok (mkTypedExpr expr (listType elementTy) None None None, nextState)
             | head :: tail ->
                 let constrained = tail |> List.fold (fun st ty -> addConstraint head.Type ty.Type st) current
-                Ok (mkTypedExpr expr (TyPrimitive "list") None None None, constrained)
+                Ok (mkTypedExpr expr (listType head.Type) None None None, constrained)
         else
             Error errors
     | TagExpr(name, payloadOpt) ->
@@ -402,7 +423,7 @@ let rec private inferExpr (env: TypeEnv) (state: InferState) (expr: Expression) 
                         | Error err -> Error err
                 | ListPattern(patterns, splatOpt) ->
                     let elementTy, nextState = freshVar state'
-                    let constrained = addConstraint scrutineeTy (TyPrimitive "list") nextState
+                    let constrained = addConstraint scrutineeTy (listType elementTy) nextState
                     let mutable innerEnv = env'
                     let mutable innerState = constrained
                     let mutable innerErrors: Diagnostic list = []
@@ -415,8 +436,9 @@ let rec private inferExpr (env: TypeEnv) (state: InferState) (expr: Expression) 
                     let innerStateWithSplat =
                         match splatOpt with
                         | Some (IdentifierPattern name) ->
-                            let scheme = TypeEnv.mono (TyPrimitive "list")
-                            TypeEnv.extend name scheme innerEnv |> ignore
+                            let scheme = TypeEnv.mono (listType elementTy)
+                            let updatedEnv = TypeEnv.extend name scheme innerEnv
+                            innerEnv <- updatedEnv
                             innerState
                         | _ -> innerState
                     if innerErrors.IsEmpty then
@@ -425,7 +447,7 @@ let rec private inferExpr (env: TypeEnv) (state: InferState) (expr: Expression) 
                         Error innerErrors
                 | ListSplatMiddle(prefix, suffix) ->
                     let elementTy, nextState = freshVar state'
-                    let constrained = addConstraint scrutineeTy (TyPrimitive "list") nextState
+                    let constrained = addConstraint scrutineeTy (listType elementTy) nextState
                     let mutable innerEnv = env'
                     let mutable innerState = constrained
                     let mutable innerErrors: Diagnostic list = []

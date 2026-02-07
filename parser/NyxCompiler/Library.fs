@@ -18,10 +18,6 @@ type CompilationPhase =
     | Lowered
     | Emitted
 
-type TypedModule =
-    { Module: Module
-      Types: Map<string, TypeExpr> }
-
 type CompileResult =
     { Phase: CompilationPhase
       Diagnostics: Diagnostic list
@@ -47,9 +43,15 @@ module Compiler =
     let desugar (module': Module) =
         module'
 
-    let typecheck (module': Module) : Result<TypedModule, Diagnostic list> =
-        Ok { Module = module'
-             Types = Map.empty }
+    let typecheck (desugared: Module) : Result<TypedModule, Diagnostic list> =
+        // TODO: type inference / checking
+        let constraints : ConstraintSet = []
+        match Unifier.unify constraints with
+        | Ok _ ->
+            Ok { Module = desugared
+                 Types = Map.empty }
+        | Error message ->
+            Error [ Diagnostics.error message ]
 
     let compile (source: string) : CompileResult =
         match parse source with

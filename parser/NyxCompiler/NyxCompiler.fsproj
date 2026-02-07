@@ -6,6 +6,10 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <Compile Include="TypedAst.fs" />
+    <Compile Include="TypeEnv.fs" />
+    <Compile Include="Constraints.fs" />
+    <Compile Include="Unifier.fs" />
     <Compile Include="Library.fs" />
   </ItemGroup>
 

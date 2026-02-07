@@ -1,13 +1,14 @@
 // Module: one
 const message = "Hello world";
 const main = (x) => (() => {
-  println(message);
+  console.log(message);
   const gt5 = (x) => (x > 5);
   const passes = gt5(gt5(6));
   const myTag = { tag: "some", value: "data" };
   const s = "";
   const getName = (x) => x.name;
-  (() => {
+  const x = { a: "a", b: "b", c: "c" };
+  const b = (() => {
   const _match0 = x;
   if (_match0 === "hi") {
     return "bye";
@@ -21,6 +22,9 @@ const main = (x) => (() => {
   }
   throw new Error("Match failed");
 })();
+  console.log(b);
   const items = [1, 2, 3];
+  const map = (a, b) => "";
   const items2 = map(items, (x) => x.name);
 })();
+main();

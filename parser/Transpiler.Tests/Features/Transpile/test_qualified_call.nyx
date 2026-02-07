@@ -1,0 +1,3 @@
+module QualifiedCall
+
+def result = console.log("hello")

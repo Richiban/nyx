@@ -6,6 +6,7 @@ type StringAlias = string
 
 type Person = (
     name: string
+    age: int
 )
 
 type Option(a) = 
@@ -14,7 +15,7 @@ type Option(a) =
 
 def main = { x -> 
     -- This is a comment
-    println(message)
+    console.log(message)
 
     def gt5 = { > 5 }
 
@@ -27,13 +28,20 @@ def main = { x ->
     def s: String = ""
     def getName: Person -> string = { .name }
     
-    match x
+    def x = (a = "a", b = "b", c = "c")
+    def b = match x
     | "hi" -> "bye"
     | "one" -> "two"
     | (a = "a", b = "b", c = c) ->
         c
 
+    console.log(b)
+
     def items = [1, 2, 3]
+
+    def map = {a, b -> ""}
 
     def items2 = items \map { .name }
 }
+
+main()

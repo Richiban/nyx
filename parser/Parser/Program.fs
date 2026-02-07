@@ -134,6 +134,12 @@ let identifierNoWs: Parser<Identifier, unit> =
 
 let identifier: Parser<Identifier, unit> = identifierNoWs .>> wsInline
 
+let qualifiedIdentifier: Parser<Identifier, unit> =
+    pipe2
+        identifierNoWs
+        (many (pchar '.' >>. identifierNoWs))
+        (fun head tail -> String.concat "." (head :: tail))
+
 
 // Parser for literals
 let stringLiteralNoWs: Parser<Literal, unit> =
@@ -638,7 +644,7 @@ opp.AddOperator(InfixOperator("!=", ws, 3, Associativity.Left, fun x y -> Binary
 // Pipe parser - handles expr \func or expr \func(args)
 let pipeTarget =
     pipe3
-        identifier
+        qualifiedIdentifier
         (opt (between (pstring "(") (pstring ")") (ws >>. (sepBy1 expression (pstring "," .>> ws) |>> fun exprs ->
             match exprs with
             | [single] -> single
@@ -780,7 +786,7 @@ do
     
     let callWithParensAndTrailing =
         pipe3
-            identifier
+            qualifiedIdentifier
             (between (pstring "(") (pstring ")") 
                 (opt (ws >>. (sepBy1 expression (pstring "," .>> ws) |>> fun exprs ->
                     match exprs with
@@ -795,7 +801,7 @@ do
     
     let callWithOnlyTrailing =
         attempt (
-            identifier >>= fun name ->
+            qualifiedIdentifier >>= fun name ->
                 skipMany (skipAnyOf " \t") >>.
                 lookAhead (pchar '{') >>.
                 lambda |>> fun lambdaExpr ->

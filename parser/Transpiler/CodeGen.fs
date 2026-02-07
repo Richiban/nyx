@@ -258,7 +258,7 @@ let transpileTopLevelItem (item: TopLevelItem) : string =
         sprintf "// Module: %s" name
     | Def(ValueDef(name, _, expr)) ->
         sprintf "const %s = %s;" name (transpileExpression expr)
-    | Def(TypeDef(_, _)) ->
+    | Def(TypeDef(_, _, _, _)) ->
         ""
     | Expr expr ->
         sprintf "%s;" (transpileExpression expr)

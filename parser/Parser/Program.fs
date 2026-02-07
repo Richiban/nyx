@@ -15,10 +15,24 @@ type Literal =
 
 type TypeExpr =
     | TypeName of Identifier
+    | TypeVar of Identifier
+    | TypeUnit
     | TypeTuple of TypeExpr list
+    | TypeRecord of TypeRecordField list
+    | TypeApply of Identifier * TypeExpr list
     | TypeFunc of TypeExpr list * TypeExpr
+    | TypeTag of Identifier * TypeExpr option
+    | TypeUnion of TypeExpr list
+    | TypeIntersection of TypeExpr list
+    | TypeOptional of TypeExpr
+    | TypeConstraint of Identifier * TypeExpr * Expression
+    | TypeWhere of TypeExpr * Expression
 
-type Expression =
+and TypeRecordField =
+    | TypeField of Identifier * bool * bool * TypeExpr option * Expression option
+    | TypeMember of Identifier * TypeExpr option
+
+and Expression =
     | LiteralExpr of Literal
     | IdentifierExpr of Identifier
     | FunctionCall of Identifier * Expression list
@@ -66,7 +80,11 @@ type ListPatternElement =
 
 type Definition =
     | ValueDef of Identifier * TypeExpr option * Expression
-    | TypeDef of Identifier * TypeExpr
+    | TypeDef of Identifier * TypeDefModifier list * (Identifier * TypeExpr option) list * TypeExpr
+
+and TypeDefModifier =
+    | Export
+    | Context
 
 type TopLevelItem =
     | ModuleDecl of ModuleName
@@ -337,24 +355,131 @@ do patternRef :=
 
 // Type expression parser
 do
+    let typeIdentifier =
+        identifierNoWs |>> fun name ->
+            if name.Length = 1 && Char.IsLower name.[0] then TypeVar name
+            else TypeName name
+
+    let typeParam =
+        pipe2
+            identifierNoWs
+            (opt (attempt (ws >>. pstring "::" >>. ws >>. typeExpr)))
+            (fun name typeOpt -> (name, typeOpt))
+
+    let typeMemberField =
+        pipe2
+            (pstring "type" >>. ws >>. identifierNoWs .>> wsNoNl())
+            (opt (attempt (pstring "=" >>. wsNoNl() >>. typeExpr)))
+            (fun name typeOpt -> TypeMember(name, typeOpt))
+
+    let typeField =
+        pipe5
+            (opt (pstring "mut" >>. ws))
+            identifierNoWs
+            (opt (pstring "?" >>% true))
+            (wsNoNl() >>. (pstring ":" <|> pstring "::") >>. ws >>. typeExpr)
+            (opt (attempt (ws >>. pstring "=" >>. ws >>. expression)))
+            (fun mutOpt name optFlag typeValue defaultOpt ->
+                let isMutable = mutOpt.IsSome
+                let isOptional = optFlag.IsSome
+                TypeField(name, isMutable, isOptional, Some typeValue, defaultOpt))
+
+    let recordFieldSeparator =
+        attempt (pstring "," >>. ws >>% ()) <|> (skipMany1 (skipAnyOf " \t\r\n") >>. ws)
+
+    let typeRecord =
+        between
+            (pstring "(")
+            (ws >>. pstring ")")
+            (pipe2
+                (ws >>. (attempt typeMemberField <|> typeField))
+                (many (attempt (recordFieldSeparator >>. (attempt typeMemberField <|> typeField))))
+                (fun first rest -> TypeRecord(first :: rest)))
+
     let typeTupleOrParen =
         between
             (pstring "(")
-            (pstring ")")
-            (sepBy1 (ws >>. typeExpr) (pstring "," .>> ws))
+            (ws >>. pstring ")")
+            (sepBy (ws >>. typeExpr) (pstring "," .>> ws))
         |>> fun items ->
             match items with
+            | [] -> TypeUnit
             | [single] -> single
             | multiple -> TypeTuple multiple
 
+    let typeTagPayloadItem =
+        let namedField =
+            pipe3
+                identifierNoWs
+                (opt (pstring "?" >>% true))
+                ((wsNoNl() >>. (pstring ":" <|> pstring "::") >>. ws >>. typeExpr))
+                (fun name optFlag typeValue ->
+                    let isOptional = optFlag.IsSome
+                    TypeField(name, false, isOptional, Some typeValue, None))
+
+        attempt (namedField |>> Choice1Of2) <|> (typeExpr |>> Choice2Of2)
+
+    let typeTag =
+        pstring "#" >>. identifierNoWs >>= fun tagName ->
+        opt (between (pstring "(") (pstring ")") (sepBy1 (ws >>. typeTagPayloadItem) (pstring "," .>> ws))) >>= fun payloadOpt ->
+        match payloadOpt with
+        | None -> preturn (TypeTag(tagName, None))
+        | Some items ->
+            let hasNamed = items |> List.exists (function Choice1Of2 _ -> true | _ -> false)
+            if hasNamed then
+                let fields =
+                    items
+                    |> List.choose (function Choice1Of2 field -> Some field | _ -> None)
+                preturn (TypeTag(tagName, Some (TypeRecord fields)))
+            else
+                let payloadTypes = items |> List.choose (function Choice2Of2 t -> Some t | _ -> None)
+                match payloadTypes with
+                | [single] -> preturn (TypeTag(tagName, Some single))
+                | multiple -> preturn (TypeTag(tagName, Some (TypeTuple multiple)))
+
+    let typeApply =
+        pipe2
+            identifierNoWs
+            (between (pstring "(") (pstring ")") (sepBy1 (ws >>. typeExpr) (pstring "," .>> ws)))
+            (fun name args -> TypeApply(name, args))
+
+    let typeConstraint =
+        pipe3
+            identifierNoWs
+            (pstring "::" >>. ws >>. typeExpr)
+            (ws >>. pstring "where" >>. ws >>. expression)
+            (fun name baseType predicate -> TypeConstraint(name, baseType, predicate))
+
     let typeAtom =
         choice [
+            attempt typeConstraint
+            attempt typeTag
+            attempt typeApply
+            attempt typeRecord
             attempt typeTupleOrParen
-            identifierNoWs |>> TypeName
+            typeIdentifier
         ]
 
+    let typePostfix =
+        pipe2 typeAtom (opt (pchar '?')) (fun baseType optFlag ->
+            match optFlag with
+            | Some _ -> TypeOptional baseType
+            | None -> baseType)
+
+    let typeIntersection =
+        sepBy1 typePostfix (attempt (ws >>. pstring "&" >>. ws)) |>> fun items ->
+            match items with
+            | [single] -> single
+            | multiple -> TypeIntersection multiple
+
+    let typeUnion =
+        opt (pstring "|" >>. ws) >>. sepBy1 typeIntersection (attempt (ws >>. pstring "|" >>. ws)) |>> fun items ->
+            match items with
+            | [single] -> single
+            | multiple -> TypeUnion multiple
+
     let typeArrow =
-        pipe2 typeAtom (opt (attempt (ws >>. pstring "->" >>. ws >>. typeExpr))) (fun left rightOpt ->
+        pipe2 typeUnion (opt (attempt (ws >>. pstring "->" >>. ws >>. typeExpr))) (fun left rightOpt ->
             match rightOpt with
             | None -> left
             | Some right ->
@@ -369,6 +494,12 @@ let typedIdentifier: Parser<Identifier * TypeExpr option, unit> =
     pipe2
         identifierNoWs
         (opt (attempt (wsInline >>. pstring ":" >>. ws >>. typeExpr)))
+        (fun name typeOpt -> (name, typeOpt))
+
+let typeParam: Parser<Identifier * TypeExpr option, unit> =
+    pipe2
+        identifierNoWs
+        (opt (attempt (ws >>. pstring "::" >>. ws >>. typeExpr)))
         (fun name typeOpt -> (name, typeOpt))
 
 // Match expression parser
@@ -724,10 +855,30 @@ let valueDef: Parser<TopLevelItem, unit> =
 
 // Parser for type definition (top-level)
 let typeDef: Parser<TopLevelItem, unit> =
-    pipe2
-        (pstring "type" >>. ws >>. identifierNoWs .>> wsNoNl() .>> pstring "=" .>> wsNoNl())
-        typeExpr
-        (fun name typeValue -> Def(TypeDef(name, typeValue)))
+    let typeModifiers =
+        many (attempt (
+            choice [
+                pstring "export" >>. ws >>% Export
+                pstring "context" >>. ws >>% Context
+            ]))
+
+    let typeParams =
+        between (pstring "(") (pstring ")") (sepBy1 (ws >>. typeParam) (pstring "," .>> ws))
+
+    let typeExprWithWhere =
+        pipe2 typeExpr (opt (attempt (ws >>. pstring "where" >>. ws >>. expression))) (fun baseType whereOpt ->
+            match whereOpt with
+            | Some predicate -> TypeWhere(baseType, predicate)
+            | None -> baseType)
+
+    pipe4
+        typeModifiers
+        (pstring "type" >>. ws >>. identifierNoWs)
+        (opt (attempt (wsNoNl() >>. typeParams)))
+        (wsNoNl() >>. pstring "=" >>. ws >>. typeExprWithWhere)
+        (fun modifiers name paramsOpt typeValue ->
+            let typeParams = defaultArg paramsOpt []
+            Def(TypeDef(name, modifiers, typeParams, typeValue)))
     <?> "type definition"
 
 // Parser for top-level expressions (script-style)

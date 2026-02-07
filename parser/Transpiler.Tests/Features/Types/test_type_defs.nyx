@@ -1,7 +1,33 @@
 module Types
 
-type Person = (String, Int)
+export type LinePair =
+	| #firstLine(prev: #nil, current: TextLine)
+	| #lastLine(prev: TextLine, current: #nil)
+	| #line(prev: TextLine, current: TextLine)
 
-type Greeter = String -> String
+context type Raise = (
+	throw: string -> ()
+)
+
+type Config = (
+	help   : bool   = false
+	verbose: bool   = false
+	input  : string = ""
+)
+
+type Arguments = list(String)
+
+type CliConfigM = StateT(Config, ReaderT(Arguments, Err(String)))
+
+type OptionalString = string?
+
+type QuickPickItem = QuickPickItem & (
+	displayOnly: true?
+)
+
+type Email = s :: string where isValidEmail(s)
+
+type OrderedPair(n :: number) =
+	(x :: n, y :: n) where x < y
 
 def name = "Nyx"

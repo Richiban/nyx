@@ -8,6 +8,10 @@ type Person = (
     name: string
 )
 
+type Option(a) = 
+    | #some(a)
+    | #none
+
 def main = { x -> 
     -- This is a comment
     println(message)

@@ -32,7 +32,7 @@ type TypeExpr =
     | TypeTuple of TypeExpr list
     | TypeRecord of TypeRecordField list
     | TypeApply of Identifier * TypeExpr list
-    | TypeFunc of TypeExpr list * TypeExpr
+    | TypeFunc of TypeExpr * TypeExpr
     | TypeTag of Identifier * TypeExpr option
     | TypeUnion of TypeExpr list
     | TypeIntersection of TypeExpr list
@@ -538,8 +538,8 @@ do
             | None -> left
             | Some right ->
                 match left with
-                | TypeTuple items -> TypeFunc(items, right)
-                | _ -> TypeFunc([left], right))
+                | TypeTuple _ -> TypeFunc(left, right)
+                | _ -> TypeFunc(left, right))
 
     typeExprRef := typeArrow
     ()

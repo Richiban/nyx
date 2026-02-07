@@ -14,7 +14,7 @@ module Unifier =
             match subst |> Map.tryFind v.Id with
             | Some replacement -> apply subst replacement
             | None -> ty
-        | TyFunc(args, ret) -> TyFunc(args |> List.map (apply subst), apply subst ret)
+        | TyFunc(arg, ret) -> TyFunc(apply subst arg, apply subst ret)
         | TyTuple items -> TyTuple(items |> List.map (apply subst))
         | TyRecord fields ->
             fields |> Map.map (fun _ v -> apply subst v) |> TyRecord
@@ -25,7 +25,7 @@ module Unifier =
     let rec occurs (varId: int) (ty: Ty) : bool =
         match ty with
         | TyVar v -> v.Id = varId
-        | TyFunc(args, ret) -> args |> List.exists (occurs varId) || occurs varId ret
+        | TyFunc(arg, ret) -> occurs varId arg || occurs varId ret
         | TyTuple items -> items |> List.exists (occurs varId)
         | TyRecord fields -> fields |> Map.exists (fun _ v -> occurs varId v)
         | TyTag(_, payload) -> payload |> Option.exists (occurs varId)
@@ -52,8 +52,8 @@ module Unifier =
                             loop newSubst rest
                     | TyPrimitive lName, TyPrimitive rName when lName = rName ->
                         loop subst rest
-                    | TyFunc(lArgs, lRet), TyFunc(rArgs, rRet) when lArgs.Length = rArgs.Length ->
-                        loop subst (List.zip lArgs rArgs @ ((lRet, rRet) :: rest))
+                    | TyFunc(lArg, lRet), TyFunc(rArg, rRet) ->
+                        loop subst ((lArg, rArg) :: (lRet, rRet) :: rest)
                     | TyTuple lItems, TyTuple rItems when lItems.Length = rItems.Length ->
                         loop subst (List.zip lItems rItems @ rest)
                     | TyRecord lFields, TyRecord rFields when lFields.Count = rFields.Count && lFields.Keys = rFields.Keys ->

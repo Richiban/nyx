@@ -39,6 +39,12 @@ let private listType elementTy =
 let private numericType =
     TyPrimitive "int"
 
+let private inputTypeFromArgs argTys =
+    match argTys with
+    | [] -> TyPrimitive "unit"
+    | [ single ] -> single
+    | _ -> TyTuple argTys
+
 let private lookupPrimitive (name: string) =
     match name with
     | "int" | "Int" -> Some (primitiveType "int")
@@ -97,16 +103,10 @@ let rec private typeExprToTy (state: InferState) (typeExpr: TypeExpr) : Ty * Inf
                 current <- next
                 ty)
         TyUnion (TyPrimitive name :: argTys), current
-    | TypeFunc(args, ret) ->
-        let mutable current = state
-        let argTys =
-            args
-            |> List.map (fun arg ->
-                let ty, next = typeExprToTy current arg
-                current <- next
-                ty)
-        let retTy, next = typeExprToTy current ret
-        TyFunc(argTys, retTy), next
+    | TypeFunc(arg, ret) ->
+        let argTy, next = typeExprToTy state arg
+        let retTy, nextState = typeExprToTy next ret
+        TyFunc(argTy, retTy), nextState
     | TypeTag(name, payloadOpt) ->
         match payloadOpt with
         | Some payload ->
@@ -186,7 +186,8 @@ let rec private inferExpr (env: TypeEnv) (state: InferState) (expr: Expression) 
                     argResults
                     |> List.choose (function Ok typedExpr -> Some typedExpr.Type | _ -> None)
                 let retTy, nextState = freshVar current
-                let withConstraint = addConstraint funcTy (TyFunc(argTys, retTy)) nextState
+                let inputTy = inputTypeFromArgs argTys
+                let withConstraint = addConstraint funcTy (TyFunc(inputTy, retTy)) nextState
                 Ok (mkTypedExpr expr retTy None None None, withConstraint)
             else
                 Error errors
@@ -205,7 +206,8 @@ let rec private inferExpr (env: TypeEnv) (state: InferState) (expr: Expression) 
                 ty)
         match inferExpr env' current body with
         | Ok (bodyExpr, next) ->
-            Ok (mkTypedExpr expr (TyFunc(argTys, bodyExpr.Type)) (Some bodyExpr) None None, next)
+            let inputTy = inputTypeFromArgs argTys
+            Ok (mkTypedExpr expr (TyFunc(inputTy, bodyExpr.Type)) (Some bodyExpr) None None, next)
         | Error err -> Error err
     | BinaryOp(_, left, right) ->
         match inferExpr env state left with

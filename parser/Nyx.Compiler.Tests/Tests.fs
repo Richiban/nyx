@@ -167,7 +167,7 @@ let ``Unifier binds type variables`` () =
 [<Fact>]
 let ``Unifier rejects occurs check`` () =
     let tvar = TyVar { Id = 2; Name = None }
-    let constraintSet: ConstraintSet = [ (tvar, TyFunc([ tvar ], TyPrimitive "int")) ]
+    let constraintSet: ConstraintSet = [ (tvar, TyFunc(tvar, TyPrimitive "int")) ]
     let result = Unifier.unify constraintSet
     match result with
     | Ok _ -> Assert.True(false, "Expected occurs check failure")

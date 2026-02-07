@@ -40,6 +40,19 @@ let ``Typecheck match arms agree`` () =
     Assert.Equal(TyPrimitive "string", typed.Types.["result"])
 
 [<Fact>]
+let ``Typecheck populates typed AST items`` () =
+    let source = "def message = \"Hello\""
+    let result = Compiler.compile source
+    let typed = result.Typed.Value
+    let hasMessage =
+        typed.Items
+        |> List.exists (function
+            | TypedDef (TypedValueDef(name, _, typedExpr)) ->
+                name = "message" && typedExpr.Type = TyPrimitive "string"
+            | _ -> false)
+    Assert.True(hasMessage)
+
+[<Fact>]
 let ``Compile reports diagnostics on parse error`` () =
     let source = "def message = "
     let result = Compiler.compile source

@@ -426,10 +426,11 @@ and inferBlock (env: TypeEnv) (state: InferState) (statements: Statement list) :
                     | Error err -> errors <- err
         if errors.IsEmpty then Ok (lastTy, current) else Error errors
 
-let inferModule (module': Module) : Result<Map<string, Ty> * InferState, Diagnostic list> =
+let inferModule (module': Module) : Result<Map<string, Ty> * TypedTopLevelItem list * InferState, Diagnostic list> =
     let mutable env = TypeEnv.empty
     let mutable state = emptyState
     let mutable types = Map.empty
+    let mutable items: TypedTopLevelItem list = []
     let mutable errors: Diagnostic list = []
 
     for item in module' do
@@ -447,15 +448,19 @@ let inferModule (module': Module) : Result<Map<string, Ty> * InferState, Diagnos
                 let scheme = TypeEnv.generalize env declaredTy
                 env <- TypeEnv.extend name scheme env
                 types <- types |> Map.add name declaredTy
+                items <- items @ [ TypedDef (TypedValueDef(name, typeOpt, { Expr = expr; Type = declaredTy })) ]
             | Error err -> errors <- err
         | Expr expr when errors.IsEmpty ->
             match inferExpr env state expr with
-            | Ok (_, next) -> state <- next
+            | Ok (exprTy, next) ->
+                state <- next
+                items <- items @ [ TypedExprItem { Expr = expr; Type = exprTy } ]
             | Error err -> errors <- err
         | Expr _ -> ()
-        | Import _ -> ()
-        | ModuleDecl _ -> ()
-        | Def (TypeDef _) -> ()
+        | Import itemsList -> items <- items @ [ TypedImport itemsList ]
+        | ModuleDecl name -> items <- items @ [ TypedModuleDecl name ]
+        | Def (TypeDef(name, modifiers, parameters, body)) ->
+            items <- items @ [ TypedDef (TypedTypeDef(name, modifiers, parameters, body)) ]
         | Def (ValueDef _) -> ()
 
-    if errors.IsEmpty then Ok (types, state) else Error errors
+    if errors.IsEmpty then Ok (types, items, state) else Error errors

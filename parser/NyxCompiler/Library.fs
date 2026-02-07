@@ -26,14 +26,27 @@ module Compiler =
     let typecheck (desugared: Module) : Result<TypedModule, Diagnostic list> =
         match NyxCompiler.Infer.inferModule desugared with
         | Error diagnostics -> Error diagnostics
-        | Ok (types, (state: NyxCompiler.Infer.InferState)) ->
+        | Ok (types, items, (state: NyxCompiler.Infer.InferState)) ->
             match Unifier.unify state.Constraints with
             | Ok subst ->
                 let resolvedTypes =
                     types
                     |> Map.map (fun _ ty -> Unifier.apply subst ty)
+                let resolvedItems =
+                    items
+                    |> List.map (fun item ->
+                        let applyExpr (typedExpr: TypedExpr) =
+                            { typedExpr with Type = Unifier.apply subst typedExpr.Type }
+                        match item with
+                        | TypedExprItem expr -> TypedExprItem (applyExpr expr)
+                        | TypedDef (TypedValueDef(name, typeOpt, expr)) ->
+                            TypedDef (TypedValueDef(name, typeOpt, applyExpr expr))
+                        | TypedDef (TypedTypeDef _)
+                        | TypedImport _
+                        | TypedModuleDecl _ -> item)
                 Ok { Module = desugared
-                     Types = resolvedTypes }
+                     Types = resolvedTypes
+                     Items = resolvedItems }
             | Error message ->
                 Error [ Diagnostics.error message ]
 

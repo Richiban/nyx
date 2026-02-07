@@ -21,6 +21,17 @@ type TypedExpr =
     { Expr: Expression
       Type: Ty }
 
+type TypedDefinition =
+    | TypedValueDef of Identifier * TypeExpr option * TypedExpr
+    | TypedTypeDef of Identifier * TypeDefModifier list * (Identifier * TypeExpr option) list * TypeExpr
+
+type TypedTopLevelItem =
+    | TypedModuleDecl of ModuleName
+    | TypedImport of ImportItem list
+    | TypedDef of TypedDefinition
+    | TypedExprItem of TypedExpr
+
 type TypedModule =
     { Module: Module
-      Types: Map<string, Ty> }
+      Types: Map<string, Ty>
+      Items: TypedTopLevelItem list }

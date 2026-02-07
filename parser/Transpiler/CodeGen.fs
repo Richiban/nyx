@@ -258,10 +258,13 @@ let transpileTopLevelItem (item: TopLevelItem) : string =
         sprintf "// Module: %s" name
     | Def(ValueDef(name, _, expr)) ->
         sprintf "const %s = %s;" name (transpileExpression expr)
+    | Def(TypeDef(_, _)) ->
+        ""
     | Expr expr ->
         sprintf "%s;" (transpileExpression expr)
 
 let transpileModule (module': Module) : string =
     module'
     |> List.map transpileTopLevelItem
+    |> List.filter (fun line -> line <> "")
     |> String.concat "\n"

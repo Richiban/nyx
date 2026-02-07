@@ -2,7 +2,11 @@ module one
 
 def message = "Hello world"
 
+type StringAlias = string
 
+type Person = (
+    name: string
+)
 
 def main = { x -> 
     -- This is a comment

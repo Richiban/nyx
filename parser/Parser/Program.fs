@@ -66,6 +66,7 @@ type ListPatternElement =
 
 type Definition =
     | ValueDef of Identifier * TypeExpr option * Expression
+    | TypeDef of Identifier * TypeExpr
 
 type TopLevelItem =
     | ModuleDecl of ModuleName
@@ -721,6 +722,14 @@ let valueDef: Parser<TopLevelItem, unit> =
         (fun (name, typeOpt) expr -> Def(ValueDef(name, typeOpt, expr)))
     <?> "value definition"
 
+// Parser for type definition (top-level)
+let typeDef: Parser<TopLevelItem, unit> =
+    pipe2
+        (pstring "type" >>. ws >>. identifierNoWs .>> wsNoNl() .>> pstring "=" .>> wsNoNl())
+        typeExpr
+        (fun name typeValue -> Def(TypeDef(name, typeValue)))
+    <?> "type definition"
+
 // Parser for top-level expressions (script-style)
 let topLevelExpr: Parser<TopLevelItem, unit> =
     exprWithoutCrossingNewlines |>> Expr
@@ -730,6 +739,7 @@ let topLevelExpr: Parser<TopLevelItem, unit> =
 let topLevelItem: Parser<TopLevelItem, unit> =
     ws >>. choice [
         moduleDecl
+        typeDef
         valueDef
         topLevelExpr
     ] .>> ws

@@ -1,0 +1,7 @@
+module Types
+
+type Person = (String, Int)
+
+type Greeter = String -> String
+
+def name = "Nyx"

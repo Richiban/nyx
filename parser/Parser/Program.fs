@@ -70,12 +70,12 @@ type TopLevelItem =
 type Module = TopLevelItem list
 
 // Helper: whitespace and comment handling
-let ws: Parser<unit, unit> = skipMany (skipAnyOf " \t\r\n")
-let wsAll: Parser<unit, unit> = skipMany (skipAnyOf " \t\r\n")
+let comment () = pstring "--" >>. skipRestOfLine true
+let ws: Parser<unit, unit> = skipMany (skipMany1 spaces1 <|> comment ())
+let wsAll: Parser<unit, unit> = ws
 let wsInline = skipMany (skipAnyOf " \t")
 let wsNoNl() = skipMany (skipAnyOf " \t") // whitespace without newlines
-let comment () = pstring "--" >>. skipRestOfLine true
-let wsWithComments () = skipMany (skipMany1 spaces1 <|> comment ())
+let wsWithComments () = ws
 
 // Indentation helpers
 let getIndentation () = 
@@ -334,7 +334,7 @@ do
         <?> "match arm"
     
     let matchArmWithLeadingWs =
-        attempt (skipMany (skipAnyOf " \t\r\n") >>. matchArm)
+        attempt (ws >>. matchArm)
 
     matchExprRef :=
         pipe2
@@ -533,14 +533,14 @@ do
         let matchStatement = wsInline >>. matchExpr |>> ExprStatement
         let statementLine =
             attempt (
-                skipMany (skipAnyOf " \t\r\n") >>.
+                ws >>.
                 (attempt matchStatement <|> statement)
             )
         let multiLine =
             attempt (
                 skipMany (skipAnyOf " \t\r") >>. newline >>.
-                skipMany (skipAnyOf " \t\r\n") >>.
-                (many1 statementLine .>> skipMany (skipAnyOf " \t\r\n"))
+                ws >>.
+                (many1 statementLine .>> ws)
                 |>> Block
             )
 

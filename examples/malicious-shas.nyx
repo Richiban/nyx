@@ -1,10 +1,11 @@
-import
+import (
  Flurl
  Flurl.Http
  System
  System.Globalization
  System.Linq
  CsvHelper
+)
 
 println("Welcome to the VirusTotal SHA checker!")
 

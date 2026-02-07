@@ -2,7 +2,7 @@
 @owner("myapp_chat")
 module devicePairingUtils
 
-import
+import (
   my/include/myStats
   my/include/myTypes
   myLogs/include/myLog
@@ -11,6 +11,7 @@ import
   myChatxLib/include/errors
   myEnvelope/include/iqTypes
   myEnvelope/include/namespaces
+)
 
 type PayloadCompanionRegMap = (
   pubKey: Binary

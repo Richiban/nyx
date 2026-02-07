@@ -1,6 +1,6 @@
 module whisper/decode
 
-import  
+import (
   numpy as np
   Torch
   Torch.Nn.Functional as F
@@ -10,6 +10,7 @@ import
   Torch.Tokenizer (Tokenizer, getTokenizer)
   Torch.Utils (compressionRatio)
   Torch.Model (Whisper)
+)
 
 
 -- Detect the spoken language in the audio, and return them as list of stringings, along with the ids

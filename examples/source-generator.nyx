@@ -1,6 +1,6 @@
 module RecordIndexerGenerator
 
-import
+import (
   nyx/collections/immutable
   nyx/linq
   nyx/text
@@ -9,6 +9,7 @@ import
   nyx/codeAnalysis/cSharp
   nyx/codeAnalysis/cSharp/syntax
   nyx/codeAnalysis/text
+)
 
 
 spec (GeneratorSyntaxContext, CancellationToken) -> PartialRecordSyntax

@@ -1,4 +1,4 @@
-import 
+import (
   bs58check
   js-sha256 (sha256)
   tiny-secp256k1 as ecc
@@ -9,6 +9,7 @@ import
   dotenv
   create-key-pair (toXOnly)
   bitcoinjs-lib (Network)
+)
 
 
 export def detectAddressTypeToScriptHash

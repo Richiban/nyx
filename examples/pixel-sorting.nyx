@@ -1,6 +1,6 @@
 module PixelSorting
 
-import
+import (
   cv2
   numpy as np
   math
@@ -10,6 +10,7 @@ import
   argparse
   tqdm
   sound
+)
 
 -- Taking arguments from command line
 def parser = argparse.ArgumentParser()  -- you iniatize as such

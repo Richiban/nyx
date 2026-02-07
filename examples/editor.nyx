@@ -1,11 +1,12 @@
 module lines
 
-import
+import (
   Editor
   Enumerable
   Utils.Lines as lineUtils
   SelectionsAndRanges 
   Io/SubjectIOBase 
+)
 
 export type LinePair =
   | #firstLine(prev: #nil, current: TextLine)

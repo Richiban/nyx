@@ -5,6 +5,7 @@ const main = (x) => (() => {
   const gt5 = (x) => (x > 5);
   const passes = gt5(gt5(6));
   const myTag = { tag: "some", value: "data" };
+  const s = "";
   const getName = (x) => x.name;
   (() => {
   const _match0 = x;

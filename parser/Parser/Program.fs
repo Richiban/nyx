@@ -353,7 +353,7 @@ do
         ]
 
     let typeArrow =
-        pipe2 typeAtom (opt (ws >>. pstring "->" >>. ws >>. typeExpr)) (fun left rightOpt ->
+        pipe2 typeAtom (opt (attempt (ws >>. pstring "->" >>. ws >>. typeExpr))) (fun left rightOpt ->
             match rightOpt with
             | None -> left
             | Some right ->

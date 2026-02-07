@@ -2,6 +2,8 @@ module one
 
 def message = "Hello world"
 
+
+
 def main = { x -> 
     -- This is a comment
     println(message)
@@ -14,7 +16,8 @@ def main = { x ->
 
     def myTag = #some("data")
 
-    def getName = { .name }
+    def s: String = ""
+    def getName: Person -> string = { .name }
     
     match x
     | "hi" -> "bye"

@@ -297,10 +297,14 @@ let guardPattern =
 let tagPattern =
     attempt (
         (pstring "#" >>. identifierNoWs) >>= fun tagName ->
-        opt (between 
-                (pstring "(") 
-                (pstring ")") 
-                (sepBy1 (ws >>. pattern) (pstring "," .>> ws))) >>= fun patternsOpt ->
+        let parenPayload =
+            between
+                (pstring "(")
+                (pstring ")")
+                (sepBy1 (ws >>. pattern) (pstring "," .>> ws))
+        let inlinePayload =
+            skipMany1 (skipAnyOf " \t") >>. pattern |>> fun p -> [p]
+        opt (attempt parenPayload <|> attempt inlinePayload) >>= fun patternsOpt ->
         match patternsOpt with
         | None -> preturn (TagPattern(tagName, None))
         | Some [single] -> preturn (TagPattern(tagName, Some single))
@@ -325,14 +329,18 @@ do patternRef :=
 // Match expression parser
 do
     let matchArm =
-        pstring "|" >>. ws >>. sepBy1 pattern (pstring "," .>> ws) .>>. (pstring "->" >>. ws >>. simpleExpression)
+        pstring "|" >>. ws >>. sepBy1 pattern (pstring "," .>> ws) .>>. (pstring "->" >>. ws >>. exprWithoutCrossingNewlines)
         <?> "match arm"
     
+    let matchArmWithLeadingWs =
+        attempt (skipMany (skipAnyOf " \t\r\n") >>. matchArm)
+
     matchExprRef :=
         pipe2
             (pstring "match" >>. ws >>. sepBy1 simpleExpression (pstring "," .>> ws))  // Multiple expressions
-            (many1 (ws >>. matchArm))
+            (many1 matchArmWithLeadingWs)
             (fun scrutinees arms -> Match(scrutinees, arms))
+        .>> skipMany (skipAnyOf " \t\r\n")
         <?> "match expression"
 
 // Operator precedence parser
@@ -508,13 +516,7 @@ do inlineExpressionRef := inlinePipeExpr
 
 // Expression parser that stops at newlines (for use in blocks)
 do exprWithoutCrossingNewlinesRef :=
-    let pipeOp = pstring "\\" >>. skipMany (skipAnyOf " \t") >>. pipeTarget
-    pipe2
-        opp.ExpressionParser
-        (many (attempt (notFollowedBy newline >>. pipeOp) .>> skipMany (skipAnyOf " \t")))
-        (fun expr pipes ->
-            pipes |> List.fold (fun acc (funcName, args) -> Pipe(acc, funcName, args)) expr
-        )
+    attempt matchExpr <|> inlinePipeExpr
 
 // Wire up the expression parser with piping support
 // Prefer match expressions first to avoid parsing "match" as an identifier.
@@ -523,16 +525,23 @@ do expressionRef := (attempt matchExpr <|> pipeExpr)
 // Wire up the lambda parser
 do 
     let paramList = sepBy identifier (pstring "," .>> ws)
-    let arrow = pstring "->" .>> ws
+    let arrow = pstring "->" .>> wsInline
     
     // Lambda body: allow multi-line statement blocks or a single expression
     let blockBody =
-        let lineEnd = skipMany1 newline >>. skipMany (skipAnyOf " \t\r")
+        let matchStatement = wsInline >>. matchExpr |>> ExprStatement
+        let statementLine =
+            attempt (
+                skipMany (skipAnyOf " \t\r\n") >>.
+                (attempt matchStatement <|> statement)
+            )
         let multiLine =
-            skipMany (skipAnyOf " \t\r\n") >>.
-            statement .>>. (attempt (lineEnd >>. sepEndBy1 statement lineEnd)) .>>
-            skipMany (skipAnyOf " \t\r\n")
-            |>> (fun (first, rest) -> Block (first :: rest))
+            attempt (
+                skipMany (skipAnyOf " \t\r") >>. newline >>.
+                skipMany (skipAnyOf " \t\r\n") >>.
+                (many1 statementLine .>> skipMany (skipAnyOf " \t\r\n"))
+                |>> Block
+            )
 
         let singleLine =
             skipMany (skipAnyOf " \t\r\n") >>.
@@ -541,7 +550,7 @@ do
 
         attempt multiLine <|> singleLine
     
-    let lambdaWithParams = pipe2 (paramList .>> arrow .>> skipMany (skipAnyOf " \t\r\n")) blockBody (fun parameters body -> Lambda(parameters, body))
+    let lambdaWithParams = pipe2 (paramList .>> arrow .>> skipMany (skipAnyOf " \t")) blockBody (fun parameters body -> Lambda(parameters, body))
     let lambdaNoParams = blockBody |>> (fun body -> Lambda([], body))
     
     // Shorthand lambda: { * } means { x, y -> x * y }
@@ -576,7 +585,7 @@ do
     
     lambdaRef :=
         between (pstring "{") (pstring "}") (
-            skipMany (skipAnyOf " \t\r\n") >>. choice [
+            skipMany (skipAnyOf " \t") >>. choice [
                 attempt shorthandUnaryOp
                 attempt shorthandBinaryOp
                 attempt shorthandPropertyAccess
@@ -647,7 +656,7 @@ do
                 | multiple -> TupleExpr multiple)))
             (fun name expr -> DefStatement(name, expr))
     
-    let exprStatement = wsNoNl() >>. expression |>> ExprStatement  // Only consume spaces/tabs, not newlines
+    let exprStatement = wsNoNl() >>. exprWithoutCrossingNewlines |>> ExprStatement  // Only consume spaces/tabs, not newlines
     
     statementRef := (attempt defStatement <|> exprStatement) <?> "statement"
 

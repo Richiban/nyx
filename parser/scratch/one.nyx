@@ -1,0 +1,14 @@
+module one
+
+def message = "Hello world"
+
+def main = { x -> 
+    println(message)
+
+    def myTag = #some("data")
+    
+    match x
+    | "hi" -> "bye"
+    | "one" -> "two"
+    | (a = "a", b = "b", c = c) -> c
+}

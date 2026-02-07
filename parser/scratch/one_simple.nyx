@@ -1,0 +1,7 @@
+module one
+
+def main = { x ->
+    match x
+    | "hi" -> "bye"
+    | "one" -> "two"
+}

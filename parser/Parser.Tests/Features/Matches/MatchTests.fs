@@ -5,7 +5,7 @@ open FsUnit.Xunit
 open ParserTestHelpers
 open System.IO
 
-[<Fact(Skip="Match fixtures include patterns and lambda forms not yet parsed")>]
+[<Fact>]
 let ``Parse match feature files`` () =
     let unsupported = set [ "test_match_basic.nyx"; "test_match_binding.nyx"; "test_match_guard.nyx"; "test_match_lambda.nyx" ]
 

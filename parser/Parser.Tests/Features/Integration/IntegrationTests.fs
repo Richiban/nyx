@@ -20,21 +20,21 @@ let ``Parse comprehensive.nyx file`` () =
         let hasLiteral =
             module' |> List.exists (fun item ->
                 match item with
-                | Def (ValueDef (_, LiteralExpr _)) -> true
+                | Def (ValueDef (_, _, LiteralExpr _)) -> true
                 | _ -> false
             )
 
         let hasFunctionCall =
             module' |> List.exists (fun item ->
                 match item with
-                | Def (ValueDef (_, FunctionCall _)) -> true
+                | Def (ValueDef (_, _, FunctionCall _)) -> true
                 | _ -> false
             )
 
         let hasLambda =
             module' |> List.exists (fun item ->
                 match item with
-                | Def (ValueDef (_, Lambda _)) -> true
+                | Def (ValueDef (_, _, Lambda _)) -> true
                 | _ -> false
             )
 

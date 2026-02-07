@@ -20,7 +20,7 @@ let ``Parse binary-operators.nyx file`` () =
         let hasBinaryOp op module' =
             module' |> List.exists (fun item ->
                 match item with
-                | Def (ValueDef (_, BinaryOp (operator, _, _))) -> operator = op
+                | Def (ValueDef (_, _, BinaryOp (operator, _, _))) -> operator = op
                 | _ -> false
             )
 

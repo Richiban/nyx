@@ -20,7 +20,7 @@ let ``Parse piping.nyx file`` () =
         let hasPipe =
             module' |> List.exists (fun item ->
                 match item with
-                | Def (ValueDef (_, Pipe _)) -> true
+                | Def (ValueDef (_, _, Pipe _)) -> true
                 | _ -> false
             )
         hasPipe |> should equal true

@@ -65,7 +65,7 @@ let rec transpileExpression (expr: Expression) : string =
             sprintf "%s(%s)" name argStrs
     
     | Lambda(params', body) ->
-        let paramStr = String.concat ", " params'
+        let paramStr = params' |> List.map fst |> String.concat ", "
         sprintf "(%s) => %s" paramStr (transpileExpression body)
     
     | Pipe(expr, funcName, args) ->
@@ -247,7 +247,7 @@ let rec transpileExpression (expr: Expression) : string =
 
 and transpileStatement (stmt: Statement) : string =
     match stmt with
-    | DefStatement(name, expr) ->
+    | DefStatement(name, _, expr) ->
         sprintf "const %s = %s;" name (transpileExpression expr)
     | ExprStatement expr ->
         sprintf "%s;" (transpileExpression expr)
@@ -256,7 +256,7 @@ let transpileTopLevelItem (item: TopLevelItem) : string =
     match item with
     | ModuleDecl name ->
         sprintf "// Module: %s" name
-    | Def(ValueDef(name, expr)) ->
+    | Def(ValueDef(name, _, expr)) ->
         sprintf "const %s = %s;" name (transpileExpression expr)
     | Expr expr ->
         sprintf "%s;" (transpileExpression expr)

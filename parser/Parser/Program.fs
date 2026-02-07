@@ -13,11 +13,16 @@ type Literal =
     | FloatLit of float
     | BoolLit of bool
 
+type TypeExpr =
+    | TypeName of Identifier
+    | TypeTuple of TypeExpr list
+    | TypeFunc of TypeExpr list * TypeExpr
+
 type Expression =
     | LiteralExpr of Literal
     | IdentifierExpr of Identifier
     | FunctionCall of Identifier * Expression list
-    | Lambda of Identifier list * Expression
+    | Lambda of (Identifier * TypeExpr option) list * Expression
     | BinaryOp of string * Expression * Expression
     | Pipe of Expression * Identifier * Expression list  // expr \func or expr \func(args)
     | Block of Statement list
@@ -51,7 +56,7 @@ and Pattern =
 and MatchArm = Pattern list * Expression  // Multiple patterns for multi-value match
 
 and Statement =
-    | DefStatement of Identifier * Expression
+    | DefStatement of Identifier * TypeExpr option * Expression
     | ExprStatement of Expression
 
 // Helper type for parsing list patterns
@@ -60,7 +65,7 @@ type ListPatternElement =
     | Splat of Identifier option
 
 type Definition =
-    | ValueDef of Identifier * Expression
+    | ValueDef of Identifier * TypeExpr option * Expression
 
 type TopLevelItem =
     | ModuleDecl of ModuleName
@@ -109,6 +114,7 @@ let identifierNoWs: Parser<Identifier, unit> =
     <?> "identifier"
 
 let identifier: Parser<Identifier, unit> = identifierNoWs .>> wsInline
+
 
 // Parser for literals
 let stringLiteralNoWs: Parser<Literal, unit> =
@@ -166,6 +172,7 @@ let lambda, lambdaRef = createParserForwardedToRef<Expression, unit>()
 let functionCall, functionCallRef = createParserForwardedToRef<Expression, unit>()
 let matchExpr, matchExprRef = createParserForwardedToRef<Expression, unit>()
 let statement, statementRef = createParserForwardedToRef<Statement, unit>()
+let typeExpr, typeExprRef = createParserForwardedToRef<TypeExpr, unit>()
 
 // Pattern parsers
 let pattern, patternRef = createParserForwardedToRef<Pattern, unit>()
@@ -326,6 +333,42 @@ do patternRef :=
         identifierPattern           // Last resort - any identifier
     ] .>> ws
     <?> "pattern"
+
+// Type expression parser
+do
+    let typeTupleOrParen =
+        between
+            (pstring "(")
+            (pstring ")")
+            (sepBy1 (ws >>. typeExpr) (pstring "," .>> ws))
+        |>> fun items ->
+            match items with
+            | [single] -> single
+            | multiple -> TypeTuple multiple
+
+    let typeAtom =
+        choice [
+            attempt typeTupleOrParen
+            identifierNoWs |>> TypeName
+        ]
+
+    let typeArrow =
+        pipe2 typeAtom (opt (ws >>. pstring "->" >>. ws >>. typeExpr)) (fun left rightOpt ->
+            match rightOpt with
+            | None -> left
+            | Some right ->
+                match left with
+                | TypeTuple items -> TypeFunc(items, right)
+                | _ -> TypeFunc([left], right))
+
+    typeExprRef := typeArrow
+    ()
+
+let typedIdentifier: Parser<Identifier * TypeExpr option, unit> =
+    pipe2
+        identifierNoWs
+        (opt (attempt (wsInline >>. pstring ":" >>. ws >>. typeExpr)))
+        (fun name typeOpt -> (name, typeOpt))
 
 // Match expression parser
 do
@@ -529,8 +572,8 @@ do expressionRef := (attempt matchExpr <|> pipeExpr)
 
 // Wire up the lambda parser
 do 
-    let paramList = sepBy identifier (pstring "," .>> ws)
-    let arrow = pstring "->" .>> wsInline
+    let paramList = sepBy typedIdentifier (pstring "," .>> ws)
+    let arrow = wsInline >>. pstring "->" .>> wsInline
     
     // Lambda body: allow multi-line statement blocks or a single expression
     let blockBody =
@@ -562,7 +605,7 @@ do
     let shorthandBinaryOp =
         let operators = ["*"; "/"; "+"; "-"; "<"; ">"; "<="; ">="; "=="; "!="]
         choice (operators |> List.map (fun op ->
-            pstring op >>. ws >>. notFollowedBy (skipAnyOf "0123456789.\"'([{") >>% Lambda(["x"; "y"], BinaryOp(op, IdentifierExpr "x", IdentifierExpr "y"))
+            pstring op >>. ws >>. notFollowedBy (skipAnyOf "0123456789.\"'([{") >>% Lambda([("x", None); ("y", None)], BinaryOp(op, IdentifierExpr "x", IdentifierExpr "y"))
         ))
     
     // Shorthand lambda: { * 2 } means { x -> x * 2 }
@@ -575,14 +618,14 @@ do
         ]
         choice (operators |> List.map (fun (op, opStr) ->
             pstring op >>. ws >>. primaryExpr |>> (fun rightExpr ->
-                Lambda(["x"], BinaryOp(opStr, IdentifierExpr "x", rightExpr))
+                Lambda([("x", None)], BinaryOp(opStr, IdentifierExpr "x", rightExpr))
             )
         ))
     
     // Shorthand lambda: { .name } means { x -> x.name }
     let shorthandPropertyAccess =
         pstring "." >>. identifier |>> (fun propName ->
-            Lambda(["x"], MemberAccess(IdentifierExpr "x", propName))
+            Lambda([("x", None)], MemberAccess(IdentifierExpr "x", propName))
         )
     
     lambdaRef :=
@@ -651,12 +694,12 @@ let blockExpr() : Parser<Expression, unit> =
 do
     let defStatement = 
         pipe2
-            (pstring "def" >>. ws >>. identifier .>> wsNoNl() .>> pstring "=" .>> wsNoNl())
+            (pstring "def" >>. ws >>. typedIdentifier .>> wsNoNl() .>> pstring "=" .>> wsNoNl())
             (attempt (blockExpr()) <|> (wsNoNl() >>. (sepBy1 expression (pstring "," .>> ws) |>> fun exprs ->
                 match exprs with
                 | [single] -> single
                 | multiple -> TupleExpr multiple)))
-            (fun name expr -> DefStatement(name, expr))
+            (fun (name, typeOpt) expr -> DefStatement(name, typeOpt, expr))
     
     let exprStatement = wsNoNl() >>. exprWithoutCrossingNewlines |>> ExprStatement  // Only consume spaces/tabs, not newlines
     
@@ -670,12 +713,12 @@ let moduleDecl: Parser<TopLevelItem, unit> =
 // Parser for value definition (top-level)
 let valueDef: Parser<TopLevelItem, unit> =
     pipe2
-        (pstring "def" >>. ws >>. identifier .>> wsNoNl() .>> pstring "=")  // Don't consume newlines after =
+        (pstring "def" >>. ws >>. typedIdentifier .>> wsNoNl() .>> pstring "=")  // Don't consume newlines after =
         (attempt (blockExpr()) <|> (wsInline >>. (sepBy1 expression (pstring "," .>> ws) |>> fun exprs ->
             match exprs with
             | [single] -> single
             | multiple -> TupleExpr multiple)))
-        (fun name expr -> Def(ValueDef(name, expr)))
+        (fun (name, typeOpt) expr -> Def(ValueDef(name, typeOpt, expr)))
     <?> "value definition"
 
 // Parser for top-level expressions (script-style)

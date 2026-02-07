@@ -14,7 +14,7 @@ let ``Parse block with two literals`` () =
     | Result.Ok module' ->
         module' |> should haveLength 1
         match module'.[0] with
-        | Def (ValueDef (name, Block statements)) ->
+        | Def (ValueDef (name, _, Block statements)) ->
             name |> should equal "test"
             statements |> should haveLength 2
             match statements.[0] with
@@ -48,7 +48,7 @@ let ``Parse sibling blocks`` () =
     | Result.Ok module' ->
         module' |> should haveLength 2
         match module'.[0], module'.[1] with
-        | Def (ValueDef (firstName, Block firstStatements)), Def (ValueDef (secondName, Block secondStatements)) ->
+        | Def (ValueDef (firstName, _, Block firstStatements)), Def (ValueDef (secondName, _, Block secondStatements)) ->
             firstName |> should equal "first"
             secondName |> should equal "second"
             firstStatements |> should haveLength 2

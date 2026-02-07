@@ -19,6 +19,6 @@ let ``Transpile function call with tuple args`` () =
 
 [<Fact>]
 let ``Transpile lambda`` () =
-    let expr = Lambda(["x"; "y"], BinaryOp("+", IdentifierExpr "x", IdentifierExpr "y"))
+    let expr = Lambda([("x", None); ("y", None)], BinaryOp("+", IdentifierExpr "x", IdentifierExpr "y"))
     let result = transpileExpression expr
     result |> should equal "(x, y) => (x + y)"

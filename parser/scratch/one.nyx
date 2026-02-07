@@ -8,11 +8,21 @@ def main = { x ->
 
     def gt5 = { > 5 }
 
+    def passes = 6 
+        \gt5
+        \gt5
+
     def myTag = #some("data")
+
+    def getName = { .name }
     
     match x
     | "hi" -> "bye"
     | "one" -> "two"
     | (a = "a", b = "b", c = c) ->
         c
+
+    def items = [1, 2, 3]
+
+    def items2 = items \map { .name }
 }

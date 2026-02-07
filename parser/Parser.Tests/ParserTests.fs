@@ -594,13 +594,10 @@ let ``Parse shorthand lambda with property access`` () =
             parameters |> should haveLength 1
             parameters.[0] |> should equal "x"
             match body with
-            | FunctionCall (funcName, args) ->
-                funcName |> should equal "name"
-                args |> should haveLength 1
-                match args.[0] with
-                | IdentifierExpr arg -> arg |> should equal "x"
-                | _ -> failwith "Expected identifier argument"
-            | _ -> failwith "Expected function call in shorthand property lambda body"
+            | MemberAccess (IdentifierExpr obj, field) ->
+                obj |> should equal "x"
+                field |> should equal "name"
+            | _ -> failwith "Expected member access in shorthand property lambda body"
         | _ -> failwith "Expected Def with Lambda"
     | Result.Error err -> failwith $"Parse should succeed, got: {err}"
 

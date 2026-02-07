@@ -3,7 +3,9 @@ const message = "Hello world";
 const main = (x) => (() => {
   println(message);
   const gt5 = (x) => (x > 5);
+  const passes = gt5(gt5(6));
   const myTag = { tag: "some", value: "data" };
+  const getName = (x) => x.name;
   (() => {
   const _match0 = x;
   if (_match0 === "hi") {
@@ -18,4 +20,6 @@ const main = (x) => (() => {
   }
   throw new Error("Match failed");
 })();
+  const items = [1, 2, 3];
+  const items2 = map(items, (x) => x.name);
 })();

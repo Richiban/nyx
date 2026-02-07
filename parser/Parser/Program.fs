@@ -462,16 +462,20 @@ opp.AddOperator(InfixOperator("!=", ws, 3, Associativity.Left, fun x y -> Binary
 
 // Pipe parser - handles expr \func or expr \func(args)
 let pipeTarget =
-    pipe2
+    pipe3
         identifier
         (opt (between (pstring "(") (pstring ")") (ws >>. (sepBy1 expression (pstring "," .>> ws) |>> fun exprs ->
             match exprs with
             | [single] -> single
             | multiple -> TupleExpr multiple))))
-        (fun funcName argOpt ->
-            match argOpt with
-            | Some arg -> (funcName, [arg])
-            | None -> (funcName, [])
+        (opt (attempt (wsInline >>. lambda)))
+        (fun funcName argOpt trailingLambdaOpt ->
+            let baseArgs = match argOpt with Some arg -> [arg] | None -> []
+            let args =
+                match trailingLambdaOpt with
+                | Some lambdaExpr -> baseArgs @ [lambdaExpr]
+                | None -> baseArgs
+            (funcName, args)
         )
 
 // Inline operator precedence parser (no newlines in operator whitespace)
@@ -575,13 +579,10 @@ do
             )
         ))
     
-    // Shorthand lambda: { .name } means { x -> x.name } (property access - for now just parse as identifier)
-    // Note: We'll need proper member access syntax later, for now treat .name as accessing a field
+    // Shorthand lambda: { .name } means { x -> x.name }
     let shorthandPropertyAccess =
         pstring "." >>. identifier |>> (fun propName ->
-            // For now, we'll represent this as a function call to a getter
-            // Later we can add proper member access to the AST
-            Lambda(["x"], FunctionCall(propName, [IdentifierExpr "x"]))
+            Lambda(["x"], MemberAccess(IdentifierExpr "x", propName))
         )
     
     lambdaRef :=

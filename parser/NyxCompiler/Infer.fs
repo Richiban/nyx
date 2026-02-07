@@ -345,6 +345,24 @@ let rec private inferExpr (env: TypeEnv) (state: InferState) (expr: Expression) 
                 | LiteralPattern literal ->
                     let constrained = addConstraint scrutineeTy (literalType literal) state'
                     Ok (env', constrained, mkTypedPattern pattern scrutineeTy)
+                | GuardPattern(_, guardExpr) ->
+                    match inferExpr env' state' guardExpr with
+                    | Ok (guardTyped, nextState) ->
+                        let constrained = addConstraint guardTyped.Type (literalType (BoolLit true)) nextState
+                        Ok (env', constrained, mkTypedPattern pattern scrutineeTy)
+                    | Error err -> Error err
+                | RangePattern(startExpr, endExpr) ->
+                    match inferExpr env' state' startExpr with
+                    | Error err -> Error err
+                    | Ok (startTyped, nextState) ->
+                        match inferExpr env' nextState endExpr with
+                        | Error err -> Error err
+                        | Ok (endTyped, finalState) ->
+                            let constrained =
+                                finalState
+                                |> addConstraint scrutineeTy startTyped.Type
+                                |> addConstraint startTyped.Type endTyped.Type
+                            Ok (env', constrained, mkTypedPattern pattern scrutineeTy)
                 | TuplePattern patterns ->
                     let mutable currentState = state'
                     let itemTypes, nextState =
@@ -382,7 +400,84 @@ let rec private inferExpr (env: TypeEnv) (state: InferState) (expr: Expression) 
                         | Ok (nextEnv, nextState, _) ->
                             Ok (nextEnv, nextState, mkTypedPattern pattern scrutineeTy)
                         | Error err -> Error err
-                | _ -> Ok (env', state', mkTypedPattern pattern scrutineeTy)
+                | ListPattern(patterns, splatOpt) ->
+                    let elementTy, nextState = freshVar state'
+                    let constrained = addConstraint scrutineeTy (TyPrimitive "list") nextState
+                    let mutable innerEnv = env'
+                    let mutable innerState = constrained
+                    let mutable innerErrors: Diagnostic list = []
+                    for pat in patterns do
+                        match inferPattern innerEnv innerState elementTy pat with
+                        | Ok (nextEnv, nextState, _) ->
+                            innerEnv <- nextEnv
+                            innerState <- nextState
+                        | Error err -> innerErrors <- err
+                    let innerStateWithSplat =
+                        match splatOpt with
+                        | Some (IdentifierPattern name) ->
+                            let scheme = TypeEnv.mono (TyPrimitive "list")
+                            TypeEnv.extend name scheme innerEnv |> ignore
+                            innerState
+                        | _ -> innerState
+                    if innerErrors.IsEmpty then
+                        Ok (innerEnv, innerStateWithSplat, mkTypedPattern pattern scrutineeTy)
+                    else
+                        Error innerErrors
+                | ListSplatMiddle(prefix, suffix) ->
+                    let elementTy, nextState = freshVar state'
+                    let constrained = addConstraint scrutineeTy (TyPrimitive "list") nextState
+                    let mutable innerEnv = env'
+                    let mutable innerState = constrained
+                    let mutable innerErrors: Diagnostic list = []
+                    for pat in prefix @ suffix do
+                        match inferPattern innerEnv innerState elementTy pat with
+                        | Ok (nextEnv, nextState, _) ->
+                            innerEnv <- nextEnv
+                            innerState <- nextState
+                        | Error err -> innerErrors <- err
+                    if innerErrors.IsEmpty then
+                        Ok (innerEnv, innerState, mkTypedPattern pattern scrutineeTy)
+                    else
+                        Error innerErrors
+                | RecordPattern(typeName, patterns) ->
+                    let mutable currentState = state'
+                    let itemTypes, nextState =
+                        patterns
+                        |> List.map (fun _ ->
+                            let ty, next = freshVar currentState
+                            currentState <- next
+                            ty)
+                        |> fun tys -> tys, currentState
+                    let constrained = addConstraint scrutineeTy (TyRecord (Map.empty)) nextState
+                    let mutable innerEnv = env'
+                    let mutable innerState = constrained
+                    let mutable innerErrors: Diagnostic list = []
+                    for (pat, ty) in List.zip patterns itemTypes do
+                        match inferPattern innerEnv innerState ty pat with
+                        | Ok (nextEnv, nextState, _) ->
+                            innerEnv <- nextEnv
+                            innerState <- nextState
+                        | Error err -> innerErrors <- err
+                    if innerErrors.IsEmpty then
+                        Ok (innerEnv, innerState, mkTypedPattern pattern scrutineeTy)
+                    else
+                        Error innerErrors
+                | RecordMemberPattern members ->
+                    let mutable innerEnv = env'
+                    let mutable innerState = state'
+                    let mutable innerErrors: Diagnostic list = []
+                    for (_, pat) in members do
+                        let memberTy, nextState = freshVar innerState
+                        innerState <- nextState
+                        match inferPattern innerEnv innerState memberTy pat with
+                        | Ok (nextEnv, nextState, _) ->
+                            innerEnv <- nextEnv
+                            innerState <- nextState
+                        | Error err -> innerErrors <- err
+                    if innerErrors.IsEmpty then
+                        Ok (innerEnv, innerState, mkTypedPattern pattern scrutineeTy)
+                    else
+                        Error innerErrors
 
             let mutable armExprs: TypedExpr list = []
             let mutable typedArms: TypedMatchArm list = []

@@ -105,6 +105,31 @@ let ``Typecheck records typed match patterns`` () =
     Assert.True(matchHasPattern)
 
 [<Fact>]
+let ``Typecheck types list and guard patterns`` () =
+    let source =
+        "def result = match [1, 2]\n" +
+        "  | [x, y] -> x\n" +
+        "  | _ -> 0"
+    let result = Compiler.compile source
+    let typed = result.Typed.Value
+    let hasListPattern =
+        typed.Items
+        |> List.exists (function
+            | TypedDef (TypedValueDef(name, _, typedExpr)) when name = "result" ->
+                match typedExpr.MatchArms with
+                | Some arms ->
+                    arms
+                    |> List.exists (fun (patterns, _) ->
+                        patterns
+                        |> List.exists (fun pattern ->
+                            match pattern.Pattern with
+                            | ListPattern _ -> true
+                            | _ -> false))
+                | None -> false
+            | _ -> false)
+    Assert.True(hasListPattern)
+
+[<Fact>]
 let ``Compile reports diagnostics on parse error`` () =
     let source = "def message = "
     let result = Compiler.compile source

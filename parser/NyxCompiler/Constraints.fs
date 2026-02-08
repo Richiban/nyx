@@ -1,7 +1,11 @@
 namespace NyxCompiler
 
-/// A constraint between two types that must be equal.
-type Constraint = Ty * Ty
+type ConstraintKind =
+    | Equal
+    | Assignable
+
+/// A constraint between two types.
+type Constraint = Ty * Ty * ConstraintKind
 
 type ConstraintSet = Constraint list
 

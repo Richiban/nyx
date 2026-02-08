@@ -203,14 +203,18 @@ let ``Typecheck rejects distinct nominal types`` () =
     Assert.Contains("Type mismatch", message)
 
 [<Fact>]
-let ``Typecheck rejects private nominal assignability`` () =
+let ``Typecheck allows local private nominal construction`` () =
     let source =
         "type @Token = private string\n" +
         "def token: @Token = \"secret\""
     let result = Compiler.compile source
-    Assert.False(result.Diagnostics.IsEmpty)
-    let message = result.Diagnostics |> List.head |> fun diag -> diag.Message
-    Assert.Contains("Type mismatch", message)
+    Assert.True(result.Diagnostics.IsEmpty)
+    let typed = result.Typed.Value
+    match typed.Types.["token"] with
+    | TyNominal(name, underlying, true) ->
+        Assert.Equal("@Token", name)
+        Assert.Equal(TyPrimitive "string", underlying)
+    | other -> Assert.True(false, $"Unexpected token type: %A{other}")
 
 [<Fact>]
 let ``Typecheck match arms agree`` () =
@@ -340,7 +344,7 @@ let ``Compile reports diagnostics on parse error`` () =
 [<Fact>]
 let ``Unifier binds type variables`` () =
     let tvar = TyVar { Id = 1; Name = None }
-    let constraints: ConstraintSet = [ (tvar, TyPrimitive "string") ]
+    let constraints: ConstraintSet = [ (tvar, TyPrimitive "string", Equal) ]
     let result = Unifier.unify constraints
     match result with
     | Ok subst -> Assert.Equal(Some (TyPrimitive "string"), subst |> Map.tryFind 1)
@@ -349,7 +353,7 @@ let ``Unifier binds type variables`` () =
 [<Fact>]
 let ``Unifier rejects occurs check`` () =
     let tvar = TyVar { Id = 2; Name = None }
-    let constraintSet: ConstraintSet = [ (tvar, TyFunc(tvar, TyPrimitive "int")) ]
+    let constraintSet: ConstraintSet = [ (tvar, TyFunc(tvar, TyPrimitive "int"), Equal) ]
     let result = Unifier.unify constraintSet
     match result with
     | Ok _ -> Assert.True(false, "Expected occurs check failure")
@@ -359,7 +363,7 @@ let ``Unifier rejects occurs check`` () =
 let ``Unifier allows record width subtyping`` () =
     let narrow = TyRecord (Map.ofList [ ("a", TyPrimitive "int") ])
     let wide = TyRecord (Map.ofList [ ("a", TyPrimitive "int"); ("b", TyPrimitive "string") ])
-    let result = Unifier.unify [ (narrow, wide) ]
+    let result = Unifier.unify [ (narrow, wide, Equal) ]
     match result with
     | Ok _ -> Assert.True(true)
     | Error message -> Assert.True(false, message)
@@ -369,8 +373,8 @@ let ``Unifier matches unions by set and width`` () =
     let unionA = TyUnion [ TyTag("some", Some (TyPrimitive "int")); TyTag("notFound", None) ]
     let unionB = TyUnion [ TyTag("notFound", None); TyTag("some", Some (TyPrimitive "int")) ]
     let unionWide = TyUnion [ TyTag("some", Some (TyPrimitive "int")); TyTag("notFound", None); TyTag("error", Some (TyPrimitive "string")) ]
-    let resultOrder = Unifier.unify [ (unionA, unionB) ]
-    let resultWidth = Unifier.unify [ (unionA, unionWide) ]
+    let resultOrder = Unifier.unify [ (unionA, unionB, Equal) ]
+    let resultWidth = Unifier.unify [ (unionA, unionWide, Equal) ]
     match resultOrder with
     | Ok _ -> Assert.True(true)
     | Error message -> Assert.True(false, message)

@@ -6,16 +6,19 @@ open NyxCompiler
 type TypedExpr = NyxCompiler.TypedExpr
 type TypedStatement = NyxCompiler.TypedStatement
 
-type InferState = { NextId: int; Constraints: ConstraintSet; TypeVars: Map<string, TyVar>; TypeDefs: Map<string, Ty * bool> }
+type InferState = { NextId: int; Constraints: ConstraintSet; TypeVars: Map<string, TyVar>; TypeDefs: Map<string, Ty * bool>; LocalNominals: Set<string>; LocalPrivateNominals: Set<string> }
 
-let emptyState = { NextId = 0; Constraints = []; TypeVars = Map.empty; TypeDefs = Map.empty }
+let emptyState = { NextId = 0; Constraints = []; TypeVars = Map.empty; TypeDefs = Map.empty; LocalNominals = Set.empty; LocalPrivateNominals = Set.empty }
 
 let private freshVar (state: InferState) =
     let var = { Id = state.NextId; Name = None }
     TyVar var, { state with NextId = state.NextId + 1 }
 
 let private addConstraint left right (state: InferState) =
-    { state with Constraints = (left, right) :: state.Constraints }
+    { state with Constraints = (left, right, Equal) :: state.Constraints }
+
+let private addAssignableConstraint left right (state: InferState) =
+    { state with Constraints = (left, right, Assignable) :: state.Constraints }
 
 let private primitiveType name =
     TyPrimitive name
@@ -68,7 +71,8 @@ let rec private typeExprToTy (state: InferState) (typeExpr: TypeExpr) : Ty * Inf
         | Some prim -> prim, state
         | None ->
             match state.TypeDefs |> Map.tryFind name with
-            | Some (underlying, isPrivate) -> TyNominal(name, underlying, isPrivate), state
+            | Some (underlying, isPrivate) when name.StartsWith("@") -> TyNominal(name, underlying, isPrivate), state
+            | Some (underlying, _) -> underlying, state
             | None -> TyPrimitive name, state
     | TypeVar name ->
         match state.TypeVars |> Map.tryFind name with
@@ -150,12 +154,16 @@ let rec private typeExprToTy (state: InferState) (typeExpr: TypeExpr) : Ty * Inf
         typeExprToTy state baseType
 
 let private registerTypeDef (state: InferState) (name: Identifier) (modifiers: TypeDefModifier list) (body: TypeExpr) =
-    if name.StartsWith("@") then
-        let underlyingTy, next = typeExprToTy state body
-        let isPrivate = isPrivateType modifiers
-        { next with TypeDefs = next.TypeDefs |> Map.add name (underlyingTy, isPrivate) }
-    else
-        state
+    let underlyingTy, next = typeExprToTy state body
+    let isPrivate = isPrivateType modifiers
+    let nextNominals =
+        if name.StartsWith("@") then next.LocalNominals |> Set.add name else next.LocalNominals
+    let nextPrivate =
+        if name.StartsWith("@") && isPrivate then next.LocalPrivateNominals |> Set.add name else next.LocalPrivateNominals
+    { next with
+        TypeDefs = next.TypeDefs |> Map.add name (underlyingTy, isPrivate)
+        LocalNominals = nextNominals
+        LocalPrivateNominals = nextPrivate }
 
 let private instantiate (state: InferState) (scheme: TypeScheme) : Ty * InferState =
     if scheme.Quantified.IsEmpty then
@@ -231,9 +239,11 @@ let rec private inferExpr (env: TypeEnv) (state: InferState) (expr: Expression) 
                     argResults
                     |> List.choose (function Ok typedExpr -> Some typedExpr.Type | _ -> None)
                 let retTy, nextState = freshVar current
+                let expectedInput, nextState2 = freshVar nextState
                 let inputTy = inputTypeFromArgs argTys
-                let withConstraint = addConstraint funcTy (TyFunc(inputTy, retTy)) nextState
-                Ok (mkTypedExpr expr retTy None None None, withConstraint)
+                let withFuncConstraint = addConstraint funcTy (TyFunc(expectedInput, retTy)) nextState2
+                let withAssignable = addAssignableConstraint inputTy expectedInput withFuncConstraint
+                Ok (mkTypedExpr expr retTy None None None, withAssignable)
             else
                 Error errors
     | Lambda(args, body) ->
@@ -617,7 +627,13 @@ and inferLambdaWithExpected (env: TypeEnv) (state: InferState) (args: (Identifie
     | Ok (bodyExpr, next) ->
         let withReturnConstraint =
             match expectedReturnOpt with
-            | Some expectedReturn -> addConstraint bodyExpr.Type expectedReturn next
+            | Some expectedReturn ->
+                match expectedReturn with
+                | TyNominal(name, underlying, _) when state.LocalNominals.Contains name ->
+                    match bodyExpr.Type with
+                    | TyNominal _ -> addAssignableConstraint bodyExpr.Type expectedReturn next
+                    | _ -> addAssignableConstraint bodyExpr.Type underlying next
+                | _ -> addAssignableConstraint bodyExpr.Type expectedReturn next
             | None -> next
         let inputTy =
             match expectedInputOpt with
@@ -656,7 +672,18 @@ and inferBlock (env: TypeEnv) (state: InferState) (statements: Statement list) :
                     | Ok (typedExpr, next) ->
                         let declaredTy, finalState =
                             match expectedDeclaredOpt with
-                            | Some declaredTy -> declaredTy, addConstraint typedExpr.Type declaredTy next
+                            | Some declaredTy ->
+                                match expr with
+                                | Lambda _ -> declaredTy, next
+                                | _ ->
+                                    let updatedState =
+                                        match declaredTy with
+                                        | TyNominal(name, underlying, _) when current.LocalNominals.Contains name ->
+                                            match typedExpr.Type with
+                                            | TyNominal _ -> addAssignableConstraint typedExpr.Type declaredTy next
+                                            | _ -> addAssignableConstraint typedExpr.Type underlying next
+                                        | _ -> addAssignableConstraint typedExpr.Type declaredTy next
+                                    declaredTy, updatedState
                             | None -> typedExpr.Type, next
                         current <- finalState
                         let scheme = TypeEnv.generalize env' declaredTy
@@ -710,7 +737,18 @@ let inferModuleWithEnv (initialEnv: TypeEnv) (initialState: InferState) (module'
             | Ok (typedExpr, next) ->
                 let declaredTy, finalState =
                     match expectedDeclaredOpt with
-                    | Some declaredTy -> declaredTy, addConstraint typedExpr.Type declaredTy next
+                    | Some declaredTy ->
+                        match expr with
+                        | Lambda _ -> declaredTy, next
+                        | _ ->
+                            let updatedState =
+                                match declaredTy with
+                                | TyNominal(name, underlying, _) when state.LocalNominals.Contains name ->
+                                    match typedExpr.Type with
+                                    | TyNominal _ -> addAssignableConstraint typedExpr.Type declaredTy next
+                                    | _ -> addAssignableConstraint typedExpr.Type underlying next
+                                | _ -> addAssignableConstraint typedExpr.Type declaredTy next
+                            declaredTy, updatedState
                     | None -> typedExpr.Type, next
                 state <- finalState
                 let scheme = TypeEnv.generalize env declaredTy

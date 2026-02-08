@@ -2,3 +2,15 @@
 import "four.1.nyx" as fp1
 
 def p: @Person = fp1.makePerson()
+
+type PersonShadow = (
+    name: string
+    age: int
+)
+
+def p2: PersonShadow = p
+
+def p3: @Person = p2
+
+def e = fp1.makeEmail()
+

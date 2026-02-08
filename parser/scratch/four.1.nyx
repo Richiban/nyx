@@ -10,3 +10,7 @@ export type @Person = (
 export def makePerson: () -> @Person = {
     ( name = "", age = 1 )
 }
+
+export def makeEmail: () -> @Email = {
+   ""
+}

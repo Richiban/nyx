@@ -17,10 +17,9 @@ def g: (#some(string) | #nil | #notFound) -> string = { o ->
 
 g(u)
 
-def mapOption: ((#some(a) | r), a -> b) -> #some(b) | r = { o, f ->
-    match o
-    | #some(v) -> #some(f(v))
-    | other -> other
+def mapOption: ((#some(a) | r), a -> b) -> #some(b) | r = {
+    | #some(v), f -> #some(f(v))
+    | other, _ -> other
 }
 
 def l: #some(string) | #nil = #some("")

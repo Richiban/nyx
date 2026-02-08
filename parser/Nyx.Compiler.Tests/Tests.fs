@@ -266,6 +266,20 @@ let ``Typecheck captures typed block statements in lambda`` () =
     Assert.True(hasBlockStatements)
 
 [<Fact>]
+let ``Typecheck supports match shorthand lambda`` () =
+    let source =
+        "def f: string -> int = {\n" +
+        "  | \"one\" -> 1\n" +
+        "  | \"two\" -> 2\n" +
+        "  | _ -> 0\n" +
+        "}\n" +
+        "def result = f(\"one\")"
+    let result = Compiler.compile source
+    Assert.True(result.Diagnostics.IsEmpty)
+    let typed = result.Typed.Value
+    Assert.Equal(TyPrimitive "int", typed.Types.["result"])
+
+[<Fact>]
 let ``Typecheck records typed match patterns`` () =
     let source =
         "def result = match 1\n" +

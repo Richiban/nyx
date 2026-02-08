@@ -1,0 +1,5 @@
+
+def f: int -> string = {
+    | 1 -> "one"
+    | _ -> "many"
+}

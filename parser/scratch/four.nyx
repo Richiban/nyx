@@ -10,7 +10,5 @@ type PersonShadow = (
 
 def p2: PersonShadow = p
 
-def p3: @Person = p2
-
 def e = fp1.makeEmail()
 

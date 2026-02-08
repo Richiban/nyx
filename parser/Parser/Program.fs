@@ -860,6 +860,24 @@ do
         pstring "." >>. identifier |>> (fun propName ->
             Lambda([("x", None)], MemberAccess(IdentifierExpr "x", propName))
         )
+
+    // Shorthand match lambda: { | pat -> expr ... }
+    let shorthandMatchLambda =
+        let matchArm =
+            pstring "|" >>. ws >>. sepBy1 pattern (pstring "," .>> ws) .>>. (pstring "->" >>. ws >>. exprWithoutCrossingNewlines)
+        let matchArms = many1 (attempt (ws >>. matchArm))
+        matchArms |>> (fun arms ->
+            let maxArity =
+                arms
+                |> List.map (fun (patterns, _) -> patterns.Length)
+                |> List.max
+            let argNames =
+                [1 .. maxArity]
+                |> List.map (fun index -> ($"arg{index}", None))
+            let scrutinees =
+                argNames
+                |> List.map (fun (name, _) -> IdentifierExpr name)
+            Lambda(argNames, Match(scrutinees, arms)))
     
     lambdaRef :=
         between (pstring "{") (pstring "}") (
@@ -867,6 +885,7 @@ do
                 attempt shorthandUnaryOp
                 attempt shorthandBinaryOp
                 attempt shorthandPropertyAccess
+                attempt shorthandMatchLambda
                 attempt lambdaWithParams
                 lambdaNoParams
             ] .>> skipMany (skipAnyOf " \t\r\n")

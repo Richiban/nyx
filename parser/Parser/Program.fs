@@ -38,6 +38,8 @@ type TypeExpr =
     | TypeUnion of TypeExpr list
     | TypeIntersection of TypeExpr list
     | TypeOptional of TypeExpr
+    | TypeContext of TypeExpr list
+    | TypeWithContext of TypeExpr list * TypeExpr
     | TypeConstraint of Identifier * TypeExpr * Expression
     | TypeWhere of TypeExpr * Expression
 
@@ -60,6 +62,7 @@ and Expression =
     | TagExpr of Identifier * Expression option  // #tagName or #tagName(expr)
     | IfExpr of Expression * Expression * Expression  // if condition then trueExpr else falseExpr
     | MemberAccess of Expression * Identifier  // expr.field
+    | UseIn of UseBinding * Expression
 
 // Record field: either named (x = expr) or positional (expr)
 and RecordField =
@@ -86,7 +89,12 @@ and Statement =
     | DefStatement of bool * Identifier * TypeExpr option * Expression
     | TypeDefStatement of Identifier * TypeDefModifier list * (Identifier * TypeExpr option) list * TypeExpr
     | ImportStatement of ImportItem list
+    | UseStatement of UseBinding
     | ExprStatement of Expression
+
+and UseBinding =
+    | UseValue of Expression
+    | UseAssign of Identifier * Expression
 
 // Helper type for parsing list patterns
 type ListPatternElement =
@@ -502,6 +510,15 @@ do
             (between (pstring "(") (pstring ")") (sepBy1 (ws >>. typeExpr) (pstring "," .>> ws)))
             (fun name args -> TypeApply(name, args))
 
+    let contextSet =
+        between
+            (pstring "[")
+            (wsNoNl() >>. pstring "]")
+            (sepBy1
+                (wsNoNl() >>. (attempt typeApply <|> typeIdentifier))
+                (wsNoNl() >>. pstring "+" >>. wsNoNl()))
+        |>> TypeContext
+
     let typeConstraint =
         pipe3
             identifierNoWs
@@ -514,6 +531,7 @@ do
             attempt typeConstraint
             attempt typeTag
             attempt typeApply
+            attempt contextSet
             attempt typeRecord
             attempt typeTupleOrParen
             typeIdentifier
@@ -546,7 +564,18 @@ do
                 | TypeTuple _ -> TypeFunc(left, right)
                 | _ -> TypeFunc(left, right))
 
-    typeExprRef := typeArrow
+    let typeWithContext =
+        (attempt (
+            pipe2
+                (contextSet .>> ws)
+                (opt (attempt typeArrow))
+                (fun ctx typeOpt ->
+                    match typeOpt with
+                    | Some t -> TypeWithContext(ctx |> (function TypeContext items -> items | _ -> []), t)
+                    | None -> ctx)))
+        <|> typeArrow
+
+    typeExprRef := typeWithContext
     ()
 
 let typedIdentifier: Parser<Identifier * TypeExpr option, unit> =
@@ -570,7 +599,7 @@ let typeDefCore: Parser<Definition, unit> =
             ]))
 
     let typeParams =
-        between (pstring "(") (pstring ")") (sepBy1 (ws >>. typeParam) (pstring "," .>> ws))
+        between (pstring "(") (pstring ")") (sepBy1 (wsNoNl() >>. typeParam) (pstring "," .>> wsNoNl()))
 
     let typeExprWithWhere =
         pipe2 typeExpr (opt (attempt (ws >>. pstring "where" >>. ws >>. expression))) (fun baseType whereOpt ->
@@ -578,19 +607,44 @@ let typeDefCore: Parser<Definition, unit> =
             | Some predicate -> TypeWhere(baseType, predicate)
             | None -> baseType)
 
-    pipe5
-        typeModifiers
-        (pstring "type" >>. ws >>. typeNameIdentifier)
-        (opt (attempt (wsNoNl() >>. typeParams)))
-        (wsNoNl() >>. pstring "=" >>. ws >>. opt (attempt (pstring "private" >>. ws)))
-        typeExprWithWhere
-        (fun modifiers name paramsOpt privateOpt typeValue ->
-            let typeParams = defaultArg paramsOpt []
-            let modifiers =
-                match privateOpt with
-                | Some _ -> Private :: modifiers
-                | None -> modifiers
-            TypeDef(name, modifiers, typeParams, typeValue))
+    let applyPrivate modifiers privateOpt =
+        match privateOpt with
+        | Some _ -> Private :: modifiers
+        | None -> modifiers
+
+    let contextName =
+        typeNameIdentifier >>= fun name ->
+            if name = "type" then
+                fail "expected context name"
+            else
+                preturn name
+
+    let contextDef =
+        pipe5
+            (opt (attempt (pstring "export" >>. ws)))
+            (pstring "context" >>. ws >>. contextName)
+            (opt (attempt (wsNoNl() >>. typeParams)))
+            (wsNoNl() >>. pstring "=" >>. ws >>. opt (attempt (pstring "private" >>. ws)))
+            typeExprWithWhere
+            (fun exportOpt name paramsOpt privateOpt typeValue ->
+                let typeParams = defaultArg paramsOpt []
+                let baseMods = if exportOpt.IsSome then [Export] else []
+                let modifiers = applyPrivate (Context :: baseMods) privateOpt
+                TypeDef(name, modifiers, typeParams, typeValue))
+
+    let typeDefWithModifiers =
+        pipe5
+            typeModifiers
+            (pstring "type" >>. ws >>. typeNameIdentifier)
+            (opt (attempt (wsNoNl() >>. typeParams)))
+            (wsNoNl() >>. pstring "=" >>. ws >>. opt (attempt (pstring "private" >>. ws)))
+            typeExprWithWhere
+            (fun modifiers name paramsOpt privateOpt typeValue ->
+                let typeParams = defaultArg paramsOpt []
+                let modifiers = applyPrivate modifiers privateOpt
+                TypeDef(name, modifiers, typeParams, typeValue))
+
+    attempt contextDef <|> typeDefWithModifiers
     <?> "type definition"
 
 let valueDefCore: Parser<Definition, unit> =
@@ -686,10 +740,29 @@ let ifExpr =
         (fun cond thenExpr elseExpr -> IfExpr(cond, thenExpr, elseExpr))
     <?> "if expression"
 
+// Use binding parser: either `use Name = expr` or `use expr`
+let useBinding =
+    let useAssign =
+        pipe2
+            (typeNameIdentifier .>> wsNoNl() .>> pstring "=" .>> wsNoNl())
+            expression
+            (fun name expr -> UseAssign(name, expr))
+    let useValue = expression |>> UseValue
+    attempt useAssign <|> useValue
+
+// Use-in expression: use X in expr
+let useInExpr =
+    pipe2
+        (pstring "use" >>. ws >>. useBinding .>> ws .>> pstring "in" .>> ws)
+        expression
+        (fun binding body -> UseIn(binding, body))
+    <?> "use-in expression"
+
 // Primary expression (literals, identifiers, function calls, lambdas, parenthesized expressions)
 // Version without trailing whitespace consumption (for use in block contexts)
 let primaryExprNoWs =
     choice [
+        attempt useInExpr
         attempt ifExpr  // if-then-else must be early to avoid partial matches
         attempt matchExpr
         attempt lambda
@@ -948,6 +1021,10 @@ do
     let importStatement =
         pstring "import" >>. wsNoNl() >>. importItems |>> ImportStatement
 
+    let useStatement =
+        (pstring "use" >>. ws >>. useBinding .>> notFollowedBy (ws >>. pstring "in"))
+        |>> UseStatement
+
     let typeDefStatement =
         typeDefCore |>> function
             | TypeDef(name, modifiers, typeParams, typeValue) ->
@@ -966,7 +1043,7 @@ do
     
     let exprStatement = wsNoNl() >>. exprWithoutCrossingNewlines |>> ExprStatement  // Only consume spaces/tabs, not newlines
     
-    statementRef := (attempt importStatement <|> attempt typeDefStatement <|> attempt defStatement <|> exprStatement) <?> "statement"
+    statementRef := (attempt importStatement <|> attempt typeDefStatement <|> attempt defStatement <|> attempt useStatement <|> exprStatement) <?> "statement"
 
 // Parser for module declaration
 let moduleDecl: Parser<TopLevelItem, unit> =

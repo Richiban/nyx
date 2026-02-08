@@ -1,0 +1,8 @@
+context type Console = (
+  println: string -> ()
+)
+
+context type Sum(a) = (
+  zero: a
+  plus: a, a -> a
+)

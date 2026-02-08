@@ -148,6 +148,11 @@ let rec private typeExprToTy (state: InferState) (typeExpr: TypeExpr) : Ty * Inf
     | TypeOptional inner ->
         let innerTy, next = typeExprToTy state inner
         TyUnion [ innerTy; TyTag("none", None) ], next
+    | TypeContext _ ->
+        let ty, next = freshVar state
+        ty, next
+    | TypeWithContext(_, inner) ->
+        typeExprToTy state inner
     | TypeConstraint(_, baseType, _) ->
         typeExprToTy state baseType
     | TypeWhere(baseType, _) ->
@@ -273,6 +278,13 @@ let rec private inferExpr (env: TypeEnv) (state: InferState) (expr: Expression) 
     | Pipe(value, name, args) ->
         let callArgs = value :: args
         inferExpr env state (FunctionCall(name, callArgs))
+    | UseIn(binding, body) ->
+        match inferUseBinding env state binding with
+        | Error err -> Error err
+        | Ok (_, nextState) ->
+            match inferExpr env nextState body with
+            | Ok (typedBody, finalState) -> Ok (mkTypedExpr expr typedBody.Type (Some typedBody) None None, finalState)
+            | Error err -> Error err
     | Block statements ->
         inferBlock env state statements
     | TupleExpr items ->
@@ -613,6 +625,11 @@ let rec private inferExpr (env: TypeEnv) (state: InferState) (expr: Expression) 
             let ty, next = freshVar state
             Ok (mkTypedExpr expr ty None None None, next)
 
+and inferUseBinding (env: TypeEnv) (state: InferState) (binding: UseBinding) : Result<TypedExpr * InferState, Diagnostic list> =
+    match binding with
+    | UseValue expr
+    | UseAssign(_, expr) -> inferExpr env state expr
+
 and inferLambdaWithExpected (env: TypeEnv) (state: InferState) (args: (Identifier * TypeExpr option) list) (body: Expression) (expectedInputOpt: Ty option) (expectedReturnOpt: Ty option) =
     let mutable current = state
     let mutable env' = env
@@ -706,6 +723,13 @@ and inferBlock (env: TypeEnv) (state: InferState) (statements: Statement list) :
             | TypeDefStatement(name, modifiers, parameters, body) ->
                 current <- registerTypeDef current name modifiers body
                 typedStatements <- typedStatements @ [ TypedTypeDefStatement(name, modifiers, parameters, body) ]
+            | UseStatement binding ->
+                if errors.IsEmpty then
+                    match inferUseBinding env' current binding with
+                    | Ok (typedExpr, next) ->
+                        current <- next
+                        typedStatements <- typedStatements @ [ TypedUseStatement(binding, Some typedExpr) ]
+                    | Error err -> errors <- err
             | ExprStatement expr ->
                 if errors.IsEmpty then
                     match inferExpr env' current expr with

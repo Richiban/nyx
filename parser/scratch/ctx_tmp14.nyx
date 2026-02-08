@@ -1,0 +1,5 @@
+context Console = (
+  println: string -> ()
+)
+
+def sayHello: [@Console] () -> () = { println("Hello") }

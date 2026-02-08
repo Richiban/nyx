@@ -1,0 +1,5 @@
+context Console = (
+  println: string -> ()
+)
+
+context Sum = int

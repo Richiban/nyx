@@ -31,6 +31,7 @@ and TypedStatement =
     | TypedExprStatement of TypedExpr
     | TypedImportStatement of ImportItem list
     | TypedTypeDefStatement of Identifier * TypeDefModifier list * (Identifier * TypeExpr option) list * TypeExpr
+    | TypedUseStatement of UseBinding * TypedExpr option
 
 type TypedDefinition =
     | TypedValueDef of bool * Identifier * TypeExpr option * TypedExpr

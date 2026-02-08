@@ -1,0 +1,4 @@
+context Sum(a) = (
+  zero: a
+  plus: a, a -> a
+)

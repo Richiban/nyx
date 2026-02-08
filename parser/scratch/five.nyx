@@ -3,3 +3,7 @@ def f: int -> string = {
     | 1 -> "one"
     | _ -> "many"
 }
+
+def g: [Console] = {
+    println("Hello world")
+}

@@ -83,6 +83,9 @@ let rec transpileExpression (expr: Expression) : string =
         | multiple ->
             let argStrs = multiple |> List.map transpileExpression |> String.concat ", "
             sprintf "%s(%s, %s)" funcName exprStr argStrs
+    | UseIn(binding, body) ->
+        let bindingExpr = transpileUseBinding binding
+        sprintf "(() => { %s; return %s; })()" bindingExpr (transpileExpression body)
     
     | Block stmts ->
         let stmtStrs =
@@ -249,6 +252,11 @@ let rec transpileExpression (expr: Expression) : string =
 
         matchBody
 
+and transpileUseBinding (binding: UseBinding) : string =
+    match binding with
+    | UseValue expr -> transpileExpression expr
+    | UseAssign(_, expr) -> transpileExpression expr
+
 and transpileStatement (stmt: Statement) : string =
     match stmt with
     | DefStatement(_, name, _, expr) ->
@@ -257,6 +265,8 @@ and transpileStatement (stmt: Statement) : string =
         ""
     | ImportStatement _ ->
         ""
+    | UseStatement binding ->
+        sprintf "%s;" (transpileUseBinding binding)
     | ExprStatement expr ->
         sprintf "%s;" (transpileExpression expr)
 

@@ -1,0 +1,30 @@
+context Console = (
+  println: string -> ()
+)
+context Sum(a) = (
+  zero: a
+  plus: (a, a) -> a
+)
+def sayHello: [@Console] () -> () = {
+  println("Hello")
+}
+
+def add: [Sum(int)] int -> int = { x -> x }
+
+def readAndPrint: [Console + FileSystem] string -> () = { filename ->
+  println(filename)
+}
+
+def r = use PointSum in points \sum
+
+def main = {
+  use Emit = (
+    emit = { msg -> println(msg) }
+  )
+
+  use myState(0)
+
+  println("ok")
+}
+
+context Web = [Console + Logger + Http]

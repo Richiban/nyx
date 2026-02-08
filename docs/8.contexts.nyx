@@ -26,11 +26,11 @@ def f = {
 -- A value's context forms part of its type. You can specify a context only, still leaving 
 -- the rest of the type to be inferred
 
-def g: <@Console> = {
+def g: [@Console] = {
   println("Hello, world!") --  OK
 }
 -- Equivalent to:
-def g: <@Console> () -> () = {
+def g: [@Console] () -> () = {
   println("Hello, world!") --  OK
 }
 
@@ -49,7 +49,7 @@ context MyState(α) = (
   set: α -> ()
 )
 
-def myState: <@Memory> int -> MyState(int) = {
+def myState: [@Memory] int -> MyState(int) = {
   mut x = 0
 
   ( get = { x }
@@ -117,7 +117,7 @@ def sum: [Sum(α)] list(α) -> α
 ---
 We could explicitly define an instance of the Sum typeclass for Point:
 
-  impl pointSum: Sum(Point) = ( 
+  def pointSum: Sum(Point) = ( 
     `0` = Point(x = 0, y = 0)
     `+` = { a, b -> Point(x = a.x + b.x, y = a.y + b.y) }
   )
@@ -147,7 +147,7 @@ and use it explicitly
 
 ---
 
-impl pointSum: Sum(Point) = (
+def pointSum: Sum(Point) = (
   `0` = Point(x = 0, y = 0)
   `+` = { a, b -> Point(x = a.x + b.x, y = a.y + b.y) }
 )
@@ -156,7 +156,7 @@ def r = use PointSum in points \sum
 
 
 def addPoundsAndDollars
-  : <CurrencyConversionTable> Pounds, Dollars -> Dollars
+  : [CurrencyConversionTable] Pounds, Dollars -> Dollars
   = { p, d ->
     convert(p, #dollars) + d -- `convert` is a function on the `CurrencyConversionTable` context
   }
@@ -171,7 +171,7 @@ def main = {
 --  Functions can be annotated with a context. The functions on that context are now available to call within that function, and functions
 --  that in turn require that context can be called
 
-def sayHello: <@Console> () -> ()
+def sayHello: [@Console] () -> ()
   = {
     println("Hello world!")
   }
@@ -198,7 +198,7 @@ type Person = (
 )
 
 --  The `use` keyword loads an object into the context in a statement context. 
---  We can define a default impl at the top level of a module,
+--  We can define a default def at the top level of a module,
 --  so that anyone who loads our module gets this in their context automatically. Such declarations
 --  do not have to be named, but it's recommended
 default Write(Person) = (
@@ -221,7 +221,7 @@ context MyContext = (
   m: string -> ()
 )
 
-def g: <MyContext> = {
+def g: [MyContext] = {
   m("Hello world") -- `m` is in scope from context `MyContext`
 }
 
@@ -229,7 +229,7 @@ def f = {
   g() --  Error: `g` requires `MyContext` in the context
 }
 
-def f: <MyContext> = {
+def f: [MyContext] = {
   g() --  This works because we have added the context to `f`'s signature, passing the context
       --  requirement on to our caller
 }
@@ -241,17 +241,17 @@ context Emit = (
 )
 
 -- emit a standard greeting.
-def hello: <Emit>
+def hello: [Emit]
   = { emit("hello world!") }
 
 -- emit a standard greeting to the console.
-export def helloConsole1: <@Console>
+export def helloConsole1: [@Console] = {
   use Emit = (
     emit = { msg -> println(msg) }
   )
 
   hello()
-
+}
 
 -- Higher-order functions
 

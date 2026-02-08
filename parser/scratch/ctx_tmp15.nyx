@@ -1,0 +1,10 @@
+context Console = (
+  println: string -> ()
+)
+context Sum(a) = (
+  zero: a
+  plus: (a, a) -> a
+)
+context Web = [Console + Logger + Http]
+
+def sayHello: [@Console] () -> () = { println("Hello") }

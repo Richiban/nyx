@@ -160,6 +160,9 @@ module Compiler =
                                 | TypedDefStatement(isExport, name, typeOpt, expr) ->
                                     TypedDefStatement(isExport, name, typeOpt, applyTypedExpr expr)
                                 | TypedExprStatement expr -> TypedExprStatement (applyTypedExpr expr)
+                                | TypedUseStatement(binding, exprOpt) ->
+                                    let mappedExpr = exprOpt |> Option.map applyTypedExpr
+                                    TypedUseStatement(binding, mappedExpr)
                                 | TypedImportStatement _
                                 | TypedTypeDefStatement _ -> statement
                             and applyTypedMatchArm (patterns, expr) =
@@ -220,6 +223,9 @@ module Compiler =
                     | TypedDefStatement(isExport, name, typeOpt, expr) ->
                         TypedDefStatement(isExport, name, typeOpt, applyTypedExpr expr)
                     | TypedExprStatement expr -> TypedExprStatement (applyTypedExpr expr)
+                    | TypedUseStatement(binding, exprOpt) ->
+                        let mappedExpr = exprOpt |> Option.map applyTypedExpr
+                        TypedUseStatement(binding, mappedExpr)
                     | TypedImportStatement _
                     | TypedTypeDefStatement _ -> statement
                 and applyTypedMatchArm (patterns, expr) =

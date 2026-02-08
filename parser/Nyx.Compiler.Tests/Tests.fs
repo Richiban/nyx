@@ -102,9 +102,9 @@ let ``Typecheck allows record width subtyping`` () =
 [<Fact>]
 let ``Typecheck treats union order as assignable`` () =
     let source =
-        "def f: (string | int) -> int = { x -> 1 }\n" +
-        "def g: (int | string) -> int = f\n" +
-        "def result = g(1)"
+        "def f: (#some(int) | #notFound) -> int = { x -> 1 }\n" +
+        "def g: (#notFound | #some(int)) -> int = f\n" +
+        "def result = g(#some(1))"
     let result = Compiler.compile source
     Assert.True(result.Diagnostics.IsEmpty)
     let typed = result.Typed.Value
@@ -113,9 +113,9 @@ let ``Typecheck treats union order as assignable`` () =
 [<Fact>]
 let ``Typecheck allows wider unions in assignment`` () =
     let source =
-        "def f: (int | string) -> int = { x -> 1 }\n" +
-        "def g: (int | string | bool) -> int = f\n" +
-        "def result = g(1)"
+        "def f: (#some(int) | #notFound) -> int = { x -> 1 }\n" +
+        "def g: (#some(int) | #notFound | #error(string)) -> int = f\n" +
+        "def result = g(#notFound)"
     let result = Compiler.compile source
     Assert.True(result.Diagnostics.IsEmpty)
     let typed = result.Typed.Value
@@ -275,9 +275,9 @@ let ``Unifier allows record width subtyping`` () =
 
 [<Fact>]
 let ``Unifier matches unions by set and width`` () =
-    let unionA = TyUnion [ TyPrimitive "int"; TyPrimitive "string" ]
-    let unionB = TyUnion [ TyPrimitive "string"; TyPrimitive "int" ]
-    let unionWide = TyUnion [ TyPrimitive "int"; TyPrimitive "string"; TyPrimitive "bool" ]
+    let unionA = TyUnion [ TyTag("some", Some (TyPrimitive "int")); TyTag("notFound", None) ]
+    let unionB = TyUnion [ TyTag("notFound", None); TyTag("some", Some (TyPrimitive "int")) ]
+    let unionWide = TyUnion [ TyTag("some", Some (TyPrimitive "int")); TyTag("notFound", None); TyTag("error", Some (TyPrimitive "string")) ]
     let resultOrder = Unifier.unify [ (unionA, unionB) ]
     let resultWidth = Unifier.unify [ (unionA, unionWide) ]
     match resultOrder with

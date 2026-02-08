@@ -89,8 +89,8 @@ module Unifier =
     let private tupleLengthMessage leftCount rightCount left right =
         $"Tuple length mismatch: {leftCount} vs {rightCount}. {mismatchMessage left right}"
 
-    let private unionLengthMessage leftCount rightCount left right =
-        $"Union length mismatch: {leftCount} vs {rightCount}. {mismatchMessage left right}"
+    let private tagUnionLengthMessage leftCount rightCount left right =
+        $"Tag union length mismatch: {leftCount} vs {rightCount}. {mismatchMessage left right}"
 
     let private recordKeyMessage leftKeys rightKeys left right =
         let leftKeyList = leftKeys |> Set.toList |> List.sort |> String.concat ", "
@@ -99,6 +99,12 @@ module Unifier =
 
     let private keySet (fields: Map<string, Ty>) =
         fields |> Map.keys |> Set.ofSeq
+
+    let private ensureTagUnion items =
+        items
+        |> List.forall (function
+            | TyTag _ -> true
+            | _ -> false)
 
     let private normalizeUnionItems (items: Ty list) =
         items
@@ -184,36 +190,45 @@ module Unifier =
                         | Some lTy, Some rTy -> loop subst ((lTy, rTy) :: rest)
                         | _ -> Error $"Tag payload mismatch: {lName}. {mismatchMessage l r}"
                     | TyUnion lItems, TyUnion rItems ->
-                        let lMap = normalizeUnionItems lItems
-                        let rMap = normalizeUnionItems rItems
-                        let lKeys = lMap |> Map.keys |> Set.ofSeq
-                        let rKeys = rMap |> Map.keys |> Set.ofSeq
-                        if Set.isSubset lKeys rKeys || Set.isSubset rKeys lKeys then
-                            let commonKeys = Set.intersect lKeys rKeys
-                            let pairs =
-                                commonKeys
-                                |> Seq.map (fun key -> (lMap.[key], rMap.[key]))
-                                |> Seq.toList
-                            loop subst (pairs @ rest)
+                        if ensureTagUnion lItems && ensureTagUnion rItems then
+                            let lMap = normalizeUnionItems lItems
+                            let rMap = normalizeUnionItems rItems
+                            let lKeys = lMap |> Map.keys |> Set.ofSeq
+                            let rKeys = rMap |> Map.keys |> Set.ofSeq
+                            if Set.isSubset lKeys rKeys || Set.isSubset rKeys lKeys then
+                                let commonKeys = Set.intersect lKeys rKeys
+                                let pairs =
+                                    commonKeys
+                                    |> Seq.map (fun key -> (lMap.[key], rMap.[key]))
+                                    |> Seq.toList
+                                loop subst (pairs @ rest)
+                            else
+                                Error (tagUnionLengthMessage lMap.Count rMap.Count l r)
                         else
-                            Error (unionLengthMessage lMap.Count rMap.Count l r)
+                            Error "Only tag unions are supported"
                     | TyUnion lItems, ty ->
-                        let rec tryItems items =
-                            match items with
-                            | [] -> Error (mismatchMessage l r)
-                            | item :: restItems ->
-                                match loop subst ((item, ty) :: rest) with
-                                | Ok result -> Ok result
-                                | Error _ -> tryItems restItems
-                        tryItems lItems
+                        if ensureTagUnion lItems then
+                            let rec tryItems items =
+                                match items with
+                                | [] -> Error (mismatchMessage l r)
+                                | item :: restItems ->
+                                    match loop subst ((item, ty) :: rest) with
+                                    | Ok result -> Ok result
+                                    | Error _ -> tryItems restItems
+                            tryItems lItems
+                        else
+                            Error "Only tag unions are supported"
                     | ty, TyUnion rItems ->
-                        let rec tryItems items =
-                            match items with
-                            | [] -> Error (mismatchMessage l r)
-                            | item :: restItems ->
-                                match loop subst ((ty, item) :: rest) with
-                                | Ok result -> Ok result
-                                | Error _ -> tryItems restItems
-                        tryItems rItems
+                        if ensureTagUnion rItems then
+                            let rec tryItems items =
+                                match items with
+                                | [] -> Error (mismatchMessage l r)
+                                | item :: restItems ->
+                                    match loop subst ((ty, item) :: rest) with
+                                    | Ok result -> Ok result
+                                    | Error _ -> tryItems restItems
+                            tryItems rItems
+                        else
+                            Error "Only tag unions are supported"
                     | _ -> Error (mismatchMessage l r)
         loop empty constraints

@@ -8,3 +8,11 @@ def args = (x = 4, y = 5, z = 0)
 
 f(x = 4, y = 5)
 f(args)
+
+def u: #some(string) | #nil = #nil
+
+def g: (#some(string) | #nil | #notFound) -> string = { o -> 
+    ""
+}
+
+g(u)

@@ -77,6 +77,18 @@ let ``Typecheck allows tuple args variable for function call`` () =
     Assert.Equal(TyPrimitive "string", typed.Types.["result"])
 
 [<Fact>]
+let ``Typecheck reports mismatch for missing tuple args`` () =
+    let source =
+        "def f = { x, y -> \"\" }\n" +
+        "def result = f(4)"
+    let result = Compiler.compile source
+    Assert.False(result.Diagnostics.IsEmpty)
+    let message = result.Diagnostics |> List.head |> fun diag -> diag.Message
+    Assert.Contains("Type mismatch", message)
+    Assert.Contains("(", message)
+    Assert.Contains("vs int", message)
+
+[<Fact>]
 let ``Typecheck match arms agree`` () =
     let source =
         "def result = match 1\n" +

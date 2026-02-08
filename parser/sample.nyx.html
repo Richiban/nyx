@@ -36,18 +36,18 @@
 <span class="keyword">module</span> <span class="identifier">StopwatchApp</span>
 
 <span class="comment">-- Context: Logger</span>
-<span class="keyword">context</span> <span class="context">Logger</span> = {
-  <span class="keyword">def</span> <span class="function">log</span> { <span class="identifier">msg</span> ->
-    <span class="identifier">print</span>(<span class="string">"[log] {msg}"</span>)
+<span class="keyword">context</span> <span class="context">Logger</span> = (
+  <span class="keyword">def</span> <span class="function">log</span> = { <span class="identifier">msg</span> ->
+    <span class="identifier">print</span>(<span class="string">"[log] {</span><span class="identifier">msg</span><span class="string">}"</span>)
   }
-}
+)
 
 <span class="comment">-- Context: Stopwatch</span>
 <span class="keyword">context</span> <span class="context">Stopwatch</span> = {
   <span class="keyword">def</span> <span class="function">startTime</span> = <span class="keyword">mut</span> <span class="identifier">none</span>()
-  <span class="keyword">def</span> <span class="function">elapsed</span> : <span class="keyword">mut</span> <span class="type">float&lt;s&gt;</span> = <span class="number">0.0s</span>
+  <span class="keyword">def</span> <span class="function">elapsed</span>: <span class="keyword">mut</span> <span class="type">float&lt;s&gt;</span> = <span class="number">0.0s</span>
 
-  <span class="keyword">def</span> <span class="function">start</span> [<span class="context">Logger</span>] {
+  <span class="keyword">def</span> <span class="function">start</span>: «<span class="context">Logger</span>» = {
     <span class="control">match</span> <span class="identifier">startTime</span>
     | <span class="tag">#none</span> ->
       <span class="keyword">def</span> <span class="identifier">now</span> = <span class="identifier">systemTime</span>()
@@ -59,7 +59,7 @@
       <span class="tag">#error</span> <span class="string">"already running"</span>
   }
 
-  <span class="keyword">def</span> <span class="function">stop</span> [<span class="context">Logger</span>] {
+  <span class="keyword">def</span> <span class="function">stop</span>: «<span class="context">Logger</span>» = {
     <span class="control">match</span> <span class="identifier">startTime</span>
     | <span class="tag">#some</span> <span class="identifier">started</span> ->
       <span class="keyword">def</span> <span class="identifier">now</span> = <span class="identifier">systemTime</span>()
@@ -73,14 +73,14 @@
       <span class="tag">#error</span> <span class="string">"not running"</span>
   }
 
-  <span class="keyword">def</span> <span class="function">reset</span> [<span class="context">Logger</span>] {
+  <span class="keyword">def</span> <span class="function">reset</span>: «<span class="context">Logger</span>» = {
     <span class="keyword">set</span> <span class="identifier">elapsed</span> = <span class="number">0.0s</span>
     <span class="keyword">set</span> <span class="identifier">startTime</span> = <span class="identifier">none</span>()
     <span class="function">log</span>(<span class="string">"Stopwatch reset."</span>)
     <span class="tag">#ok</span>
   }
 
-  <span class="keyword">def</span> <span class="function">read</span> [<span class="context">Logger</span>] {
+  <span class="keyword">def</span> <span class="function">read</span>: «<span class="context">Logger</span>» = {
     <span class="control">match</span> <span class="identifier">startTime</span>
     | <span class="tag">#some</span> <span class="identifier">started</span> ->
       <span class="keyword">def</span> <span class="identifier">now</span> = <span class="identifier">systemTime</span>()
@@ -94,7 +94,7 @@
 }
 
 <span class="comment">-- Main loop</span>
-<span class="keyword">def</span> <span class="function">loop</span> [<span class="context">Console</span>, <span class="context">Async</span>, <span class="context">Logger</span>, <span class="context">Stopwatch</span>] {
+<span class="keyword">def</span> <span class="function">loop</span>: «<span class="context">Console</span>, <span class="context">Async</span>, <span class="context">Logger</span>, <span class="context">Stopwatch</span>» = {
   <span class="identifier">print</span>(<span class="string">"Command: start | stop | reset | read | exit"</span>)
   <span class="keyword">def</span> <span class="identifier">input</span> = <span class="control">await</span> <span class="identifier">readLine</span>()
 

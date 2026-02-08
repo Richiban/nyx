@@ -599,9 +599,19 @@ let rec private inferExpr (env: TypeEnv) (state: InferState) (expr: Expression) 
                         Ok (mkTypedExpr expr head.Type None None (Some typedArms), constrained)
             else
                 Error errors
-    | MemberAccess(_, _) ->
-        let ty, next = freshVar state
-        Ok (mkTypedExpr expr ty None None None, next)
+    | MemberAccess(baseExpr, memberName) ->
+        match baseExpr with
+        | IdentifierExpr baseName ->
+            let qualifiedName = $"{baseName}.{memberName}"
+            match TypeEnv.tryFind qualifiedName env with
+            | Some scheme ->
+                let ty, next = instantiate state scheme
+                Ok (mkTypedExpr expr ty None None None, next)
+            | None ->
+                Error [ Diagnostics.error ($"Module {baseName} has no exported member '{memberName}'") ]
+        | _ ->
+            let ty, next = freshVar state
+            Ok (mkTypedExpr expr ty None None None, next)
 
 and inferLambdaWithExpected (env: TypeEnv) (state: InferState) (args: (Identifier * TypeExpr option) list) (body: Expression) (expectedInputOpt: Ty option) (expectedReturnOpt: Ty option) =
     let mutable current = state
@@ -653,7 +663,7 @@ and inferBlock (env: TypeEnv) (state: InferState) (statements: Statement list) :
         let mutable errors: Diagnostic list = []
         for statement in statements do
             match statement with
-            | DefStatement(name, typeOpt, expr) ->
+            | DefStatement(isExport, name, typeOpt, expr) ->
                 if errors.IsEmpty then
                     let expectedInputOpt, expectedReturnOpt, expectedDeclaredOpt, nextState =
                         match typeOpt with
@@ -688,7 +698,7 @@ and inferBlock (env: TypeEnv) (state: InferState) (statements: Statement list) :
                         current <- finalState
                         let scheme = TypeEnv.generalize env' declaredTy
                         env' <- TypeEnv.extend name scheme env'
-                        typedStatements <- typedStatements @ [ TypedDefStatement(name, typeOpt, typedExpr) ]
+                        typedStatements <- typedStatements @ [ TypedDefStatement(isExport, name, typeOpt, typedExpr) ]
                         lastExpr <- typedExpr
                     | Error err -> errors <- err
             | ImportStatement items ->
@@ -719,7 +729,7 @@ let inferModuleWithEnv (initialEnv: TypeEnv) (initialState: InferState) (module'
 
     for item in module' do
         match item with
-        | Def (ValueDef(name, typeOpt, expr)) when errors.IsEmpty ->
+        | Def (ValueDef(isExport, name, typeOpt, expr)) when errors.IsEmpty ->
             let expectedInputOpt, expectedReturnOpt, expectedDeclaredOpt, nextState =
                 match typeOpt with
                 | Some typeExpr ->
@@ -754,7 +764,7 @@ let inferModuleWithEnv (initialEnv: TypeEnv) (initialState: InferState) (module'
                 let scheme = TypeEnv.generalize env declaredTy
                 env <- TypeEnv.extend name scheme env
                 types <- types |> Map.add name declaredTy
-                items <- items @ [ TypedDef (TypedValueDef(name, typeOpt, typedExpr)) ]
+                items <- items @ [ TypedDef (TypedValueDef(isExport, name, typeOpt, typedExpr)) ]
             | Error err -> errors <- err
         | Expr expr when errors.IsEmpty ->
             match inferExpr env state expr with

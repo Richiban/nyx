@@ -234,7 +234,7 @@ let ``Typecheck populates typed AST items`` () =
     let hasMessage =
         typed.Items
         |> List.exists (function
-            | TypedDef (TypedValueDef(name, _, typedExpr)) ->
+            | TypedDef (TypedValueDef(_, name, _, typedExpr)) ->
                 name = "message" && typedExpr.Type = TyPrimitive "string"
             | _ -> false)
     Assert.True(hasMessage)
@@ -251,14 +251,14 @@ let ``Typecheck captures typed block statements in lambda`` () =
     let hasBlockStatements =
         typed.Items
         |> List.exists (function
-            | TypedDef (TypedValueDef(name, _, typedExpr)) when name = "f" ->
+            | TypedDef (TypedValueDef(_, name, _, typedExpr)) when name = "f" ->
                 match typedExpr.Body with
                 | Some bodyExpr ->
                     match bodyExpr.Statements with
                     | Some statements ->
                         statements
                         |> List.exists (function
-                            | TypedDefStatement(defName, _, _) -> defName = "y"
+                            | TypedDefStatement(_, defName, _, _) -> defName = "y"
                             | _ -> false)
                     | None -> false
                 | None -> false
@@ -290,7 +290,7 @@ let ``Typecheck records typed match patterns`` () =
     let matchHasPattern =
         typed.Items
         |> List.exists (function
-            | TypedDef (TypedValueDef(name, _, typedExpr)) when name = "result" ->
+            | TypedDef (TypedValueDef(_, name, _, typedExpr)) when name = "result" ->
                 match typedExpr.MatchArms with
                 | Some arms ->
                     arms
@@ -315,7 +315,7 @@ let ``Typecheck types list and guard patterns`` () =
     let hasListPattern =
         typed.Items
         |> List.exists (function
-            | TypedDef (TypedValueDef(name, _, typedExpr)) when name = "result" ->
+            | TypedDef (TypedValueDef(_, name, _, typedExpr)) when name = "result" ->
                 match typedExpr.MatchArms with
                 | Some arms ->
                     arms

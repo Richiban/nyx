@@ -65,6 +65,20 @@ module Compiler =
             | _ -> None)
         |> List.collect id
 
+    let private exportedValueNames (module': Module) =
+        module'
+        |> List.choose (function
+            | Def (ValueDef(true, name, _, _)) -> Some name
+            | _ -> None)
+        |> Set.ofList
+
+    let private exportedTypeNames (module': Module) =
+        module'
+        |> List.choose (function
+            | Def (TypeDef(name, modifiers, _, _)) when modifiers |> List.contains Export -> Some name
+            | _ -> None)
+        |> Set.ofList
+
     let private mergeTypeDefs (target: Map<string, Ty * bool>) (incoming: Map<string, Ty * bool>) =
         incoming
         |> Map.fold (fun acc key value ->
@@ -104,8 +118,16 @@ module Compiler =
                         | Error diags -> errors <- errors @ diags
                         | Ok typed ->
                             let prefix = importPrefix item
-                            env <- extendEnvWithImport env prefix typed.Types
-                            state <- { state with TypeDefs = mergeTypeDefs state.TypeDefs typed.TypeDefs }
+                            let exportedValues = exportedValueNames typed.Module
+                            let exportedTypes = exportedTypeNames typed.Module
+                            let filteredTypes =
+                                typed.Types
+                                |> Map.filter (fun name _ -> exportedValues.Contains name)
+                            let filteredTypeDefs =
+                                typed.TypeDefs
+                                |> Map.filter (fun name _ -> exportedTypes.Contains name)
+                            env <- extendEnvWithImport env prefix filteredTypes
+                            state <- { state with TypeDefs = mergeTypeDefs state.TypeDefs filteredTypeDefs }
                 if not errors.IsEmpty then
                     Error errors
                 else
@@ -135,8 +157,8 @@ module Compiler =
                                     MatchArms = mappedMatchArms }
                             and applyTypedStatement statement =
                                 match statement with
-                                | TypedDefStatement(name, typeOpt, expr) ->
-                                    TypedDefStatement(name, typeOpt, applyTypedExpr expr)
+                                | TypedDefStatement(isExport, name, typeOpt, expr) ->
+                                    TypedDefStatement(isExport, name, typeOpt, applyTypedExpr expr)
                                 | TypedExprStatement expr -> TypedExprStatement (applyTypedExpr expr)
                                 | TypedImportStatement _
                                 | TypedTypeDefStatement _ -> statement
@@ -152,8 +174,8 @@ module Compiler =
                                 |> List.map (fun item ->
                                     match item with
                                     | TypedExprItem expr -> TypedExprItem (applyTypedExpr expr)
-                                    | TypedDef (TypedValueDef(name, typeOpt, expr)) ->
-                                        TypedDef (TypedValueDef(name, typeOpt, applyTypedExpr expr))
+                                    | TypedDef (TypedValueDef(isExport, name, typeOpt, expr)) ->
+                                        TypedDef (TypedValueDef(isExport, name, typeOpt, applyTypedExpr expr))
                                     | TypedDef (TypedTypeDef _)
                                     | TypedImport _
                                     | TypedModuleDecl _ -> item)
@@ -195,8 +217,8 @@ module Compiler =
                         MatchArms = mappedMatchArms }
                 and applyTypedStatement statement =
                     match statement with
-                    | TypedDefStatement(name, typeOpt, expr) ->
-                        TypedDefStatement(name, typeOpt, applyTypedExpr expr)
+                    | TypedDefStatement(isExport, name, typeOpt, expr) ->
+                        TypedDefStatement(isExport, name, typeOpt, applyTypedExpr expr)
                     | TypedExprStatement expr -> TypedExprStatement (applyTypedExpr expr)
                     | TypedImportStatement _
                     | TypedTypeDefStatement _ -> statement
@@ -215,8 +237,8 @@ module Compiler =
                     |> List.map (fun item ->
                         match item with
                         | TypedExprItem expr -> TypedExprItem (applyTypedExpr expr)
-                        | TypedDef (TypedValueDef(name, typeOpt, expr)) ->
-                            TypedDef (TypedValueDef(name, typeOpt, applyTypedExpr expr))
+                        | TypedDef (TypedValueDef(isExport, name, typeOpt, expr)) ->
+                            TypedDef (TypedValueDef(isExport, name, typeOpt, applyTypedExpr expr))
                         | TypedDef (TypedTypeDef _)
                         | TypedImport _
                         | TypedModuleDecl _ -> item)

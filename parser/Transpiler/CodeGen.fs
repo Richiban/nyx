@@ -251,7 +251,7 @@ let rec transpileExpression (expr: Expression) : string =
 
 and transpileStatement (stmt: Statement) : string =
     match stmt with
-    | DefStatement(name, _, expr) ->
+    | DefStatement(_, name, _, expr) ->
         sprintf "const %s = %s;" name (transpileExpression expr)
     | TypeDefStatement(_, _, _, _) ->
         ""
@@ -264,7 +264,7 @@ let transpileTopLevelItem (item: TopLevelItem) : string =
     match item with
     | ModuleDecl name ->
         sprintf "// Module: %s" name
-    | Def(ValueDef(name, _, expr)) ->
+    | Def(ValueDef(_, name, _, expr)) ->
         sprintf "const %s = %s;" name (transpileExpression expr)
     | Def(TypeDef(_, _, _, _)) ->
         ""

@@ -12,3 +12,5 @@ def p2: PersonShadow = p
 
 def e = fp1.makeEmail()
 
+--def s = fp1.x
+def s2 = fp1.y

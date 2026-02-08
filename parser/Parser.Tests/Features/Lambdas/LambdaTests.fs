@@ -20,7 +20,7 @@ let ``Parse lambdas.nyx file`` () =
         let defs = module' |> List.tail
         for def in defs do
             match def with
-            | Def (ValueDef (_, _, Lambda _)) -> ()
+            | Def (ValueDef (_, _, _, Lambda _)) -> ()
             | _ -> failwith "Expected all definitions to contain lambdas"
     | Result.Error err -> failwith $"Parse failed: {err}"
 
@@ -39,8 +39,8 @@ let ``Parse shorthand-lambdas.nyx file`` () =
         let defs = module' |> List.tail
         for def in defs do
             match def with
-            | Def (ValueDef (_, _, Lambda _)) -> ()
-            | Def (ValueDef (_, _, FunctionCall (_, args))) ->
+            | Def (ValueDef (_, _, _, Lambda _)) -> ()
+            | Def (ValueDef (_, _, _, FunctionCall (_, args))) ->
                 let rec hasLambda arg =
                     match arg with
                     | Lambda _ -> true

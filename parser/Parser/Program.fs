@@ -83,7 +83,7 @@ and Pattern =
 and MatchArm = Pattern list * Expression  // Multiple patterns for multi-value match
 
 and Statement =
-    | DefStatement of Identifier * TypeExpr option * Expression
+    | DefStatement of bool * Identifier * TypeExpr option * Expression
     | TypeDefStatement of Identifier * TypeDefModifier list * (Identifier * TypeExpr option) list * TypeExpr
     | ImportStatement of ImportItem list
     | ExprStatement of Expression
@@ -94,7 +94,7 @@ type ListPatternElement =
     | Splat of Identifier option
 
 type Definition =
-    | ValueDef of Identifier * TypeExpr option * Expression
+    | ValueDef of bool * Identifier * TypeExpr option * Expression
     | TypeDef of Identifier * TypeDefModifier list * (Identifier * TypeExpr option) list * TypeExpr
 
 type TopLevelItem =
@@ -594,13 +594,14 @@ let typeDefCore: Parser<Definition, unit> =
     <?> "type definition"
 
 let valueDefCore: Parser<Definition, unit> =
-    pipe2
-        (opt (attempt (pstring "export" >>. ws)) >>. pstring "def" >>. ws >>. typedIdentifier .>> wsNoNl() .>> pstring "=")
+    pipe3
+        (opt (attempt (pstring "export" >>. ws)))
+        (pstring "def" >>. ws >>. typedIdentifier .>> wsNoNl() .>> pstring "=")
         (wsInline >>. (sepBy1 expression (pstring "," .>> ws) |>> fun exprs ->
             match exprs with
             | [single] -> single
             | multiple -> TupleExpr multiple))
-        (fun (name, typeOpt) expr -> ValueDef(name, typeOpt, expr))
+        (fun exportOpt (name, typeOpt) expr -> ValueDef(exportOpt.IsSome, name, typeOpt, expr))
     <?> "value definition"
 
 // Match expression parser
@@ -954,13 +955,14 @@ do
             | _ -> failwith "Expected type definition"
 
     let defStatement = 
-        pipe2
-            (opt (attempt (pstring "export" >>. ws)) >>. pstring "def" >>. ws >>. typedIdentifier .>> wsNoNl() .>> pstring "=" .>> wsNoNl())
+        pipe3
+            (opt (attempt (pstring "export" >>. ws)))
+            (pstring "def" >>. ws >>. typedIdentifier .>> wsNoNl() .>> pstring "=" .>> wsNoNl())
             (attempt (blockExpr()) <|> (wsNoNl() >>. (sepBy1 expression (pstring "," .>> ws) |>> fun exprs ->
                 match exprs with
                 | [single] -> single
                 | multiple -> TupleExpr multiple)))
-            (fun (name, typeOpt) expr -> DefStatement(name, typeOpt, expr))
+            (fun exportOpt (name, typeOpt) expr -> DefStatement(exportOpt.IsSome, name, typeOpt, expr))
     
     let exprStatement = wsNoNl() >>. exprWithoutCrossingNewlines |>> ExprStatement  // Only consume spaces/tabs, not newlines
     
@@ -973,13 +975,14 @@ let moduleDecl: Parser<TopLevelItem, unit> =
 
 // Parser for value definition (top-level)
 let valueDef: Parser<TopLevelItem, unit> =
-    pipe2
-        (opt (attempt (pstring "export" >>. ws)) >>. pstring "def" >>. ws >>. typedIdentifier .>> wsNoNl() .>> pstring "=")  // Don't consume newlines after =
+    pipe3
+        (opt (attempt (pstring "export" >>. ws)))
+        (pstring "def" >>. ws >>. typedIdentifier .>> wsNoNl() .>> pstring "=")  // Don't consume newlines after =
         (attempt (blockExpr()) <|> (wsInline >>. (sepBy1 expression (pstring "," .>> ws) |>> fun exprs ->
             match exprs with
             | [single] -> single
             | multiple -> TupleExpr multiple)))
-        (fun (name, typeOpt) expr -> Def(ValueDef(name, typeOpt, expr)))
+        (fun exportOpt (name, typeOpt) expr -> Def(ValueDef(exportOpt.IsSome, name, typeOpt, expr)))
     <?> "value definition"
 
 // Parser for type definition (top-level)

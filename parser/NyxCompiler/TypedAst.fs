@@ -27,13 +27,13 @@ and TypedPattern =
 and TypedMatchArm = TypedPattern list * TypedExpr
 
 and TypedStatement =
-    | TypedDefStatement of Identifier * TypeExpr option * TypedExpr
+    | TypedDefStatement of bool * Identifier * TypeExpr option * TypedExpr
     | TypedExprStatement of TypedExpr
     | TypedImportStatement of ImportItem list
     | TypedTypeDefStatement of Identifier * TypeDefModifier list * (Identifier * TypeExpr option) list * TypeExpr
 
 type TypedDefinition =
-    | TypedValueDef of Identifier * TypeExpr option * TypedExpr
+    | TypedValueDef of bool * Identifier * TypeExpr option * TypedExpr
     | TypedTypeDef of Identifier * TypeDefModifier list * (Identifier * TypeExpr option) list * TypeExpr
 
 type TypedTopLevelItem =

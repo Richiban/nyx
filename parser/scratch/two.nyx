@@ -3,5 +3,7 @@ def s = "Hello world"
 
 def r = (x = "one", y = 5)
 
-def x = match ""
+def x = 
+    match ""
     | "" -> ""
+    | 2 -> 2

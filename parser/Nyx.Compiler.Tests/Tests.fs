@@ -31,6 +31,28 @@ let ``Typecheck supports polymorphic let`` () =
     Assert.Equal(TyPrimitive "string", typed.Types.["b"])
 
 [<Fact>]
+let ``Typecheck uses tuple input for multi-arg functions`` () =
+    let source =
+        "def f = { x, y -> x }\n" +
+        "def result = f(1, 2)"
+    let result = Compiler.compile source
+    let typed = result.Typed.Value
+    match typed.Types.["f"] with
+    | TyFunc(TyTuple [ TyVar _; TyVar _ ], TyVar _) -> Assert.True(true)
+    | other -> Assert.True(false, $"Unexpected function type: %A{other}")
+    Assert.Equal(TyPrimitive "int", typed.Types.["result"])
+
+[<Fact>]
+let ``Typecheck uses unit input for zero-arg functions`` () =
+    let source =
+        "def f = { 1 }\n" +
+        "def result = f()"
+    let result = Compiler.compile source
+    let typed = result.Typed.Value
+    Assert.Equal(TyFunc(TyPrimitive "unit", TyPrimitive "int"), typed.Types.["f"])
+    Assert.Equal(TyPrimitive "int", typed.Types.["result"])
+
+[<Fact>]
 let ``Typecheck match arms agree`` () =
     let source =
         "def result = match 1\n" +

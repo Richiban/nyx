@@ -889,7 +889,7 @@ do
 
 // Block parser - parses indented statements after a newline
 let blockExpr() : Parser<Expression, unit> =
-    newline >>.
+    skipMany (skipAnyOf " \t") >>. newline >>.
     many (pchar ' ' <|> pchar '\t') >>= fun indentChars ->
         let indentLevel = indentChars.Length
         if indentLevel > 0 then

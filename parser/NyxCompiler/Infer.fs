@@ -39,11 +39,20 @@ let private listType elementTy =
 let private numericType =
     TyPrimitive "int"
 
+let private tupleFieldName index =
+    $"item{index}"
+
+let private tupleRecordType (items: Ty list) =
+    items
+    |> List.mapi (fun index ty -> tupleFieldName (index + 1), ty)
+    |> Map.ofList
+    |> TyRecord
+
 let private inputTypeFromArgs argTys =
     match argTys with
     | [] -> TyPrimitive "unit"
     | [ single ] -> single
-    | _ -> TyTuple argTys
+    | _ -> tupleRecordType argTys
 
 let private lookupPrimitive (name: string) =
     match name with
@@ -77,7 +86,7 @@ let rec private typeExprToTy (state: InferState) (typeExpr: TypeExpr) : Ty * Inf
                 let ty, next = typeExprToTy current item
                 current <- next
                 ty)
-        TyTuple tys, current
+        tupleRecordType tys, current
     | TypeRecord fields ->
         let mutable current = state
         let fieldMap =
@@ -250,7 +259,7 @@ let rec private inferExpr (env: TypeEnv) (state: InferState) (expr: Expression) 
         if errors.IsEmpty then
             let itemExprs = tys |> List.choose (function Ok ty -> Some ty | _ -> None)
             let itemTys = itemExprs |> List.map (fun typedExpr -> typedExpr.Type)
-            Ok (mkTypedExpr expr (TyTuple itemTys) None None None, current)
+            Ok (mkTypedExpr expr (tupleRecordType itemTys) None None None, current)
         else
             Error errors
     | RecordExpr fields ->
@@ -260,46 +269,46 @@ let rec private inferExpr (env: TypeEnv) (state: InferState) (expr: Expression) 
                 match field with
                 | PositionalField expr -> (expr :: pos, named)
                 | NamedField(name, expr) -> (pos, (name, expr) :: named)) ([], [])
-        match positional, named with
-        | [], namedFields ->
-            let mutable current = state
-            let mapped =
-                namedFields
-                |> List.rev
-                |> List.map (fun (name, expr) ->
-                    match inferExpr env current expr with
-                    | Ok (typedExpr, next) ->
-                        current <- next
-                        Ok (name, typedExpr)
-                    | Error err -> Error err)
-            let errors = mapped |> List.choose (function Error err -> Some err | _ -> None) |> List.concat
-            if errors.IsEmpty then
-                let fieldMap =
-                    mapped
-                    |> List.choose (function Ok (name, typedExpr) -> Some (name, typedExpr.Type) | _ -> None)
-                    |> Map.ofList
-                Ok (mkTypedExpr expr (TyRecord fieldMap) None None None, current)
-            else
-                Error errors
-        | positionalFields, [] ->
-            let mutable current = state
-            let itemResults =
-                positionalFields
-                |> List.rev
-                |> List.map (fun expr ->
-                    match inferExpr env current expr with
-                    | Ok (typedExpr, next) ->
-                        current <- next
-                        Ok typedExpr
-                    | Error err -> Error err)
-            let errors = itemResults |> List.choose (function Error err -> Some err | _ -> None) |> List.concat
-            if errors.IsEmpty then
-                let itemExprs = itemResults |> List.choose (function Ok ty -> Some ty | _ -> None)
-                let itemTys = itemExprs |> List.map (fun typedExpr -> typedExpr.Type)
-                Ok (mkTypedExpr expr (TyTuple itemTys) None None None, current)
-            else
-                Error errors
-        | _ -> Error [ Diagnostics.error "Mixed positional and named record fields are not supported yet" ]
+        let mutable current = state
+        let positionalResults =
+            positional
+            |> List.rev
+            |> List.map (fun expr ->
+                match inferExpr env current expr with
+                | Ok (typedExpr, next) ->
+                    current <- next
+                    Ok typedExpr
+                | Error err -> Error err)
+        let namedResults =
+            named
+            |> List.rev
+            |> List.map (fun (name, expr) ->
+                match inferExpr env current expr with
+                | Ok (typedExpr, next) ->
+                    current <- next
+                    Ok (name, typedExpr)
+                | Error err -> Error err)
+        let errors =
+            positionalResults
+            |> List.choose (function Error err -> Some err | _ -> None)
+            |> List.concat
+            |> fun errs ->
+                let namedErrors = namedResults |> List.choose (function Error err -> Some err | _ -> None) |> List.concat
+                errs @ namedErrors
+        if errors.IsEmpty then
+            let positionalExprs = positionalResults |> List.choose (function Ok ty -> Some ty | _ -> None)
+            let positionalFieldsMap =
+                positionalExprs
+                |> List.mapi (fun index typedExpr -> tupleFieldName (index + 1), typedExpr.Type)
+            let namedFieldsMap =
+                namedResults
+                |> List.choose (function Ok (name, typedExpr) -> Some (name, typedExpr.Type) | _ -> None)
+            let fieldMap =
+                positionalFieldsMap @ namedFieldsMap
+                |> Map.ofList
+            Ok (mkTypedExpr expr (TyRecord fieldMap) None None None, current)
+        else
+            Error errors
     | ListExpr items ->
         let mutable current = state
         let itemResults =
@@ -395,7 +404,8 @@ let rec private inferExpr (env: TypeEnv) (state: InferState) (expr: Expression) 
                             currentState <- next
                             ty)
                         |> fun tys -> tys, currentState
-                    let constrained = addConstraint scrutineeTy (TyTuple itemTypes) nextState
+                    let tupleRecord = tupleRecordType itemTypes
+                    let constrained = addConstraint scrutineeTy tupleRecord nextState
                     let mutable innerEnv = env'
                     let mutable innerState = constrained
                     let mutable innerErrors: Diagnostic list = []
@@ -408,7 +418,7 @@ let rec private inferExpr (env: TypeEnv) (state: InferState) (expr: Expression) 
                             innerPatterns <- innerPatterns @ [typedPattern]
                         | Error err -> innerErrors <- err
                     if innerErrors.IsEmpty then
-                        Ok (innerEnv, innerState, mkTypedPattern pattern (TyTuple itemTypes))
+                        Ok (innerEnv, innerState, mkTypedPattern pattern tupleRecord)
                     else
                         Error innerErrors
                 | TagPattern(tagName, payloadOpt) ->

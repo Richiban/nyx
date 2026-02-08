@@ -24,8 +24,9 @@ module TypeEnv =
         match ty with
         | TyVar v -> Set.singleton v.Id
         | TyPrimitive _ -> Set.empty
-            | TyFunc(arg, ret) ->
-                Set.union (freeTyVars arg) (freeTyVars ret)
+        | TyNominal(_, underlying, _) -> freeTyVars underlying
+        | TyFunc(arg, ret) ->
+            Set.union (freeTyVars arg) (freeTyVars ret)
         | TyTuple items ->
             items
             |> List.map freeTyVars

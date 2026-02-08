@@ -10,6 +10,7 @@ type TyVar =
 type Ty =
     | TyVar of TyVar
     | TyPrimitive of string
+    | TyNominal of string * Ty * bool
     | TyFunc of Ty * Ty
     | TyTuple of Ty list
     | TyRecord of Map<string, Ty>

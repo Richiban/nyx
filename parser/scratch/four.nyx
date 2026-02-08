@@ -1,0 +1,4 @@
+
+import "four.1.nyx" as fp1
+
+def p: @Person = fp1.makePerson()

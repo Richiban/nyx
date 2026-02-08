@@ -16,6 +16,7 @@ type Literal =
 type TypeDefModifier =
     | Export
     | Context
+    | Private
 
 type ImportSource =
     | ModuleImport of string
@@ -144,6 +145,10 @@ let identifierNoWs: Parser<Identifier, unit> =
     <?> "identifier"
 
 let identifier: Parser<Identifier, unit> = identifierNoWs .>> wsInline
+
+let typeNameIdentifier: Parser<Identifier, unit> =
+    (pchar '@' >>. identifierNoWs |>> fun name -> "@" + name)
+    <|> identifierNoWs
 
 let qualifiedIdentifier: Parser<Identifier, unit> =
     pipe2
@@ -410,7 +415,7 @@ do patternRef :=
 // Type expression parser
 do
     let typeIdentifier =
-        identifierNoWs |>> fun name ->
+        typeNameIdentifier |>> fun name ->
             if name.Length = 1 && Char.IsLower name.[0] then TypeVar name
             else TypeName name
 
@@ -573,13 +578,18 @@ let typeDefCore: Parser<Definition, unit> =
             | Some predicate -> TypeWhere(baseType, predicate)
             | None -> baseType)
 
-    pipe4
+    pipe5
         typeModifiers
-        (pstring "type" >>. ws >>. identifierNoWs)
+        (pstring "type" >>. ws >>. typeNameIdentifier)
         (opt (attempt (wsNoNl() >>. typeParams)))
-        (wsNoNl() >>. pstring "=" >>. ws >>. typeExprWithWhere)
-        (fun modifiers name paramsOpt typeValue ->
+        (wsNoNl() >>. pstring "=" >>. ws >>. opt (attempt (pstring "private" >>. ws)))
+        typeExprWithWhere
+        (fun modifiers name paramsOpt privateOpt typeValue ->
             let typeParams = defaultArg paramsOpt []
+            let modifiers =
+                match privateOpt with
+                | Some _ -> Private :: modifiers
+                | None -> modifiers
             TypeDef(name, modifiers, typeParams, typeValue))
     <?> "type definition"
 
@@ -618,7 +628,7 @@ let recordField =
 let tupleOrParenExpr =
     (between
         (pstring "(")
-        (pstring ")")
+        (ws >>. pstring ")")
         (sepBy1 (ws >>. recordField) (pstring "," .>> ws))
     |>> fun fields ->
         match fields with

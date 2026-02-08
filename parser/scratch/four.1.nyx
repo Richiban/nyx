@@ -1,0 +1,12 @@
+
+
+export type @Email = private string
+
+export type @Person = (
+    name: string
+    age: int
+)
+
+export def makePerson: () -> @Person = {
+    ( name = "", age = 1 )
+}

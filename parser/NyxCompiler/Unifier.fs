@@ -46,6 +46,7 @@ module Unifier =
             match v.Name with
             | Some name -> $"'{name}"
             | None -> $"'t{v.Id}"
+        | TyNominal(name, _, _) -> name
         | TyFunc(arg, ret) -> $"{tyToString arg} -> {tyToString ret}"
         | TyTuple items ->
             items
@@ -148,6 +149,7 @@ module Unifier =
             match subst |> Map.tryFind v.Id with
             | Some replacement -> apply subst replacement
             | None -> ty
+        | TyNominal(name, underlying, isPrivate) -> TyNominal(name, apply subst underlying, isPrivate)
         | TyFunc(arg, ret) -> TyFunc(apply subst arg, apply subst ret)
         | TyTuple items -> TyTuple(items |> List.map (apply subst))
         | TyRecord fields ->
@@ -159,6 +161,7 @@ module Unifier =
     let rec occurs (varId: int) (ty: Ty) : bool =
         match ty with
         | TyVar v -> v.Id = varId
+        | TyNominal(_, underlying, _) -> occurs varId underlying
         | TyFunc(arg, ret) -> occurs varId arg || occurs varId ret
         | TyTuple items -> items |> List.exists (occurs varId)
         | TyRecord fields -> fields |> Map.exists (fun _ v -> occurs varId v)
@@ -198,6 +201,21 @@ module Unifier =
                             loop newSubst rest
                     | TyPrimitive lName, TyPrimitive rName when lName = rName ->
                         loop subst rest
+                    | TyNominal(lName, lUnderlying, lPrivate), TyNominal(rName, rUnderlying, rPrivate) ->
+                        if lName = rName then
+                            if lPrivate || rPrivate then
+                                loop subst rest
+                            else
+                                loop subst ((lUnderlying, rUnderlying) :: rest)
+                        else
+                            Error (mismatchMessage l r)
+                    | TyNominal(_, _, true), _
+                    | _, TyNominal(_, _, true) ->
+                        Error (mismatchMessage l r)
+                    | TyNominal(_, underlying, false), _ ->
+                        loop subst ((underlying, r) :: rest)
+                    | _, TyNominal(_, underlying, false) ->
+                        loop subst ((l, underlying) :: rest)
                     | TyFunc(lArg, lRet), TyFunc(rArg, rRet) ->
                         loop subst ((lArg, rArg) :: (lRet, rRet) :: rest)
                     | TyTuple lItems, TyTuple rItems when lItems.Length = rItems.Length ->

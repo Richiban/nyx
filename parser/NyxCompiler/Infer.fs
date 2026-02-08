@@ -6,15 +6,9 @@ open NyxCompiler
 type TypedExpr = NyxCompiler.TypedExpr
 type TypedStatement = NyxCompiler.TypedStatement
 
-type InferState =
-    { NextId: int
-      Constraints: ConstraintSet
-      TypeVars: Map<string, TyVar> }
+type InferState = { NextId: int; Constraints: ConstraintSet; TypeVars: Map<string, TyVar>; TypeDefs: Map<string, Ty * bool> }
 
-let emptyState =
-    { NextId = 0
-      Constraints = []
-      TypeVars = Map.empty }
+let emptyState = { NextId = 0; Constraints = []; TypeVars = Map.empty; TypeDefs = Map.empty }
 
 let private freshVar (state: InferState) =
     let var = { Id = state.NextId; Name = None }
@@ -54,6 +48,9 @@ let private inputTypeFromArgs argTys =
     | [ single ] -> single
     | _ -> tupleRecordType argTys
 
+let private isPrivateType modifiers =
+    modifiers |> List.exists (fun modifier -> modifier = TypeDefModifier.Private)
+
 
 let private lookupPrimitive (name: string) =
     match name with
@@ -69,7 +66,10 @@ let rec private typeExprToTy (state: InferState) (typeExpr: TypeExpr) : Ty * Inf
     | TypeName name ->
         match lookupPrimitive name with
         | Some prim -> prim, state
-        | None -> TyPrimitive name, state
+        | None ->
+            match state.TypeDefs |> Map.tryFind name with
+            | Some (underlying, isPrivate) -> TyNominal(name, underlying, isPrivate), state
+            | None -> TyPrimitive name, state
     | TypeVar name ->
         match state.TypeVars |> Map.tryFind name with
         | Some existing -> TyVar existing, state
@@ -148,6 +148,14 @@ let rec private typeExprToTy (state: InferState) (typeExpr: TypeExpr) : Ty * Inf
         typeExprToTy state baseType
     | TypeWhere(baseType, _) ->
         typeExprToTy state baseType
+
+let private registerTypeDef (state: InferState) (name: Identifier) (modifiers: TypeDefModifier list) (body: TypeExpr) =
+    if name.StartsWith("@") then
+        let underlyingTy, next = typeExprToTy state body
+        let isPrivate = isPrivateType modifiers
+        { next with TypeDefs = next.TypeDefs |> Map.add name (underlyingTy, isPrivate) }
+    else
+        state
 
 let private instantiate (state: InferState) (scheme: TypeScheme) : Ty * InferState =
     if scheme.Quantified.IsEmpty then
@@ -659,6 +667,7 @@ and inferBlock (env: TypeEnv) (state: InferState) (statements: Statement list) :
             | ImportStatement items ->
                 typedStatements <- typedStatements @ [ TypedImportStatement items ]
             | TypeDefStatement(name, modifiers, parameters, body) ->
+                current <- registerTypeDef current name modifiers body
                 typedStatements <- typedStatements @ [ TypedTypeDefStatement(name, modifiers, parameters, body) ]
             | ExprStatement expr ->
                 if errors.IsEmpty then
@@ -719,6 +728,7 @@ let inferModule (module': Module) : Result<Map<string, Ty> * TypedTopLevelItem l
         | Import itemsList -> items <- items @ [ TypedImport itemsList ]
         | ModuleDecl name -> items <- items @ [ TypedModuleDecl name ]
         | Def (TypeDef(name, modifiers, parameters, body)) ->
+            state <- registerTypeDef state name modifiers body
             items <- items @ [ TypedDef (TypedTypeDef(name, modifiers, parameters, body)) ]
         | Def (ValueDef _) -> ()
 

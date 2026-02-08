@@ -171,6 +171,48 @@ let ``Typecheck tag union width and rest regression`` () =
     | other -> Assert.True(false, $"Unexpected l2 type: %A{other}")
 
 [<Fact>]
+let ``Typecheck supports nominal types`` () =
+    let source =
+        "type @Email = string\n" +
+        "def email: @Email = \"a@b.com\"\n" +
+        "def addr: string = email\n" +
+        "def email2: @Email = addr"
+    let result = Compiler.compile source
+    Assert.True(result.Diagnostics.IsEmpty)
+    let typed = result.Typed.Value
+    match typed.Types.["email"] with
+    | TyNominal(name, underlying, false) ->
+        Assert.Equal("@Email", name)
+        Assert.Equal(TyPrimitive "string", underlying)
+    | other -> Assert.True(false, $"Unexpected nominal type: %A{other}")
+    Assert.Equal(TyPrimitive "string", typed.Types.["addr"])
+    match typed.Types.["email2"] with
+    | TyNominal(name, _, false) -> Assert.Equal("@Email", name)
+    | other -> Assert.True(false, $"Unexpected nominal type: %A{other}")
+
+[<Fact>]
+let ``Typecheck rejects distinct nominal types`` () =
+    let source =
+        "type @Email = string\n" +
+        "type @UserId = string\n" +
+        "def email: @Email = \"a@b.com\"\n" +
+        "def user: @UserId = email"
+    let result = Compiler.compile source
+    Assert.False(result.Diagnostics.IsEmpty)
+    let message = result.Diagnostics |> List.head |> fun diag -> diag.Message
+    Assert.Contains("Type mismatch", message)
+
+[<Fact>]
+let ``Typecheck rejects private nominal assignability`` () =
+    let source =
+        "type @Token = private string\n" +
+        "def token: @Token = \"secret\""
+    let result = Compiler.compile source
+    Assert.False(result.Diagnostics.IsEmpty)
+    let message = result.Diagnostics |> List.head |> fun diag -> diag.Message
+    Assert.Contains("Type mismatch", message)
+
+[<Fact>]
 let ``Typecheck match arms agree`` () =
     let source =
         "def result = match 1\n" +

@@ -89,6 +89,39 @@ let ``Typecheck reports mismatch for missing tuple args`` () =
     Assert.Contains("vs int", message)
 
 [<Fact>]
+let ``Typecheck allows record width subtyping`` () =
+    let source =
+        "def f: (a: int) -> int = { r -> 1 }\n" +
+        "def args = (a = 1, b = 2)\n" +
+        "def result = f(args)"
+    let result = Compiler.compile source
+    Assert.True(result.Diagnostics.IsEmpty)
+    let typed = result.Typed.Value
+    Assert.Equal(TyPrimitive "int", typed.Types.["result"])
+
+[<Fact>]
+let ``Typecheck treats union order as assignable`` () =
+    let source =
+        "def f: (string | int) -> int = { x -> 1 }\n" +
+        "def g: (int | string) -> int = f\n" +
+        "def result = g(1)"
+    let result = Compiler.compile source
+    Assert.True(result.Diagnostics.IsEmpty)
+    let typed = result.Typed.Value
+    Assert.Equal(TyPrimitive "int", typed.Types.["result"])
+
+[<Fact>]
+let ``Typecheck allows wider unions in assignment`` () =
+    let source =
+        "def f: (int | string) -> int = { x -> 1 }\n" +
+        "def g: (int | string | bool) -> int = f\n" +
+        "def result = g(1)"
+    let result = Compiler.compile source
+    Assert.True(result.Diagnostics.IsEmpty)
+    let typed = result.Typed.Value
+    Assert.Equal(TyPrimitive "int", typed.Types.["result"])
+
+[<Fact>]
 let ``Typecheck match arms agree`` () =
     let source =
         "def result = match 1\n" +
@@ -230,3 +263,26 @@ let ``Unifier rejects occurs check`` () =
     match result with
     | Ok _ -> Assert.True(false, "Expected occurs check failure")
     | Error message -> Assert.Contains("Occurs", message)
+
+[<Fact>]
+let ``Unifier allows record width subtyping`` () =
+    let narrow = TyRecord (Map.ofList [ ("a", TyPrimitive "int") ])
+    let wide = TyRecord (Map.ofList [ ("a", TyPrimitive "int"); ("b", TyPrimitive "string") ])
+    let result = Unifier.unify [ (narrow, wide) ]
+    match result with
+    | Ok _ -> Assert.True(true)
+    | Error message -> Assert.True(false, message)
+
+[<Fact>]
+let ``Unifier matches unions by set and width`` () =
+    let unionA = TyUnion [ TyPrimitive "int"; TyPrimitive "string" ]
+    let unionB = TyUnion [ TyPrimitive "string"; TyPrimitive "int" ]
+    let unionWide = TyUnion [ TyPrimitive "int"; TyPrimitive "string"; TyPrimitive "bool" ]
+    let resultOrder = Unifier.unify [ (unionA, unionB) ]
+    let resultWidth = Unifier.unify [ (unionA, unionWide) ]
+    match resultOrder with
+    | Ok _ -> Assert.True(true)
+    | Error message -> Assert.True(false, message)
+    match resultWidth with
+    | Ok _ -> Assert.True(true)
+    | Error message -> Assert.True(false, message)

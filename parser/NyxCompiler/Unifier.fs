@@ -100,6 +100,12 @@ module Unifier =
     let private keySet (fields: Map<string, Ty>) =
         fields |> Map.keys |> Set.ofSeq
 
+    let private normalizeUnionItems (items: Ty list) =
+        items
+        |> List.fold (fun acc ty ->
+            let key = tyToString ty
+            if acc |> Map.containsKey key then acc else acc |> Map.add key ty) Map.empty
+
     let empty : Subst = Map.empty
 
     let rec apply (subst: Subst) (ty: Ty) : Ty =
@@ -128,6 +134,18 @@ module Unifier =
 
     let unify (constraints: ConstraintSet) : Result<Subst, string> =
         let rec loop (subst: Subst) (remaining: ConstraintSet) =
+            let unifyRecordFields (lFields: Map<string, Ty>) (rFields: Map<string, Ty>) rest left right =
+                let lKeys = keySet lFields
+                let rKeys = keySet rFields
+                if Set.isSubset lKeys rKeys || Set.isSubset rKeys lKeys then
+                    let commonKeys = Set.intersect lKeys rKeys
+                    let pairs =
+                        commonKeys
+                        |> Seq.map (fun key -> (lFields.[key], rFields.[key]))
+                        |> Seq.toList
+                    loop subst (pairs @ rest)
+                else
+                    Error (recordKeyMessage lKeys rKeys left right)
             match remaining with
             | [] -> Ok subst
             | (left, right) :: rest ->
@@ -154,38 +172,48 @@ module Unifier =
                         Error (tupleLengthMessage lItems.Length rItems.Length l r)
                     | TyTuple lItems, TyRecord rFields ->
                         let lFields = tupleFieldMap lItems
-                        let lKeys = keySet lFields
-                        let rKeys = keySet rFields
-                        if lFields.Count = rFields.Count && lKeys = rKeys then
-                            let pairs = lFields |> Map.toList |> List.map (fun (k, v) -> (v, rFields.[k]))
-                            loop subst (pairs @ rest)
-                        else
-                            Error (recordKeyMessage lKeys rKeys l r)
+                        unifyRecordFields lFields rFields rest l r
                     | TyRecord lFields, TyRecord rFields ->
-                        let lKeys = keySet lFields
-                        let rKeys = keySet rFields
-                        if lFields.Count = rFields.Count && lKeys = rKeys then
-                            let pairs = lFields |> Map.toList |> List.map (fun (k, v) -> (v, rFields.[k]))
-                            loop subst (pairs @ rest)
-                        else
-                            Error (recordKeyMessage lKeys rKeys l r)
+                        unifyRecordFields lFields rFields rest l r
                     | TyRecord lFields, TyTuple rItems ->
                         let rFields = tupleFieldMap rItems
-                        let lKeys = keySet lFields
-                        let rKeys = keySet rFields
-                        if lFields.Count = rFields.Count && lKeys = rKeys then
-                            let pairs = lFields |> Map.toList |> List.map (fun (k, v) -> (v, rFields.[k]))
-                            loop subst (pairs @ rest)
-                        else
-                            Error (recordKeyMessage lKeys rKeys l r)
+                        unifyRecordFields lFields rFields rest l r
                     | TyTag(lName, lPayload), TyTag(rName, rPayload) when lName = rName ->
                         match lPayload, rPayload with
                         | None, None -> loop subst rest
                         | Some lTy, Some rTy -> loop subst ((lTy, rTy) :: rest)
                         | _ -> Error $"Tag payload mismatch: {lName}. {mismatchMessage l r}"
-                    | TyUnion lItems, TyUnion rItems when lItems.Length = rItems.Length ->
-                        loop subst (List.zip lItems rItems @ rest)
                     | TyUnion lItems, TyUnion rItems ->
-                        Error (unionLengthMessage lItems.Length rItems.Length l r)
+                        let lMap = normalizeUnionItems lItems
+                        let rMap = normalizeUnionItems rItems
+                        let lKeys = lMap |> Map.keys |> Set.ofSeq
+                        let rKeys = rMap |> Map.keys |> Set.ofSeq
+                        if Set.isSubset lKeys rKeys || Set.isSubset rKeys lKeys then
+                            let commonKeys = Set.intersect lKeys rKeys
+                            let pairs =
+                                commonKeys
+                                |> Seq.map (fun key -> (lMap.[key], rMap.[key]))
+                                |> Seq.toList
+                            loop subst (pairs @ rest)
+                        else
+                            Error (unionLengthMessage lMap.Count rMap.Count l r)
+                    | TyUnion lItems, ty ->
+                        let rec tryItems items =
+                            match items with
+                            | [] -> Error (mismatchMessage l r)
+                            | item :: restItems ->
+                                match loop subst ((item, ty) :: rest) with
+                                | Ok result -> Ok result
+                                | Error _ -> tryItems restItems
+                        tryItems lItems
+                    | ty, TyUnion rItems ->
+                        let rec tryItems items =
+                            match items with
+                            | [] -> Error (mismatchMessage l r)
+                            | item :: restItems ->
+                                match loop subst ((ty, item) :: rest) with
+                                | Ok result -> Ok result
+                                | Error _ -> tryItems restItems
+                        tryItems rItems
                     | _ -> Error (mismatchMessage l r)
         loop empty constraints

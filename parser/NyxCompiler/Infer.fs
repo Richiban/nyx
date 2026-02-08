@@ -54,6 +54,7 @@ let private inputTypeFromArgs argTys =
     | [ single ] -> single
     | _ -> tupleRecordType argTys
 
+
 let private lookupPrimitive (name: string) =
     match name with
     | "int" | "Int" -> Some (primitiveType "int")
@@ -164,6 +165,33 @@ let private instantiate (state: InferState) (scheme: TypeScheme) : Ty * InferSta
 let private mkTypedExpr expr ty body statements matchArms : TypedExpr =
     { Expr = expr; Type = ty; Body = body; Statements = statements; MatchArms = matchArms }
 
+let private argTypesFromExpected (state: InferState) (args: (Identifier * TypeExpr option) list) (expectedInput: Ty) =
+    let mutable current = state
+    let argTys =
+        match expectedInput with
+        | TyRecord fields ->
+            args
+            |> List.mapi (fun index (name, _) ->
+                match fields |> Map.tryFind name with
+                | Some ty -> ty
+                | None ->
+                    let tupleName = tupleFieldName (index + 1)
+                    match fields |> Map.tryFind tupleName with
+                    | Some ty -> ty
+                    | None ->
+                        let ty, next = freshVar current
+                        current <- next
+                        ty)
+        | _ when args.Length = 1 -> [ expectedInput ]
+        | _ ->
+            args
+            |> List.map (fun _ ->
+                let ty, next = freshVar current
+                current <- next
+                ty)
+    argTys, current
+
+
 let rec private inferExpr (env: TypeEnv) (state: InferState) (expr: Expression) : Result<TypedExpr * InferState, Diagnostic list> =
     match expr with
     | LiteralExpr literal ->
@@ -201,23 +229,7 @@ let rec private inferExpr (env: TypeEnv) (state: InferState) (expr: Expression) 
             else
                 Error errors
     | Lambda(args, body) ->
-        let mutable current = state
-        let mutable env' = env
-        let argTys =
-            args
-            |> List.map (fun (name, typeOpt) ->
-                let ty, next =
-                    match typeOpt with
-                    | Some typeExpr -> typeExprToTy current typeExpr
-                    | None -> freshVar current
-                current <- next
-                env' <- TypeEnv.extend name (TypeEnv.mono ty) env'
-                ty)
-        match inferExpr env' current body with
-        | Ok (bodyExpr, next) ->
-            let inputTy = inputTypeFromArgs argTys
-            Ok (mkTypedExpr expr (TyFunc(inputTy, bodyExpr.Type)) (Some bodyExpr) None None, next)
-        | Error err -> Error err
+        inferLambdaWithExpected env state args body None None
     | BinaryOp(_, left, right) ->
         match inferExpr env state left with
         | Error err -> Error err
@@ -548,6 +560,39 @@ let rec private inferExpr (env: TypeEnv) (state: InferState) (expr: Expression) 
         let ty, next = freshVar state
         Ok (mkTypedExpr expr ty None None None, next)
 
+and inferLambdaWithExpected (env: TypeEnv) (state: InferState) (args: (Identifier * TypeExpr option) list) (body: Expression) (expectedInputOpt: Ty option) (expectedReturnOpt: Ty option) =
+    let mutable current = state
+    let mutable env' = env
+    let argTys =
+        match expectedInputOpt with
+        | Some expectedInput ->
+            let tys, next = argTypesFromExpected current args expectedInput
+            current <- next
+            tys
+        | None ->
+            args
+            |> List.map (fun (_, typeOpt) ->
+                let ty, next =
+                    match typeOpt with
+                    | Some typeExpr -> typeExprToTy current typeExpr
+                    | None -> freshVar current
+                current <- next
+                ty)
+    for ((name, _), ty) in List.zip args argTys do
+        env' <- TypeEnv.extend name (TypeEnv.mono ty) env'
+    match inferExpr env' current body with
+    | Ok (bodyExpr, next) ->
+        let withReturnConstraint =
+            match expectedReturnOpt with
+            | Some expectedReturn -> addConstraint bodyExpr.Type expectedReturn next
+            | None -> next
+        let inputTy =
+            match expectedInputOpt with
+            | Some expectedInput -> expectedInput
+            | None -> inputTypeFromArgs argTys
+        Ok (mkTypedExpr (Lambda(args, body)) (TyFunc(inputTy, bodyExpr.Type)) (Some bodyExpr) None None, withReturnConstraint)
+    | Error err -> Error err
+
 and inferBlock (env: TypeEnv) (state: InferState) (statements: Statement list) : Result<TypedExpr * InferState, Diagnostic list> =
     match statements with
     | [] -> Ok (mkTypedExpr (Block []) (TyPrimitive "unit") None (Some []) None, state)
@@ -561,15 +606,26 @@ and inferBlock (env: TypeEnv) (state: InferState) (statements: Statement list) :
             match statement with
             | DefStatement(name, typeOpt, expr) ->
                 if errors.IsEmpty then
-                    match inferExpr env' current expr with
+                    let expectedInputOpt, expectedReturnOpt, expectedDeclaredOpt, nextState =
+                        match typeOpt with
+                        | Some typeExpr ->
+                            let ty, st = typeExprToTy current typeExpr
+                            match ty with
+                            | TyFunc(inputTy, returnTy) -> Some inputTy, Some returnTy, Some ty, st
+                            | _ -> None, None, Some ty, st
+                        | None -> None, None, None, current
+                    let inferResult =
+                        match expr with
+                        | Lambda(args, body) when expectedDeclaredOpt.IsSome ->
+                            inferLambdaWithExpected env' nextState args body expectedInputOpt expectedReturnOpt
+                        | _ -> inferExpr env' nextState expr
+                    match inferResult with
                     | Ok (typedExpr, next) ->
-                        let declaredTy, nextState =
-                            match typeOpt with
-                            | Some typeExpr ->
-                                let ty, st = typeExprToTy next typeExpr
-                                ty, addConstraint typedExpr.Type ty st
+                        let declaredTy, finalState =
+                            match expectedDeclaredOpt with
+                            | Some declaredTy -> declaredTy, addConstraint typedExpr.Type declaredTy next
                             | None -> typedExpr.Type, next
-                        current <- nextState
+                        current <- finalState
                         let scheme = TypeEnv.generalize env' declaredTy
                         env' <- TypeEnv.extend name scheme env'
                         typedStatements <- typedStatements @ [ TypedDefStatement(name, typeOpt, typedExpr) ]
@@ -603,15 +659,26 @@ let inferModule (module': Module) : Result<Map<string, Ty> * TypedTopLevelItem l
     for item in module' do
         match item with
         | Def (ValueDef(name, typeOpt, expr)) when errors.IsEmpty ->
-            match inferExpr env state expr with
+            let expectedInputOpt, expectedReturnOpt, expectedDeclaredOpt, nextState =
+                match typeOpt with
+                | Some typeExpr ->
+                    let ty, st = typeExprToTy state typeExpr
+                    match ty with
+                    | TyFunc(inputTy, returnTy) -> Some inputTy, Some returnTy, Some ty, st
+                    | _ -> None, None, Some ty, st
+                | None -> None, None, None, state
+            let inferResult =
+                match expr with
+                | Lambda(args, body) when expectedDeclaredOpt.IsSome ->
+                    inferLambdaWithExpected env nextState args body expectedInputOpt expectedReturnOpt
+                | _ -> inferExpr env nextState expr
+            match inferResult with
             | Ok (typedExpr, next) ->
-                let declaredTy, nextState =
-                    match typeOpt with
-                    | Some typeExpr ->
-                        let ty, st = typeExprToTy next typeExpr
-                        ty, addConstraint typedExpr.Type ty st
+                let declaredTy, finalState =
+                    match expectedDeclaredOpt with
+                    | Some declaredTy -> declaredTy, addConstraint typedExpr.Type declaredTy next
                     | None -> typedExpr.Type, next
-                state <- nextState
+                state <- finalState
                 let scheme = TypeEnv.generalize env declaredTy
                 env <- TypeEnv.extend name scheme env
                 types <- types |> Map.add name declaredTy

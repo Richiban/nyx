@@ -108,10 +108,15 @@ module Unifier =
             | _ -> false)
 
 
+    let private tagUnionKey ty =
+        match ty with
+        | TyTag(name, _) -> name
+        | _ -> tyToString ty
+
     let private normalizeUnionItems (items: Ty list) =
         items
         |> List.fold (fun acc ty ->
-            let key = tyToString ty
+            let key = tagUnionKey ty
             if acc |> Map.containsKey key then acc else acc |> Map.add key ty) Map.empty
 
     let private parseTagUnion items =
@@ -243,7 +248,7 @@ module Unifier =
                                     loop subst (pairs @ rest)
                                 else
                                     Error (tagUnionLengthMessage lMap.Count rMap.Count l r)
-                            else if (lRest.IsSome || extraLeft.IsEmpty) && (rRest.IsSome || extraRight.IsEmpty) then
+                            else if (lRest.IsSome || extraRight.IsEmpty) && (rRest.IsSome || extraLeft.IsEmpty) then
                                 loop subst (pairs @ restConstraints @ rest)
                             else
                                 Error (tagUnionLengthMessage lMap.Count rMap.Count l r)

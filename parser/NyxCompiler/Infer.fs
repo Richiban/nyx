@@ -683,9 +683,9 @@ and inferBlock (env: TypeEnv) (state: InferState) (statements: Statement list) :
         else
             Error errors
 
-let inferModule (module': Module) : Result<Map<string, Ty> * TypedTopLevelItem list * InferState, Diagnostic list> =
-    let mutable env = TypeEnv.empty
-    let mutable state = emptyState
+let inferModuleWithEnv (initialEnv: TypeEnv) (initialState: InferState) (module': Module) : Result<Map<string, Ty> * TypedTopLevelItem list * InferState, Diagnostic list> =
+    let mutable env = initialEnv
+    let mutable state = initialState
     let mutable types = Map.empty
     let mutable items: TypedTopLevelItem list = []
     let mutable errors: Diagnostic list = []
@@ -733,3 +733,6 @@ let inferModule (module': Module) : Result<Map<string, Ty> * TypedTopLevelItem l
         | Def (ValueDef _) -> ()
 
     if errors.IsEmpty then Ok (types, items, state) else Error errors
+
+let inferModule (module': Module) : Result<Map<string, Ty> * TypedTopLevelItem list * InferState, Diagnostic list> =
+    inferModuleWithEnv TypeEnv.empty emptyState module'

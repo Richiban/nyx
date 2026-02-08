@@ -42,7 +42,4 @@ type TypedTopLevelItem =
     | TypedDef of TypedDefinition
     | TypedExprItem of TypedExpr
 
-type TypedModule =
-    { Module: Module
-      Types: Map<string, Ty>
-      Items: TypedTopLevelItem list }
+type TypedModule = { Module: Module; Types: Map<string, Ty>; TypeDefs: Map<string, Ty * bool>; Items: TypedTopLevelItem list }

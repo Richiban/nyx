@@ -593,6 +593,16 @@ let typeDefCore: Parser<Definition, unit> =
             TypeDef(name, modifiers, typeParams, typeValue))
     <?> "type definition"
 
+let valueDefCore: Parser<Definition, unit> =
+    pipe2
+        (opt (attempt (pstring "export" >>. ws)) >>. pstring "def" >>. ws >>. typedIdentifier .>> wsNoNl() .>> pstring "=")
+        (wsInline >>. (sepBy1 expression (pstring "," .>> ws) |>> fun exprs ->
+            match exprs with
+            | [single] -> single
+            | multiple -> TupleExpr multiple))
+        (fun (name, typeOpt) expr -> ValueDef(name, typeOpt, expr))
+    <?> "value definition"
+
 // Match expression parser
 do
     let matchArm =
@@ -926,7 +936,7 @@ do
 
     let defStatement = 
         pipe2
-            (pstring "def" >>. ws >>. typedIdentifier .>> wsNoNl() .>> pstring "=" .>> wsNoNl())
+            (opt (attempt (pstring "export" >>. ws)) >>. pstring "def" >>. ws >>. typedIdentifier .>> wsNoNl() .>> pstring "=" .>> wsNoNl())
             (attempt (blockExpr()) <|> (wsNoNl() >>. (sepBy1 expression (pstring "," .>> ws) |>> fun exprs ->
                 match exprs with
                 | [single] -> single
@@ -945,7 +955,7 @@ let moduleDecl: Parser<TopLevelItem, unit> =
 // Parser for value definition (top-level)
 let valueDef: Parser<TopLevelItem, unit> =
     pipe2
-        (pstring "def" >>. ws >>. typedIdentifier .>> wsNoNl() .>> pstring "=")  // Don't consume newlines after =
+        (opt (attempt (pstring "export" >>. ws)) >>. pstring "def" >>. ws >>. typedIdentifier .>> wsNoNl() .>> pstring "=")  // Don't consume newlines after =
         (attempt (blockExpr()) <|> (wsInline >>. (sepBy1 expression (pstring "," .>> ws) |>> fun exprs ->
             match exprs with
             | [single] -> single
@@ -967,7 +977,7 @@ let topLevelItem: Parser<TopLevelItem, unit> =
     ws >>. choice [
         moduleDecl
         (attempt (pstring "import" >>. wsNoNl() >>. importItems) |>> Import)
-        typeDef
+        attempt typeDef
         valueDef
         topLevelExpr
     ] .>> ws

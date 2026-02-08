@@ -33,8 +33,7 @@ let main args =
             printfn "File not found: %s" filePath
             2
         else
-            let source = File.ReadAllText filePath
-            let result = Compiler.compile source
+            let result = Compiler.compileFile filePath
             printfn "Phase: %A" result.Phase
             printDiagnostics result.Diagnostics
             match result.Typed with

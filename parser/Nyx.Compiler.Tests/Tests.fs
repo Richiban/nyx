@@ -150,6 +150,27 @@ let ``Typecheck requires catch-all for tag union rest`` () =
     Assert.Contains("catch-all", message)
 
 [<Fact>]
+let ``Typecheck tag union width and rest regression`` () =
+    let source =
+        "def u: #some(string) | #nil = #nil\n" +
+        "def g: (#some(string) | #nil | #notFound) -> string = { o -> \"\" }\n" +
+        "def _ = g(u)\n" +
+        "def mapOption: ((#some(a) | r), a -> b) -> #some(b) | r = { o, f ->\n" +
+        "  match o\n" +
+        "  | #some(v) -> #some(f(v))\n" +
+        "  | other -> other\n" +
+        "}\n" +
+        "def l: #some(string) | #nil = #some(\"\")\n" +
+        "def mapper: string -> int = { s -> 1 }\n" +
+        "def l2 = l \\mapOption(mapper)"
+    let result = Compiler.compile source
+    Assert.True(result.Diagnostics.IsEmpty)
+    let typed = result.Typed.Value
+    match typed.Types.["l2"] with
+    | TyUnion [ TyTag("some", Some (TyPrimitive "int")); TyUnion [ TyTag("nil", None) ] ] -> Assert.True(true)
+    | other -> Assert.True(false, $"Unexpected l2 type: %A{other}")
+
+[<Fact>]
 let ``Typecheck match arms agree`` () =
     let source =
         "def result = match 1\n" +

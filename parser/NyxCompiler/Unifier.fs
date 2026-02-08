@@ -104,13 +104,36 @@ module Unifier =
         items
         |> List.forall (function
             | TyTag _ -> true
+            | TyVar _ -> true
             | _ -> false)
+
 
     let private normalizeUnionItems (items: Ty list) =
         items
         |> List.fold (fun acc ty ->
             let key = tyToString ty
             if acc |> Map.containsKey key then acc else acc |> Map.add key ty) Map.empty
+
+    let private parseTagUnion items =
+        if ensureTagUnion items then
+            let mutable restVar: TyVar option = None
+            let tagMap =
+                items
+                |> List.choose (function
+                    | TyTag _ as tag -> Some tag
+                    | TyVar v ->
+                        match restVar with
+                        | None ->
+                            restVar <- Some v
+                            None
+                        | Some _ ->
+                            restVar <- restVar
+                            None
+                    | _ -> None)
+                |> normalizeUnionItems
+            Ok (tagMap, restVar)
+        else
+            Error "Only tag unions are supported"
 
     let empty : Subst = Map.empty
 
@@ -190,45 +213,73 @@ module Unifier =
                         | Some lTy, Some rTy -> loop subst ((lTy, rTy) :: rest)
                         | _ -> Error $"Tag payload mismatch: {lName}. {mismatchMessage l r}"
                     | TyUnion lItems, TyUnion rItems ->
-                        if ensureTagUnion lItems && ensureTagUnion rItems then
-                            let lMap = normalizeUnionItems lItems
-                            let rMap = normalizeUnionItems rItems
+                        match parseTagUnion lItems, parseTagUnion rItems with
+                        | Ok (lMap, lRest), Ok (rMap, rRest) ->
                             let lKeys = lMap |> Map.keys |> Set.ofSeq
                             let rKeys = rMap |> Map.keys |> Set.ofSeq
-                            if Set.isSubset lKeys rKeys || Set.isSubset rKeys lKeys then
-                                let commonKeys = Set.intersect lKeys rKeys
-                                let pairs =
-                                    commonKeys
-                                    |> Seq.map (fun key -> (lMap.[key], rMap.[key]))
-                                    |> Seq.toList
-                                loop subst (pairs @ rest)
+                            let extraLeft = Set.difference lKeys rKeys
+                            let extraRight = Set.difference rKeys lKeys
+                            let commonKeys = Set.intersect lKeys rKeys
+                            let pairs =
+                                commonKeys
+                                |> Seq.map (fun key -> (lMap.[key], rMap.[key]))
+                                |> Seq.toList
+                            let restConstraints =
+                                [ match lRest with
+                                  | Some restVar when not extraRight.IsEmpty ->
+                                      let extraTags = extraRight |> Seq.map (fun key -> rMap.[key]) |> Seq.toList
+                                      yield (TyVar restVar, TyUnion extraTags)
+                                  | _ -> ()
+                                  match rRest with
+                                  | Some restVar when not extraLeft.IsEmpty ->
+                                      let extraTags = extraLeft |> Seq.map (fun key -> lMap.[key]) |> Seq.toList
+                                      yield (TyVar restVar, TyUnion extraTags)
+                                  | _ -> ()
+                                  match lRest, rRest with
+                                  | Some lVar, Some rVar -> yield (TyVar lVar, TyVar rVar)
+                                  | _ -> () ]
+                            if lRest.IsNone && rRest.IsNone then
+                                if extraLeft.IsEmpty || extraRight.IsEmpty then
+                                    loop subst (pairs @ rest)
+                                else
+                                    Error (tagUnionLengthMessage lMap.Count rMap.Count l r)
+                            else if (lRest.IsSome || extraLeft.IsEmpty) && (rRest.IsSome || extraRight.IsEmpty) then
+                                loop subst (pairs @ restConstraints @ rest)
                             else
                                 Error (tagUnionLengthMessage lMap.Count rMap.Count l r)
-                        else
-                            Error "Only tag unions are supported"
+                        | Error message, _ -> Error message
+                        | _, Error message -> Error message
                     | TyUnion lItems, ty ->
-                        if ensureTagUnion lItems then
+                        match parseTagUnion lItems with
+                        | Ok (lMap, lRest) ->
+                            let tags = lMap |> Map.toList |> List.map snd
                             let rec tryItems items =
                                 match items with
-                                | [] -> Error (mismatchMessage l r)
+                                | [] ->
+                                    match lRest with
+                                    | Some restVar -> loop subst ((TyVar restVar, ty) :: rest)
+                                    | None -> Error (mismatchMessage l r)
                                 | item :: restItems ->
                                     match loop subst ((item, ty) :: rest) with
                                     | Ok result -> Ok result
                                     | Error _ -> tryItems restItems
-                            tryItems lItems
-                        else
-                            Error "Only tag unions are supported"
+                            tryItems tags
+                        | Error message -> Error message
                     | ty, TyUnion rItems ->
-                        if ensureTagUnion rItems then
+                        match parseTagUnion rItems with
+                        | Ok (rMap, rRest) ->
+                            let tags = rMap |> Map.toList |> List.map snd
                             let rec tryItems items =
                                 match items with
-                                | [] -> Error (mismatchMessage l r)
+                                | [] ->
+                                    match rRest with
+                                    | Some restVar -> loop subst ((ty, TyVar restVar) :: rest)
+                                    | None -> Error (mismatchMessage l r)
                                 | item :: restItems ->
                                     match loop subst ((ty, item) :: rest) with
                                     | Ok result -> Ok result
                                     | Error _ -> tryItems restItems
-                            tryItems rItems
-                        else
-                            Error "Only tag unions are supported"
+                            tryItems tags
+                        | Error message -> Error message
                     | _ -> Error (mismatchMessage l r)
         loop empty constraints

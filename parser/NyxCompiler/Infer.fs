@@ -549,11 +549,36 @@ let rec private inferExpr (env: TypeEnv) (state: InferState) (expr: Expression) 
                             typedArms <- typedArms @ [ (typedPatterns, typedExpr) ]
                         | Error err -> errors <- err
             if errors.IsEmpty then
-                match List.rev armExprs with
-                | [] -> Ok (mkTypedExpr expr (TyPrimitive "unit") None None (Some typedArms), current)
-                | head :: tail ->
-                    let constrained = tail |> List.fold (fun st typedExpr -> addConstraint head.Type typedExpr.Type st) current
-                    Ok (mkTypedExpr expr head.Type None None (Some typedArms), constrained)
+                let hasRestUnion =
+                    scrutineeTypes
+                    |> List.exists (function
+                        | TyUnion items -> items |> List.exists (function TyVar _ -> true | _ -> false)
+                        | _ -> false)
+                let restError =
+                    if hasRestUnion then
+                        let hasCatchAll =
+                            arms
+                            |> List.exists (fun (patterns, _) ->
+                                patterns
+                                |> List.exists (function
+                                    | WildcardPattern
+                                    | ElsePattern
+                                    | IdentifierPattern _ -> true
+                                    | _ -> false))
+                        if hasCatchAll then
+                            None
+                        else
+                            Some (Diagnostics.error "Tag union rest parameters require a catch-all match arm")
+                    else
+                        None
+                match restError with
+                | Some diag -> Error [ diag ]
+                | None ->
+                    match List.rev armExprs with
+                    | [] -> Ok (mkTypedExpr expr (TyPrimitive "unit") None None (Some typedArms), current)
+                    | head :: tail ->
+                        let constrained = tail |> List.fold (fun st typedExpr -> addConstraint head.Type typedExpr.Type st) current
+                        Ok (mkTypedExpr expr head.Type None None (Some typedArms), constrained)
             else
                 Error errors
     | MemberAccess(_, _) ->

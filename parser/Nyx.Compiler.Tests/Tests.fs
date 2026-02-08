@@ -122,6 +122,34 @@ let ``Typecheck allows wider unions in assignment`` () =
     Assert.Equal(TyPrimitive "int", typed.Types.["result"])
 
 [<Fact>]
+let ``Typecheck supports tag union rest parameter`` () =
+    let source =
+        "def mapOption: ((#some(a) | r), a -> b) -> #some(b) | r = { o, f ->\n" +
+        "  match o\n" +
+        "  | #some(v) -> #some(f(v))\n" +
+        "  | other -> other\n" +
+        "}\n" +
+        "def result = mapOption(#some(1), { x -> x })"
+    let result = Compiler.compile source
+    Assert.True(result.Diagnostics.IsEmpty)
+    let typed = result.Typed.Value
+    match typed.Types.["result"] with
+    | TyUnion [ TyTag("some", Some (TyPrimitive "int")); TyVar _ ] -> Assert.True(true)
+    | other -> Assert.True(false, $"Unexpected rest union result type: %A{other}")
+
+[<Fact>]
+let ``Typecheck requires catch-all for tag union rest`` () =
+    let source =
+        "def mapOption: ((#some(a) | r), a -> b) -> #some(b) | r = { o, f ->\n" +
+        "  match o\n" +
+        "  | #some(v) -> #some(f(v))\n" +
+        "}\n"
+    let result = Compiler.compile source
+    Assert.False(result.Diagnostics.IsEmpty)
+    let message = result.Diagnostics |> List.head |> fun diag -> diag.Message
+    Assert.Contains("catch-all", message)
+
+[<Fact>]
 let ``Typecheck match arms agree`` () =
     let source =
         "def result = match 1\n" +

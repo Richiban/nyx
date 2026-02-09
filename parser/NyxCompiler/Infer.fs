@@ -6,9 +6,23 @@ open NyxCompiler
 type TypedExpr = NyxCompiler.TypedExpr
 type TypedStatement = NyxCompiler.TypedStatement
 
-type InferState = { NextId: int; Constraints: ConstraintSet; TypeVars: Map<string, TyVar>; TypeDefs: Map<string, Ty * bool>; LocalNominals: Set<string>; LocalPrivateNominals: Set<string> }
+type InferState =
+        { NextId: int;
+            Constraints: ConstraintSet;
+            TypeVars: Map<string, TyVar>;
+            TypeDefs: Map<string, Ty * bool>;
+            ContextDefs: Map<string, TypeExpr>;
+            LocalNominals: Set<string>;
+            LocalPrivateNominals: Set<string> }
 
-let emptyState = { NextId = 0; Constraints = []; TypeVars = Map.empty; TypeDefs = Map.empty; LocalNominals = Set.empty; LocalPrivateNominals = Set.empty }
+let emptyState =
+        { NextId = 0;
+            Constraints = [];
+            TypeVars = Map.empty;
+            TypeDefs = Map.empty;
+            ContextDefs = Map.empty;
+            LocalNominals = Set.empty;
+            LocalPrivateNominals = Set.empty }
 
 let private freshVar (state: InferState) =
     let var = { Id = state.NextId; Name = None }
@@ -38,6 +52,9 @@ let private numericType =
 
 let private tupleFieldName index =
     $"item{index}"
+
+let private isContextDef (modifiers: TypeDefModifier list) =
+    modifiers |> List.contains Context
 
 let private tupleRecordType (items: Ty list) =
     items
@@ -158,6 +175,67 @@ let rec private typeExprToTy (state: InferState) (typeExpr: TypeExpr) : Ty * Inf
     | TypeWhere(baseType, _) ->
         typeExprToTy state baseType
 
+let private extractContextFromTypeExpr (typeExpr: TypeExpr option) : TypeExpr list option * TypeExpr option =
+    match typeExpr with
+    | Some (TypeWithContext(contexts, inner)) -> Some contexts, Some inner
+    | Some (TypeContext contexts) -> Some contexts, None
+    | Some other -> None, Some other
+    | None -> None, None
+
+let private extendEnvWithRecordFields (env: TypeEnv) (ty: Ty) =
+    let addFields fields =
+        fields
+        |> Map.fold (fun acc name fieldTy -> TypeEnv.extend name (TypeEnv.mono fieldTy) acc) env
+    match ty with
+    | TyRecord fields -> addFields fields
+    | TyNominal(_, underlying, _) ->
+        match underlying with
+        | TyRecord fields -> addFields fields
+        | _ -> env
+    | _ -> env
+
+let rec private collectContextMembers (state: InferState) (ctxExpr: TypeExpr) : (Identifier * Ty) list * InferState =
+    match ctxExpr with
+    | TypeRecord fields ->
+        let mutable current = state
+        let members =
+            fields
+            |> List.choose (function
+                | TypeField(name, _, _, typeOpt, _) -> Some (name, typeOpt)
+                | TypeMember(name, typeOpt) -> Some (name, typeOpt))
+            |> List.map (fun (name, typeOpt) ->
+                let ty, next =
+                    match typeOpt with
+                    | Some t -> typeExprToTy current t
+                    | None -> freshVar current
+                current <- next
+                name, ty)
+        members, current
+    | TypeContext contexts ->
+        let mutable current = state
+        let members =
+            contexts
+            |> List.collect (fun item ->
+                let itemMembers, next = collectContextMembers current item
+                current <- next
+                itemMembers)
+        members, current
+    | TypeName name
+    | TypeApply(name, _) ->
+        match state.ContextDefs |> Map.tryFind name with
+        | Some ctxDef -> collectContextMembers state ctxDef
+        | None -> [], state
+    | _ -> [], state
+
+let private extendEnvWithContexts (env: TypeEnv) (state: InferState) (contexts: TypeExpr list) =
+    let mutable current = state
+    let mutable env' = env
+    for ctx in contexts do
+        let members, next = collectContextMembers current ctx
+        current <- next
+        env' <- members |> List.fold (fun acc (name, ty) -> TypeEnv.extend name (TypeEnv.mono ty) acc) env'
+    env', current
+
 let private registerTypeDef (state: InferState) (name: Identifier) (modifiers: TypeDefModifier list) (body: TypeExpr) =
     let underlyingTy, next = typeExprToTy state body
     let isPrivate = isPrivateType modifiers
@@ -165,8 +243,11 @@ let private registerTypeDef (state: InferState) (name: Identifier) (modifiers: T
         if name.StartsWith("@") then next.LocalNominals |> Set.add name else next.LocalNominals
     let nextPrivate =
         if name.StartsWith("@") && isPrivate then next.LocalPrivateNominals |> Set.add name else next.LocalPrivateNominals
+    let nextContexts =
+        if isContextDef modifiers then next.ContextDefs |> Map.add name body else next.ContextDefs
     { next with
         TypeDefs = next.TypeDefs |> Map.add name (underlyingTy, isPrivate)
+        ContextDefs = nextContexts
         LocalNominals = nextNominals
         LocalPrivateNominals = nextPrivate }
 
@@ -281,8 +362,9 @@ let rec private inferExpr (env: TypeEnv) (state: InferState) (expr: Expression) 
     | UseIn(binding, body) ->
         match inferUseBinding env state binding with
         | Error err -> Error err
-        | Ok (_, nextState) ->
-            match inferExpr env nextState body with
+        | Ok (typedBinding, nextState) ->
+            let envWithUse = extendEnvWithRecordFields env typedBinding.Type
+            match inferExpr envWithUse nextState body with
             | Ok (typedBody, finalState) -> Ok (mkTypedExpr expr typedBody.Type (Some typedBody) None None, finalState)
             | Error err -> Error err
     | Block statements ->
@@ -682,19 +764,24 @@ and inferBlock (env: TypeEnv) (state: InferState) (statements: Statement list) :
             match statement with
             | DefStatement(isExport, name, typeOpt, expr) ->
                 if errors.IsEmpty then
-                    let expectedInputOpt, expectedReturnOpt, expectedDeclaredOpt, nextState =
-                        match typeOpt with
-                        | Some typeExpr ->
-                            let ty, st = typeExprToTy current typeExpr
+                    let contextOpt, declaredTypeExprOpt = extractContextFromTypeExpr typeOpt
+                    let envWithCtx, nextState =
+                        match contextOpt with
+                        | Some contexts -> extendEnvWithContexts env' current contexts
+                        | None -> env', current
+                    let expectedInputOpt, expectedReturnOpt, expectedDeclaredOpt, nextState2 =
+                        match declaredTypeExprOpt with
+                        | Some declaredExpr ->
+                            let ty, st = typeExprToTy nextState declaredExpr
                             match ty with
                             | TyFunc(inputTy, returnTy) -> Some inputTy, Some returnTy, Some ty, st
                             | _ -> None, None, Some ty, st
-                        | None -> None, None, None, current
+                        | None -> None, None, None, nextState
                     let inferResult =
                         match expr with
                         | Lambda(args, body) when expectedDeclaredOpt.IsSome ->
-                            inferLambdaWithExpected env' nextState args body expectedInputOpt expectedReturnOpt
-                        | _ -> inferExpr env' nextState expr
+                            inferLambdaWithExpected envWithCtx nextState2 args body expectedInputOpt expectedReturnOpt
+                        | _ -> inferExpr envWithCtx nextState2 expr
                     match inferResult with
                     | Ok (typedExpr, next) ->
                         let declaredTy, finalState =
@@ -728,6 +815,7 @@ and inferBlock (env: TypeEnv) (state: InferState) (statements: Statement list) :
                     match inferUseBinding env' current binding with
                     | Ok (typedExpr, next) ->
                         current <- next
+                        env' <- extendEnvWithRecordFields env' typedExpr.Type
                         typedStatements <- typedStatements @ [ TypedUseStatement(binding, Some typedExpr) ]
                     | Error err -> errors <- err
             | ExprStatement expr ->
@@ -754,19 +842,24 @@ let inferModuleWithEnv (initialEnv: TypeEnv) (initialState: InferState) (module'
     for item in module' do
         match item with
         | Def (ValueDef(isExport, name, typeOpt, expr)) when errors.IsEmpty ->
-            let expectedInputOpt, expectedReturnOpt, expectedDeclaredOpt, nextState =
-                match typeOpt with
-                | Some typeExpr ->
-                    let ty, st = typeExprToTy state typeExpr
+            let contextOpt, declaredTypeExprOpt = extractContextFromTypeExpr typeOpt
+            let envWithCtx, nextState =
+                match contextOpt with
+                | Some contexts -> extendEnvWithContexts env state contexts
+                | None -> env, state
+            let expectedInputOpt, expectedReturnOpt, expectedDeclaredOpt, nextState2 =
+                match declaredTypeExprOpt with
+                | Some declaredExpr ->
+                    let ty, st = typeExprToTy nextState declaredExpr
                     match ty with
                     | TyFunc(inputTy, returnTy) -> Some inputTy, Some returnTy, Some ty, st
                     | _ -> None, None, Some ty, st
-                | None -> None, None, None, state
+                | None -> None, None, None, nextState
             let inferResult =
                 match expr with
                 | Lambda(args, body) when expectedDeclaredOpt.IsSome ->
-                    inferLambdaWithExpected env nextState args body expectedInputOpt expectedReturnOpt
-                | _ -> inferExpr env nextState expr
+                    inferLambdaWithExpected envWithCtx nextState2 args body expectedInputOpt expectedReturnOpt
+                | _ -> inferExpr envWithCtx nextState2 expr
             match inferResult with
             | Ok (typedExpr, next) ->
                 let declaredTy, finalState =

@@ -54,6 +54,43 @@ let ``Typecheck uses unit input for zero-arg functions`` () =
     Assert.Equal(TyPrimitive "int", typed.Types.["result"])
 
 [<Fact>]
+let ``Typecheck allows context members with annotation`` () =
+    let source =
+        "context Console = (println: string -> ())\n" +
+        "def sayHello: [Console] () -> () = { println(\"hi\") }"
+    let result = Compiler.compile source
+    Assert.True(result.Diagnostics.IsEmpty)
+
+[<Fact>]
+let ``Typecheck rejects missing context members`` () =
+    let source =
+        "context Console = (println: string -> ())\n" +
+        "def sayHello = { println(\"hi\") }"
+    let result = Compiler.compile source
+    Assert.False(result.Diagnostics.IsEmpty)
+    let message = result.Diagnostics |> List.head |> fun diag -> diag.Message
+    Assert.Contains("Unknown", message)
+
+[<Fact>]
+let ``Typecheck allows use statement to bring members into scope`` () =
+    let source =
+        "def main = {\n" +
+        "  use Console = (println = { msg -> msg })\n" +
+        "  println(\"hi\")\n" +
+        "}"
+    let result = Compiler.compile source
+    Assert.True(result.Diagnostics.IsEmpty)
+
+[<Fact>]
+let ``Typecheck allows use-in expression`` () =
+    let source =
+        "def result = use Ctx = (value = 1) in value"
+    let result = Compiler.compile source
+    Assert.True(result.Diagnostics.IsEmpty)
+    let typed = result.Typed.Value
+    Assert.Equal(TyPrimitive "int", typed.Types.["result"])
+
+[<Fact>]
 let ``Typecheck supports mixed positional and named records`` () =
     let source = "def value = (1, 2, z = 3)"
     let result = Compiler.compile source

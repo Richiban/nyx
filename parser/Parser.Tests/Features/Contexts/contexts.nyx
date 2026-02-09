@@ -15,7 +15,7 @@ def readAndPrint: [Console + FileSystem] string -> () = { filename ->
   println(filename)
 }
 
-def r = use PointSum in points \sum
+def r = use pointSum in points \sum
 
 def main = {
   use Emit(

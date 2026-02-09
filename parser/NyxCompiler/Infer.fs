@@ -763,8 +763,7 @@ let rec private inferExpr (env: TypeEnv) (state: InferState) (expr: Expression) 
 
 and inferUseBinding (env: TypeEnv) (state: InferState) (binding: UseBinding) : Result<TypedExpr * InferState, Diagnostic list> =
     match binding with
-    | UseValue expr
-    | UseAssign(_, expr) -> inferExpr env state expr
+    | UseValue expr -> inferExpr env state expr
 
 and inferLambdaWithExpected (env: TypeEnv) (state: InferState) (args: (Identifier * TypeExpr option) list) (body: Expression) (expectedInputOpt: Ty option) (expectedReturnOpt: Ty option) =
     let mutable current = state

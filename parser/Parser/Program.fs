@@ -95,7 +95,6 @@ and Statement =
 
 and UseBinding =
     | UseValue of Expression
-    | UseAssign of Identifier * Expression
 
 // Helper type for parsing list patterns
 type ListPatternElement =

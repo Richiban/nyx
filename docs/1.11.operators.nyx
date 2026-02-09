@@ -52,7 +52,11 @@ context VectorOps = (
   `+`: Vector, Vector -> Vector
 )
 
-use VectorOps in a + b
+def vectorOps: VectorOps = (
+  `+` = { a, b -> a + b }
+)
+
+use vectorOps in a + b
 
 ---
   # Comparison

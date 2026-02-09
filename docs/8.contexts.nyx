@@ -152,7 +152,7 @@ def pointSum: Sum(Point) = (
   `+` = { a, b -> Point(x = a.x + b.x, y = a.y + b.y) }
 )
 
-def r = use PointSum in points \sum
+def r = use pointSum in points \sum
 
 
 def addPoundsAndDollars
@@ -198,6 +198,10 @@ type Person = (
 )
 
 --  The `use` keyword loads an object into the context in a statement context. 
+--  Syntax:
+--    use <expr>            -- load a record expression into the current context
+--    use <expr> in <expr>  -- load a record expression for a single expression
+--  The expression must be a record type (records are the only types that support intersection).
 --  We can define a default def at the top level of a module,
 --  so that anyone who loads our module gets this in their context automatically. Such declarations
 --  do not have to be named, but it's recommended

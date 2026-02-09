@@ -86,7 +86,7 @@ def safeDivide: <Raise> int, int -> int
 
 def raiseConst: () -> int
   = {
-    use Raise (                 -- The `use` construct puts the relevant record into the context
+    use Raise(                  -- The `use` construct puts the relevant record into the context
       ctx raise = { _ -> 42 }
     )
 
@@ -96,7 +96,7 @@ def raiseConst: () -> int
 
 def raiseConst2: () -> int
   = {
-    use Raise (                 -- The `use` construct puts the relevant record into the context
+    use Raise(                  -- The `use` construct puts the relevant record into the context
       ctx raise = { _ -> resume 42 }
     )
 
@@ -114,7 +114,7 @@ def addTwice: <Ask(int)> () -> int
 
 def askConst: () -> int
   = {
-    use Ask(int) (
+    use Ask(int)(
       ask = { 21 }
     )
 

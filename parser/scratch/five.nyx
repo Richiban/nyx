@@ -22,5 +22,10 @@ def h = {
         println = { s -> () }
     )
 
+    use CAdd(
+        
+        add = { x, y -> x + y }
+    )
+
     g()
 }

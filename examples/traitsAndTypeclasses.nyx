@@ -70,7 +70,7 @@ def reduce: [Monoid(α)] Seq(α) -> α
     xs \fold(empty, combine)
   }
 
-def sum(xs) = use MultiplicativeMonoid in reduce(xs)
+def sum(xs) = use multiplicativeMonoid in reduce(xs)
 
 type Point = (x: int, y: int)
 

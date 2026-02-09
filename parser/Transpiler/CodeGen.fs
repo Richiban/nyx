@@ -256,7 +256,6 @@ let rec transpileExpression (expr: Expression) : string =
 and transpileUseBinding (binding: UseBinding) : string =
     match binding with
     | UseValue expr -> transpileExpression expr
-    | UseAssign(_, expr) -> transpileExpression expr
 
 and transpileStatement (stmt: Statement) : string =
     match stmt with

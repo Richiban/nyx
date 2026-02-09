@@ -74,8 +74,9 @@ let ``Typecheck rejects missing context members`` () =
 [<Fact>]
 let ``Typecheck allows use statement to bring members into scope`` () =
     let source =
+        "context Console = (println: string -> string)\n" +
         "def main = {\n" +
-        "  use Console (println = { msg -> msg })\n" +
+        "  use Console(println = { msg -> msg })\n" +
         "  println(\"hi\")\n" +
         "}"
     let result = Compiler.compile source
@@ -84,7 +85,8 @@ let ``Typecheck allows use statement to bring members into scope`` () =
 [<Fact>]
 let ``Typecheck allows use-in expression`` () =
     let source =
-        "def result = use Ctx (value = 1) in value"
+        "type Ctx = (value: int)\n" +
+        "def result = use Ctx(value = 1) in value"
     let result = Compiler.compile source
     Assert.True(result.Diagnostics.IsEmpty)
     let typed = result.Typed.Value

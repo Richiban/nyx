@@ -745,15 +745,9 @@ let ifExpr =
         (fun cond thenExpr elseExpr -> IfExpr(cond, thenExpr, elseExpr))
     <?> "if expression"
 
-// Use binding parser: either `use Name expr` or `use expr`
+// Use binding parser: `use expr`
 let useBinding =
-    let useAssign =
-        pipe2
-            (typeNameIdentifier .>> wsNoNl())
-            expression
-            (fun name expr -> UseAssign(name, expr))
-    let useValue = expression |>> UseValue
-    attempt useAssign <|> useValue
+    expression |>> UseValue
 
 // Use-in expression: use X in expr
 let useInExpr =

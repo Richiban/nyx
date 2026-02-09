@@ -1,4 +1,4 @@
 def main = {
-  use Console (println = { msg -> () })
+  use (println = { msg -> () })
   println("hi")
 }

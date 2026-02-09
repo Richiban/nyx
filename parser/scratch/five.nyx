@@ -5,7 +5,7 @@ def f: int -> string = {
 }
 
 context Console = (
-    println: string -> ()
+    println: a -> ()
 )
 
 context CAdd = (
@@ -13,8 +13,9 @@ context CAdd = (
 )
 
 def g: [Console + CAdd] = { s ->
-    println(s)
     def r = add(4, 5)
+    println(s)
+    println(r)
 }
 
 def h = {
@@ -28,3 +29,5 @@ def h = {
 
     g("Hello world")
 }
+
+h()

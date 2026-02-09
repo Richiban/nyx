@@ -13,6 +13,7 @@ let rec transpileLiteral (lit: Literal) : string =
 
 let rec transpileExpression (expr: Expression) : string =
     match expr with
+    | UnitExpr -> "undefined"
     | LiteralExpr lit -> transpileLiteral lit
     
     | IdentifierExpr id -> id

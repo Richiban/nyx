@@ -49,6 +49,7 @@ and TypeRecordField =
 
 and Expression =
     | LiteralExpr of Literal
+    | UnitExpr
     | IdentifierExpr of Identifier
     | FunctionCall of Identifier * Expression list
     | Lambda of (Identifier * TypeExpr option) list * Expression
@@ -688,6 +689,10 @@ let recordField =
     ) <|> (expression |>> PositionalField))
     <?> "record field"
 
+// Unit literal: ()
+let unitExpr =
+    between (pstring "(") (ws >>. pstring ")") (preturn ()) |>> fun _ -> UnitExpr
+
 // Tuple/Record or parenthesized expression parser
 // Handles: (x), (x, y), (x = 1), (x = 1, y = 2), (x = 1, 2), etc.
 let tupleOrParenExpr =
@@ -740,11 +745,11 @@ let ifExpr =
         (fun cond thenExpr elseExpr -> IfExpr(cond, thenExpr, elseExpr))
     <?> "if expression"
 
-// Use binding parser: either `use Name = expr` or `use expr`
+// Use binding parser: either `use Name expr` or `use expr`
 let useBinding =
     let useAssign =
         pipe2
-            (typeNameIdentifier .>> wsNoNl() .>> pstring "=" .>> wsNoNl())
+            (typeNameIdentifier .>> wsNoNl())
             expression
             (fun name expr -> UseAssign(name, expr))
     let useValue = expression |>> UseValue
@@ -763,6 +768,7 @@ let useInExpr =
 let primaryExprNoWs =
     choice [
         attempt useInExpr
+        attempt unitExpr
         attempt ifExpr  // if-then-else must be early to avoid partial matches
         attempt matchExpr
         attempt lambda
@@ -971,15 +977,23 @@ do
     // Trailing lambda: function can be called with a lambda after parentheses
     // Examples: f(a, b) { x -> x + 1 } or f { x -> x + 1 } (no parens needed if only lambda arg)
     // Note: f(a, b) creates single tuple argument: FunctionCall("f", [TupleExpr[a; b]])
+
+    let fieldsToExpr fields =
+        match fields with
+        | [PositionalField single] -> single
+        | _ ->
+            let allPositional = fields |> List.forall (function PositionalField _ -> true | _ -> false)
+            if allPositional then
+                let exprs = fields |> List.map (function PositionalField e -> e | _ -> failwith "unexpected")
+                TupleExpr exprs
+            else
+                RecordExpr fields
     
     let callWithParensAndTrailing =
         pipe3
             qualifiedIdentifier
             (between (pstring "(") (pstring ")") 
-                (opt (ws >>. (sepBy1 expression (pstring "," .>> ws) |>> fun exprs ->
-                    match exprs with
-                    | [single] -> single
-                    | multiple -> TupleExpr multiple) .>> ws)))
+                (opt (ws >>. (sepBy1 (ws >>. recordField) (pstring "," .>> ws) |>> fieldsToExpr) .>> ws)))
             (opt (attempt (skipMany (skipAnyOf " \t") >>. lambda)))
             (fun name exprOpt trailingLambdaOpt ->
                 let baseArgs = match exprOpt with Some e -> [e] | None -> []

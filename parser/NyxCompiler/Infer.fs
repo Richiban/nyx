@@ -12,6 +12,7 @@ type InferState =
             TypeVars: Map<string, TyVar>;
             TypeDefs: Map<string, Ty * bool>;
             ContextDefs: Map<string, TypeExpr>;
+            ContextRequirements: Map<string, TypeExpr list>;
             LocalNominals: Set<string>;
             LocalPrivateNominals: Set<string> }
 
@@ -21,6 +22,7 @@ let emptyState =
             TypeVars = Map.empty;
             TypeDefs = Map.empty;
             ContextDefs = Map.empty;
+            ContextRequirements = Map.empty;
             LocalNominals = Set.empty;
             LocalPrivateNominals = Set.empty }
 
@@ -236,6 +238,25 @@ let private extendEnvWithContexts (env: TypeEnv) (state: InferState) (contexts: 
         env' <- members |> List.fold (fun acc (name, ty) -> TypeEnv.extend name (TypeEnv.mono ty) acc) env'
     env', current
 
+let private registerContextRequirement (state: InferState) (name: Identifier) (contexts: TypeExpr list) =
+    { state with ContextRequirements = state.ContextRequirements |> Map.add name contexts }
+
+let private ensureContextAvailable (env: TypeEnv) (state: InferState) (name: Identifier) (contexts: TypeExpr list) =
+    let requiredMembers =
+        contexts
+        |> List.collect (fun ctx ->
+            let members, _ = collectContextMembers state ctx
+            members |> List.map fst)
+    let missing =
+        requiredMembers
+        |> List.filter (fun memberName -> TypeEnv.tryFind memberName env |> Option.isNone)
+        |> List.distinct
+    if missing.IsEmpty then
+        Ok ()
+    else
+        let missingText = String.concat ", " missing
+        Error [ Diagnostics.error ($"Missing context members for '{name}': {missingText}") ]
+
 let private registerTypeDef (state: InferState) (name: Identifier) (modifiers: TypeDefModifier list) (body: TypeExpr) =
     let underlyingTy, next = typeExprToTy state body
     let isPrivate = isPrivateType modifiers
@@ -298,6 +319,8 @@ let rec private inferExpr (env: TypeEnv) (state: InferState) (expr: Expression) 
     match expr with
     | LiteralExpr literal ->
         Ok (mkTypedExpr expr (literalType literal) None None None, state)
+    | UnitExpr ->
+        Ok (mkTypedExpr expr (TyPrimitive "unit") None None None, state)
     | IdentifierExpr name ->
         match TypeEnv.tryFind name env with
         | Some scheme ->
@@ -305,33 +328,64 @@ let rec private inferExpr (env: TypeEnv) (state: InferState) (expr: Expression) 
             Ok (mkTypedExpr expr ty None None None, next)
         | None -> Error [ Diagnostics.error ($"Unknown identifier '{name}'") ]
     | FunctionCall(name, args) ->
-        match TypeEnv.tryFind name env with
-        | None -> Error [ Diagnostics.error ($"Unknown function '{name}'") ]
-        | Some scheme ->
-            let mutable current = state
-            let funcTy, nextState = instantiate current scheme
-            current <- nextState
-            let argResults =
-                args
-                |> List.map (fun arg ->
-                    match inferExpr env current arg with
-                    | Ok (ty, next) ->
-                        current <- next
-                        Ok ty
-                    | Error err -> Error err)
-            let errors = argResults |> List.choose (function Error err -> Some err | _ -> None) |> List.concat
-            if errors.IsEmpty then
-                let argTys =
-                    argResults
-                    |> List.choose (function Ok typedExpr -> Some typedExpr.Type | _ -> None)
-                let retTy, nextState = freshVar current
-                let expectedInput, nextState2 = freshVar nextState
-                let inputTy = inputTypeFromArgs argTys
-                let withFuncConstraint = addConstraint funcTy (TyFunc(expectedInput, retTy)) nextState2
-                let withAssignable = addAssignableConstraint inputTy expectedInput withFuncConstraint
-                Ok (mkTypedExpr expr retTy None None None, withAssignable)
-            else
-                Error errors
+        let contextCheck =
+            match state.ContextRequirements |> Map.tryFind name with
+            | Some contexts -> ensureContextAvailable env state name contexts
+            | None -> Ok ()
+        match contextCheck with
+        | Error err -> Error err
+        | Ok () ->
+            match TypeEnv.tryFind name env with
+            | Some scheme ->
+                let mutable current = state
+                let funcTy, nextState = instantiate current scheme
+                current <- nextState
+                let argResults =
+                    args
+                    |> List.map (fun arg ->
+                        match inferExpr env current arg with
+                        | Ok (ty, next) ->
+                            current <- next
+                            Ok ty
+                        | Error err -> Error err)
+                let errors = argResults |> List.choose (function Error err -> Some err | _ -> None) |> List.concat
+                if errors.IsEmpty then
+                    let argTys =
+                        argResults
+                        |> List.choose (function Ok typedExpr -> Some typedExpr.Type | _ -> None)
+                    let retTy, nextState = freshVar current
+                    let expectedInput, nextState2 = freshVar nextState
+                    let inputTy = inputTypeFromArgs argTys
+                    let withFuncConstraint = addConstraint funcTy (TyFunc(expectedInput, retTy)) nextState2
+                    let withAssignable = addAssignableConstraint inputTy expectedInput withFuncConstraint
+                    Ok (mkTypedExpr expr retTy None None None, withAssignable)
+                else
+                    Error errors
+            | None ->
+                match state.TypeDefs |> Map.tryFind name with
+                | Some (underlyingTy, isPrivate) ->
+                    let mutable current = state
+                    let argResults =
+                        args
+                        |> List.map (fun arg ->
+                            match inferExpr env current arg with
+                            | Ok (ty, next) ->
+                                current <- next
+                                Ok ty
+                            | Error err -> Error err)
+                    let errors = argResults |> List.choose (function Error err -> Some err | _ -> None) |> List.concat
+                    if errors.IsEmpty then
+                        let argTys =
+                            argResults
+                            |> List.choose (function Ok typedExpr -> Some typedExpr.Type | _ -> None)
+                        let inputTy = inputTypeFromArgs argTys
+                        let constrained = addAssignableConstraint inputTy underlyingTy current
+                        let resultTy =
+                            if name.StartsWith("@") then TyNominal(name, underlyingTy, isPrivate) else underlyingTy
+                        Ok (mkTypedExpr expr resultTy None None None, constrained)
+                    else
+                        Error errors
+                | None -> Error [ Diagnostics.error ($"Unknown function '{name}'") ]
     | Lambda(args, body) ->
         inferLambdaWithExpected env state args body None None
     | BinaryOp(_, left, right) ->
@@ -777,6 +831,10 @@ and inferBlock (env: TypeEnv) (state: InferState) (statements: Statement list) :
                             | TyFunc(inputTy, returnTy) -> Some inputTy, Some returnTy, Some ty, st
                             | _ -> None, None, Some ty, st
                         | None -> None, None, None, nextState
+                    let nextState2 =
+                        match contextOpt with
+                        | Some contexts -> registerContextRequirement nextState2 name contexts
+                        | None -> nextState2
                     let inferResult =
                         match expr with
                         | Lambda(args, body) when expectedDeclaredOpt.IsSome ->
@@ -855,11 +913,15 @@ let inferModuleWithEnv (initialEnv: TypeEnv) (initialState: InferState) (module'
                     | TyFunc(inputTy, returnTy) -> Some inputTy, Some returnTy, Some ty, st
                     | _ -> None, None, Some ty, st
                 | None -> None, None, None, nextState
+            let nextState2WithReq =
+                match contextOpt with
+                | Some contexts -> registerContextRequirement nextState2 name contexts
+                | None -> nextState2
             let inferResult =
                 match expr with
                 | Lambda(args, body) when expectedDeclaredOpt.IsSome ->
-                    inferLambdaWithExpected envWithCtx nextState2 args body expectedInputOpt expectedReturnOpt
-                | _ -> inferExpr envWithCtx nextState2 expr
+                    inferLambdaWithExpected envWithCtx nextState2WithReq args body expectedInputOpt expectedReturnOpt
+                | _ -> inferExpr envWithCtx nextState2WithReq expr
             match inferResult with
             | Ok (typedExpr, next) ->
                 let declaredTy, finalState =

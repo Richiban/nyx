@@ -19,6 +19,11 @@ let transpileFile filename =
     | Result.Ok ast -> transpileModule ast
     | Result.Error err -> failwith $"Parse error: {err}"
 
+let transpileSource source =
+    match parseModule source with
+    | Result.Ok ast -> transpileModule ast
+    | Result.Error err -> failwith $"Parse error: {err}"
+
 // Literal Tests
 [<Fact>]
 let ``Transpile integer literal`` () =
@@ -247,6 +252,47 @@ let ``Transpile tag with payload`` () =
     let expr = TagExpr("Some", Some (LiteralExpr (IntLit 42)))
     let result = transpileExpression expr
     result |> should equal "{ tag: \"Some\", value: 42 }"
+
+[<Fact>]
+let ``Transpile record constructor to object literal`` () =
+    let source =
+        "type Person = (name: string)\n" +
+        "def p = Person(name = \"Ada\")"
+    let result = transpileSource source
+    Assert.Contains("const p = { name: \"Ada\" };", result)
+    Assert.DoesNotContain("Person(", result)
+
+[<Fact>]
+let ``Transpile context functions as curried`` () =
+    let source =
+        "context Console = (println: string -> ())\n" +
+        "context CAdd = (add: (int, int) -> int)\n" +
+        "def g: [Console + CAdd] = { s ->\n" +
+        "  println(s)\n" +
+        "  def r = add(4, 5)\n" +
+        "}\n" +
+        "def h = {\n" +
+        "  use Console(println = { s -> () })\n" +
+        "  use CAdd(add = { x, y -> x + y })\n" +
+        "  g(\"Hello\")\n" +
+        "}"
+    let result = transpileSource source
+    Assert.Contains("const g = (__ctx) =>", result)
+    Assert.Contains("const { add, println } = __ctx;", result)
+    Assert.Contains("g(__ctx)(\"Hello\")", result)
+
+[<Fact>]
+let ``Transpile nested use merges context`` () =
+    let source =
+        "def h = {\n" +
+        "  use (println = { s -> () })\n" +
+        "  use (add = { x, y -> x + y })\n" +
+        "  println(\"hi\")\n" +
+        "}"
+    let result = transpileSource source
+    Assert.Contains("let __ctx = {};", result)
+    Assert.Contains("__ctx = { ...__ctx, ...{ println:", result)
+    Assert.Contains("__ctx = { ...__ctx, ...{ add:", result)
 
 // File Tests
 [<Fact>]

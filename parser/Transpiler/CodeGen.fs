@@ -2,19 +2,9 @@ module Transpiler.CodeGen
 
 open Parser.Program
 
-type TranspileEnv =
-    { ContextMembers: Map<string, Set<string>>
-      ContextFunctions: Map<string, Set<string>>
-      ContextVar: string option
-      BoundNames: Set<string>
-      NextCtxId: int }
+type TranspileEnv = { ContextMembers: Map<string, Set<string>>; ContextFunctions: Map<string, Set<string>>; RecordTypes: Set<string>; ContextVar: string option; BoundNames: Set<string>; NextCtxId: int }
 
-let emptyEnv =
-    { ContextMembers = Map.empty
-      ContextFunctions = Map.empty
-      ContextVar = None
-      BoundNames = Set.empty
-      NextCtxId = 0 }
+let emptyEnv = { ContextMembers = Map.empty; ContextFunctions = Map.empty; RecordTypes = Set.empty; ContextVar = None; BoundNames = Set.empty; NextCtxId = 0 }
 
 let private ctxVarName (id: int) =
     if id = 0 then "__ctx" else $"__ctx{id}"
@@ -64,6 +54,27 @@ let private resolveContextMembers (contextDefs: Map<string, TypeExpr>) =
     contextDefs
     |> Map.map (fun name body -> membersFromTypeExpr (Set.singleton name) body)
 
+let private resolveRecordTypes (typeDefs: Map<string, TypeExpr>) =
+    let rec isRecordType seen typeExpr =
+        match typeExpr with
+        | TypeRecord _ -> true
+        | TypeIntersection items
+        | TypeUnion items -> items |> List.exists (isRecordType seen)
+        | TypeContext items -> items |> List.exists (isRecordType seen)
+        | TypeName name
+        | TypeApply(name, _) ->
+            if seen |> Set.contains name then
+                false
+            else
+                match typeDefs |> Map.tryFind name with
+                | Some body -> isRecordType (seen |> Set.add name) body
+                | None -> false
+        | _ -> false
+
+    typeDefs
+    |> Map.fold (fun acc name body ->
+        if isRecordType (Set.singleton name) body then acc |> Set.add name else acc) Set.empty
+
 let rec private contextMembersFromTypeExpr (env: TranspileEnv) (typeExpr: TypeExpr) : Set<string> =
     match contextNameFromTypeExpr typeExpr with
     | Some name -> env.ContextMembers |> Map.tryFind name |> Option.defaultValue Set.empty
@@ -96,7 +107,7 @@ let private contextMembersFromUseExpr (env: TranspileEnv) (expr: Expression) : S
 
 let private isRecordConstructor (env: TranspileEnv) (name: string) (args: Expression list) =
     match args with
-    | [RecordExpr _] -> env.ContextMembers |> Map.containsKey name
+    | [RecordExpr _] -> env.RecordTypes |> Set.contains name
     | _ -> false
 
 // JavaScript code generation for Nyx AST
@@ -476,7 +487,8 @@ let transpileModule (module': Module) : string =
             | _ -> None)
         |> Map.ofList
     let contextMembers = resolveContextMembers typeDefs
-    let mutable env = { emptyEnv with ContextMembers = contextMembers }
+    let recordTypes = resolveRecordTypes typeDefs
+    let mutable env = { emptyEnv with ContextMembers = contextMembers; RecordTypes = recordTypes }
     let lines =
         module'
         |> List.collect (fun item ->

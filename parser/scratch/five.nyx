@@ -12,8 +12,8 @@ context CAdd = (
     add: (int, int) -> int
 )
 
-def g: [Console + CAdd] = {
-    println("Hello world")
+def g: [Console + CAdd] = { s ->
+    println(s)
     def r = add(4, 5)
 }
 
@@ -23,9 +23,8 @@ def h = {
     )
 
     use CAdd(
-        
         add = { x, y -> x + y }
     )
 
-    g()
+    g("Hello world")
 }

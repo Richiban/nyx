@@ -2,6 +2,7 @@
 open System.IO
 open Parser.Program
 open Transpiler.CodeGen
+open NyxCompiler
 
 [<EntryPoint>]
 let main argv =
@@ -24,7 +25,8 @@ let main argv =
                 
                 match parseModule sourceCode with
                 | Result.Ok ast ->
-                    let jsCode = transpileModule ast
+                    let desugared = Compiler.desugar ast
+                    let jsCode = transpileModule desugared
                     File.WriteAllText(outputFile, jsCode)
                     printfn "Successfully transpiled %s -> %s" inputFile outputFile
                     0

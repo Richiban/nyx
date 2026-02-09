@@ -243,6 +243,40 @@ let ``Typecheck tag union width and rest regression`` () =
     | other -> Assert.True(false, $"Unexpected l2 type: %A{other}")
 
 [<Fact>]
+let ``Desugar workflow bind and return`` () =
+    let source =
+        "def result = async {\n" +
+        "  def x = await! foo()\n" +
+        "  return! x.y\n" +
+        "}"
+    match parseModule source with
+    | Result.Error err -> Assert.True(false, $"Parse error: {err}")
+    | Result.Ok ast ->
+        let desugared = Compiler.desugar ast
+        match desugared with
+        | [Def (ValueDef(_, "result", _, FunctionCall("async", [Lambda([], Block [ExprStatement expr])])))] ->
+            match expr with
+            | FunctionCall("await", [FunctionCall("foo", []); Lambda([("x", None)], FunctionCall("pure", [MemberAccess(IdentifierExpr "x", "y")]))]) ->
+                Assert.True(true)
+            | other -> Assert.True(false, $"Unexpected workflow desugar: %A{other}")
+        | other -> Assert.True(false, $"Unexpected desugared module: %A{other}")
+
+[<Fact>]
+let ``Desugar workflow implicit return`` () =
+    let source =
+        "def result = async {\n" +
+        "  1\n" +
+        "}"
+    match parseModule source with
+    | Result.Error err -> Assert.True(false, $"Parse error: {err}")
+    | Result.Ok ast ->
+        let desugared = Compiler.desugar ast
+        match desugared with
+        | [Def (ValueDef(_, "result", _, FunctionCall("async", [Lambda([], Block [ExprStatement (LiteralExpr (IntLit 1))])])))] ->
+            Assert.True(true)
+        | other -> Assert.True(false, $"Unexpected desugared module: %A{other}")
+
+[<Fact>]
 let ``Typecheck supports nominal types`` () =
     let source =
         "type @Email = string\n" +

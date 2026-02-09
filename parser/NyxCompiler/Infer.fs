@@ -421,6 +421,10 @@ let rec private inferExpr (env: TypeEnv) (state: InferState) (expr: Expression) 
             match inferExpr envWithUse nextState body with
             | Ok (typedBody, finalState) -> Ok (mkTypedExpr expr typedBody.Type (Some typedBody) None None, finalState)
             | Error err -> Error err
+    | WorkflowBindExpr _ ->
+        Error [ Diagnostics.error "Workflow bind used outside of a workflow block" ]
+    | WorkflowReturnExpr _ ->
+        Error [ Diagnostics.error "Workflow return used outside of a workflow block" ]
     | Block statements ->
         inferBlock env state statements
     | TupleExpr items ->

@@ -228,6 +228,9 @@ let rec private transpileExpressionWithEnv (env: TranspileEnv) (expr: Expression
              merged]
             @ destructure
         sprintf "(() => { %s return %s; })()" (String.concat " " lines) bodyExpr
+    | WorkflowBindExpr _
+    | WorkflowReturnExpr _ ->
+        failwith "Workflow expressions must be desugared before transpilation"
     
     | Block stmts ->
         let hasUse = stmts |> List.exists (function UseStatement _ -> true | _ -> false)

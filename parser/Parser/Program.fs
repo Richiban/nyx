@@ -64,6 +64,8 @@ and Expression =
     | IfExpr of Expression * Expression * Expression  // if condition then trueExpr else falseExpr
     | MemberAccess of Expression * Identifier  // expr.field
     | UseIn of UseBinding * Expression
+    | WorkflowBindExpr of Identifier * Expression
+    | WorkflowReturnExpr of Expression
 
 // Record field: either named (x = expr) or positional (expr)
 and RecordField =
@@ -744,6 +746,24 @@ let ifExpr =
         (fun cond thenExpr elseExpr -> IfExpr(cond, thenExpr, elseExpr))
     <?> "if expression"
 
+let workflowBindExpr =
+    attempt (
+        pipe2
+            (identifierNoWs .>> pchar '!' .>> ws)
+            expression
+            (fun name expr -> WorkflowBindExpr(name, expr)))
+    <?> "workflow bind"
+
+let workflowReturnExpr =
+    let isIdentChar c = isLetter c || isDigit c || c = '_'
+    attempt (
+        pstring "return"
+        .>> notFollowedBy (satisfy isIdentChar)
+        >>. ws
+        >>. expression
+        |>> WorkflowReturnExpr)
+    <?> "workflow return"
+
 // Use binding parser: `use expr`
 let useBinding =
     expression |>> UseValue
@@ -760,6 +780,8 @@ let useInExpr =
 // Version without trailing whitespace consumption (for use in block contexts)
 let primaryExprNoWs =
     choice [
+        attempt workflowReturnExpr
+        attempt workflowBindExpr
         attempt useInExpr
         attempt unitExpr
         attempt ifExpr  // if-then-else must be early to avoid partial matches

@@ -1,0 +1,8 @@
+
+def main = {
+    async {
+        def data = await! foo()
+
+        return! data.name
+    }
+}

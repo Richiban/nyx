@@ -95,6 +95,119 @@ module Compiler =
         | Result.Ok ast -> Ok ast
         | Result.Error err -> Error [ Diagnostics.error err ]
 
+    let desugar (module': Module) =
+        let isReturnKeyword keyword = keyword = "return"
+
+        let rec desugarExpr expr =
+            match expr with
+            | FunctionCall(name, args) ->
+                FunctionCall(name, args |> List.map desugarExpr)
+            | Lambda(args, body) ->
+                Lambda(args, desugarExpr body)
+            | BinaryOp(op, left, right) ->
+                BinaryOp(op, desugarExpr left, desugarExpr right)
+            | Pipe(value, name, args) ->
+                Pipe(desugarExpr value, name, args |> List.map desugarExpr)
+            | Block statements ->
+                Block(desugarBlock statements)
+            | Match(exprs, arms) ->
+                let mappedExprs = exprs |> List.map desugarExpr
+                let mappedArms = arms |> List.map (fun (patterns, expr) -> patterns, desugarExpr expr)
+                Match(mappedExprs, mappedArms)
+            | TupleExpr items -> TupleExpr(items |> List.map desugarExpr)
+            | RecordExpr fields ->
+                let mappedFields =
+                    fields
+                    |> List.map (function
+                        | NamedField(name, value) -> NamedField(name, desugarExpr value)
+                        | PositionalField value -> PositionalField(desugarExpr value))
+                RecordExpr mappedFields
+            | ListExpr items -> ListExpr(items |> List.map desugarExpr)
+            | TagExpr(name, payload) -> TagExpr(name, payload |> Option.map desugarExpr)
+            | IfExpr(cond, thenExpr, elseExpr) ->
+                IfExpr(desugarExpr cond, desugarExpr thenExpr, desugarExpr elseExpr)
+            | MemberAccess(baseExpr, field) -> MemberAccess(desugarExpr baseExpr, field)
+            | UseIn(binding, body) ->
+                let binding' = desugarUseBinding binding
+                UseIn(binding', desugarExpr body)
+            | WorkflowBindExpr(keyword, value) ->
+                if isReturnKeyword keyword then
+                    FunctionCall("pure", [desugarExpr value])
+                else
+                    FunctionCall(keyword, [desugarExpr value])
+            | WorkflowReturnExpr value -> FunctionCall("pure", [desugarExpr value])
+            | UnitExpr
+            | LiteralExpr _
+            | IdentifierExpr _ -> expr
+        and desugarUseBinding binding =
+            match binding with
+            | UseValue expr -> UseValue (desugarExpr expr)
+        and desugarStatement stmt =
+            match stmt with
+            | DefStatement(isExport, name, typeOpt, expr) ->
+                let expr' =
+                    match expr with
+                    | WorkflowBindExpr(keyword, value) when isReturnKeyword keyword ->
+                        FunctionCall("pure", [desugarExpr value])
+                    | _ -> desugarExpr expr
+                DefStatement(isExport, name, typeOpt, expr')
+            | ExprStatement expr -> ExprStatement (desugarExpr expr)
+            | UseStatement binding -> UseStatement (desugarUseBinding binding)
+            | ImportStatement _
+            | TypeDefStatement _ -> stmt
+        and desugarWorkflowChain statements =
+            match statements with
+            | [] -> UnitExpr
+            | DefStatement(isExport, name, typeOpt, expr) :: rest ->
+                match expr with
+                | WorkflowBindExpr(keyword, bindExpr) when isReturnKeyword keyword ->
+                    FunctionCall("pure", [desugarExpr bindExpr])
+                | WorkflowBindExpr(keyword, bindExpr) ->
+                    let nextExpr = desugarWorkflowChain rest
+                    FunctionCall(keyword, [desugarExpr bindExpr; Lambda([name, None], nextExpr)])
+                | _ ->
+                    let expr' = desugarExpr expr
+                    let nextExpr = desugarWorkflowChain rest
+                    Block [DefStatement(isExport, name, typeOpt, expr'); ExprStatement nextExpr]
+            | ExprStatement expr :: rest ->
+                match expr with
+                | WorkflowReturnExpr value -> FunctionCall("pure", [desugarExpr value])
+                | WorkflowBindExpr(keyword, bindExpr) when isReturnKeyword keyword ->
+                    FunctionCall("pure", [desugarExpr bindExpr])
+                | WorkflowBindExpr(keyword, bindExpr) ->
+                    let nextExpr = desugarWorkflowChain rest
+                    FunctionCall(keyword, [desugarExpr bindExpr; Lambda([("_", None)], nextExpr)])
+                | _ ->
+                    let expr' = desugarExpr expr
+                    let nextExpr = desugarWorkflowChain rest
+                    Block [ExprStatement expr'; ExprStatement nextExpr]
+            | UseStatement binding :: rest ->
+                let binding' = desugarUseBinding binding
+                let nextExpr = desugarWorkflowChain rest
+                Block [UseStatement binding'; ExprStatement nextExpr]
+            | statement :: rest ->
+                let nextExpr = desugarWorkflowChain rest
+                Block [desugarStatement statement; ExprStatement nextExpr]
+        and desugarBlock statements =
+            let rec split prefix remaining =
+                match remaining with
+                | [] -> List.rev prefix
+                | (DefStatement(_, _, _, WorkflowBindExpr _)) :: _
+                | (ExprStatement (WorkflowBindExpr _)) :: _
+                | (ExprStatement (WorkflowReturnExpr _)) :: _ ->
+                    let chainExpr = desugarWorkflowChain remaining
+                    List.rev prefix @ [ExprStatement chainExpr]
+                | stmt :: rest ->
+                    split (desugarStatement stmt :: prefix) rest
+            split [] statements
+
+        module'
+        |> List.map (function
+            | Def (ValueDef(isExport, name, typeOpt, expr)) ->
+                Def (ValueDef(isExport, name, typeOpt, desugarExpr expr))
+            | Expr expr -> Expr (desugarExpr expr)
+            | other -> other)
+
     let rec private typecheckFile (filePath: string) (visited: Set<string>) : Result<TypedModule, Diagnostic list> =
         let fullPath = Path.GetFullPath filePath
         if visited.Contains fullPath then
@@ -104,7 +217,7 @@ module Compiler =
             match parseWithDiagnostics source with
             | Result.Error diagnostics -> Error diagnostics
             | Result.Ok ast ->
-                let desugared = ast
+                let desugared = desugar ast
                 let imports = collectImports desugared
                 let baseDir = Path.GetDirectoryName fullPath
                 let mutable env = TypeEnv.empty
@@ -192,9 +305,6 @@ module Compiler =
         match parseModule source with
         | Result.Ok ast -> Ok ast
         | Result.Error err -> Error [ Diagnostics.error err ]
-
-    let desugar (module': Module) =
-        module'
 
     let typecheck (desugared: Module) : Result<TypedModule, Diagnostic list> =
         match NyxCompiler.Infer.inferModule desugared with

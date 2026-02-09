@@ -1,5 +1,0 @@
-def f: (string | int) -> int = { x -> 1 }
-
-def g: (int | string) -> int = f
-
-def result = g(1)

@@ -16,6 +16,10 @@
     "Programming Languages"
   ],
   "main": "./dist/extension.js",
+  "activationEvents": [
+    "onLanguage:nyx",
+    "onCommand:nyx.typecheckFile"
+  ],
   "contributes": {
     "languages": [
       {

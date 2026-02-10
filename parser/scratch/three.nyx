@@ -22,6 +22,6 @@ def mapOption: ((#some(a) | r), a -> b) -> #some(b) | r = {
     | other, _ -> other
 }
 
-def l: #some(string) | #nil = #some("")
+def l: #some(string) | #nil | #invalid = #some("")
 
 def l2 = l \mapOption { s -> 1 }

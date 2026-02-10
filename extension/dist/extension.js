@@ -35,141 +35,43 @@ var __importStar = (this && this.__importStar) || (function () {
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.activate = activate;
 exports.deactivate = deactivate;
-const fs = __importStar(require("fs"));
 const path = __importStar(require("path"));
-const child_process_1 = require("child_process");
 const vscode = __importStar(require("vscode"));
-const LANGUAGE_ID = "nyx";
-const OUTPUT_CHANNEL_NAME = "Nyx";
+const node_1 = require("vscode-languageclient/node");
 const COMMAND_TYPECHECK = "nyx.typecheckFile";
-function activate(context) {
-    const output = vscode.window.createOutputChannel(OUTPUT_CHANNEL_NAME);
-    const diagnostics = vscode.languages.createDiagnosticCollection(LANGUAGE_ID);
+let client;
+async function activate(context) {
+    const serverModule = context.asAbsolutePath(path.join("dist", "server", "server.js"));
+    const serverOptions = {
+        run: { module: serverModule, transport: node_1.TransportKind.stdio },
+        debug: {
+            module: serverModule,
+            transport: node_1.TransportKind.stdio,
+            options: { execArgv: ["--nolazy", "--inspect=6009"] }
+        }
+    };
+    const clientOptions = {
+        documentSelector: [{ scheme: "file", language: "nyx" }],
+        synchronize: {
+            configurationSection: "nyx"
+        }
+    };
+    client = new node_1.LanguageClient("nyx", "Nyx Language Server", serverOptions, clientOptions);
+    context.subscriptions.push(client);
+    await client.start();
     const typecheckCommand = vscode.commands.registerCommand(COMMAND_TYPECHECK, async () => {
         const editor = vscode.window.activeTextEditor;
         if (!editor) {
             vscode.window.showInformationMessage("No active editor to typecheck.");
             return;
         }
-        await typecheckDocument(editor.document, diagnostics, output);
+        await client?.sendNotification("nyx/typecheck", { uri: editor.document.uri.toString() });
     });
-    const onSave = vscode.workspace.onDidSaveTextDocument(async (document) => {
-        if (!shouldTypecheckOnSave()) {
-            return;
-        }
-        await typecheckDocument(document, diagnostics, output);
-    });
-    const onOpen = vscode.workspace.onDidOpenTextDocument(async (document) => {
-        if (!shouldTypecheckOnSave()) {
-            return;
-        }
-        await typecheckDocument(document, diagnostics, output);
-    });
-    const onClose = vscode.workspace.onDidCloseTextDocument((document) => {
-        if (document.languageId === LANGUAGE_ID) {
-            diagnostics.delete(document.uri);
-        }
-    });
-    context.subscriptions.push(diagnostics, output, typecheckCommand, onSave, onOpen, onClose);
+    context.subscriptions.push(typecheckCommand);
 }
-function deactivate() {
-    // No-op
-}
-function shouldTypecheckOnSave() {
-    const config = vscode.workspace.getConfiguration("nyx");
-    return config.get("typecheckOnSave", true);
-}
-async function typecheckDocument(document, diagnostics, output) {
-    if (document.languageId !== LANGUAGE_ID) {
-        return;
+async function deactivate() {
+    if (client) {
+        await client.stop();
     }
-    if (document.isUntitled) {
-        output.appendLine("Skipping typecheck for untitled document.");
-        return;
-    }
-    const workspaceFolder = vscode.workspace.getWorkspaceFolder(document.uri);
-    if (!workspaceFolder) {
-        output.appendLine("Nyx typecheck skipped: document is not in a workspace folder.");
-        return;
-    }
-    const workspaceRoot = workspaceFolder.uri.fsPath;
-    const config = vscode.workspace.getConfiguration("nyx", document.uri);
-    const dotnetPath = config.get("compilerDotnetPath", "dotnet");
-    const projectPathSetting = config.get("compilerProject", "parser/NyxCompiler.Cli/NyxCompiler.Cli.fsproj");
-    const projectPath = resolveProjectPath(workspaceRoot, projectPathSetting);
-    if (!fs.existsSync(projectPath)) {
-        const message = `Nyx compiler project not found at ${projectPath}`;
-        output.appendLine(message);
-        vscode.window.showErrorMessage(message);
-        return;
-    }
-    output.appendLine(`Typechecking ${document.fileName}`);
-    try {
-        const result = await runCompiler(dotnetPath, projectPath, document.fileName, output);
-        const parsed = parseDiagnostics(result);
-        diagnostics.set(document.uri, parsed);
-        if (parsed.length === 0) {
-            output.appendLine("No diagnostics reported.");
-        }
-    }
-    catch (err) {
-        const message = err instanceof Error ? err.message : String(err);
-        output.appendLine(`Nyx typecheck failed: ${message}`);
-        vscode.window.showErrorMessage(`Nyx typecheck failed: ${message}`);
-    }
-}
-function resolveProjectPath(workspaceRoot, projectSetting) {
-    if (!projectSetting) {
-        return path.join(workspaceRoot, "parser", "NyxCompiler.Cli", "NyxCompiler.Cli.fsproj");
-    }
-    if (path.isAbsolute(projectSetting)) {
-        return projectSetting;
-    }
-    return path.join(workspaceRoot, projectSetting);
-}
-function runCompiler(dotnetPath, projectPath, filePath, output) {
-    const args = ["run", "--project", projectPath, "--", filePath];
-    output.appendLine(`Running: ${dotnetPath} ${args.join(" ")}`);
-    return new Promise((resolve, reject) => {
-        const child = (0, child_process_1.spawn)(dotnetPath, args, { cwd: path.dirname(projectPath) });
-        let stdout = "";
-        let stderr = "";
-        child.stdout.on("data", (data) => {
-            stdout += data.toString();
-        });
-        child.stderr.on("data", (data) => {
-            stderr += data.toString();
-        });
-        child.on("error", (error) => {
-            reject(error);
-        });
-        child.on("close", (code) => {
-            const combined = [stdout.trim(), stderr.trim()].filter(Boolean).join("\n");
-            if (code !== 0 && !combined) {
-                reject(new Error(`Compiler exited with code ${code}`));
-                return;
-            }
-            resolve(combined || stdout);
-        });
-    });
-}
-function parseDiagnostics(output) {
-    if (!output) {
-        return [];
-    }
-    const diagnostics = [];
-    const lines = output.split(/\r?\n/);
-    for (const line of lines) {
-        const match = line.match(/^\[(error|warning)\]\s*(.+)$/i);
-        if (!match) {
-            continue;
-        }
-        const severityText = match[1].toLowerCase();
-        const message = match[2].trim();
-        const severity = severityText === "warning" ? vscode.DiagnosticSeverity.Warning : vscode.DiagnosticSeverity.Error;
-        const range = new vscode.Range(0, 0, 0, 1);
-        diagnostics.push(new vscode.Diagnostic(range, message, severity));
-    }
-    return diagnostics;
 }
 //# sourceMappingURL=extension.js.map

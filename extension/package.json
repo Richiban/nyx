@@ -69,9 +69,16 @@
     }
   },
   "scripts": {
-    "compile": "tsc -p ./",
+    "compile": "tsc -p ./ && tsc -p ./server",
     "watch": "tsc -watch -p ./",
+    "watch:server": "tsc -watch -p ./server",
     "vscode:prepublish": "npm run compile"
+  },
+  "dependencies": {
+    "vscode-languageclient": "^9.0.1",
+    "vscode-languageserver": "^9.0.1",
+    "vscode-languageserver-textdocument": "^1.0.11",
+    "vscode-uri": "^3.0.8"
   },
   "devDependencies": {
     "@types/node": "^20.11.30",

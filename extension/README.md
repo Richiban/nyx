@@ -1,11 +1,11 @@
 # Nyx VS Code Extension
 
-This extension provides basic editor support for the Nyx language, including syntax highlighting and compiler-driven diagnostics.
+This extension provides editor support for the Nyx language, including syntax highlighting and compiler-driven diagnostics via a language server.
 
 ## Features
 
 - Syntax highlighting for `.nyx` files.
-- Typechecking diagnostics via `NyxCompiler.Cli`.
+- Typechecking diagnostics via the Nyx language server (powered by `NyxCompiler.Cli`).
 - Command palette action: **Nyx: Typecheck Current File**.
 
 ## Settings
@@ -16,7 +16,7 @@ This extension provides basic editor support for the Nyx language, including syn
 
 ## How it works
 
-The extension executes `dotnet run --project <NyxCompiler.Cli.fsproj> -- <file>` and parses `[error]` and `[warning]` lines from stdout to populate VS Code diagnostics.
+The language server executes `dotnet run --project <NyxCompiler.Cli.fsproj> -- <file>` and parses `[error]` and `[warning]` lines from stdout to populate VS Code diagnostics.
 
 ## Troubleshooting
 

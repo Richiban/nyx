@@ -77,6 +77,27 @@ let ``Import with alias does not bring unqualified names`` () =
         Assert.Contains("Unknown identifier", message))
 
 [<Fact>]
+let ``Match rejects non-exhaustive tag unions`` () =
+    let source =
+        "def value: #some(int) | #none = #none\n" +
+        "def result = match value\n" +
+        "| #some(v) -> v\n"
+    let result = Compiler.compile source
+    Assert.False(result.Diagnostics.IsEmpty)
+    let message = result.Diagnostics |> List.head |> fun diag -> diag.Message
+    Assert.Contains("Non-exhaustive match", message)
+
+[<Fact>]
+let ``Match accepts exhaustive tag unions`` () =
+    let source =
+        "def value: #some(int) | #none = #none\n" +
+        "def result = match value\n" +
+        "| #some(v) -> v\n" +
+        "| #none -> 0\n"
+    let result = Compiler.compile source
+    Assert.True(result.Diagnostics.IsEmpty)
+
+[<Fact>]
 let ``Typecheck dotted def name`` () =
     let source =
         "type Person = (firstName: string)\n" +

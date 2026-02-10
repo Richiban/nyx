@@ -841,6 +841,30 @@ let rec private inferExpr (env: TypeEnv) (state: InferState) (expr: Expression) 
             let mutable armExprs: TypedExpr list = []
             let mutable typedArms: TypedMatchArm list = []
             let mutable errors: Diagnostic list = []
+            let isCatchAllPattern pattern =
+                match pattern with
+                | WildcardPattern
+                | ElsePattern
+                | IdentifierPattern _ -> true
+                | _ -> false
+            let tryGetTagName pattern =
+                match pattern with
+                | TagPattern(tagName, _) -> Some tagName
+                | _ -> None
+            let tryGetTagUnion ty =
+                let rec unwrap ty =
+                    match ty with
+                    | TyNominal(_, underlying, _) -> unwrap underlying
+                    | TyUnion items ->
+                        if items |> List.forall (function TyTag _ -> true | _ -> false) then
+                            items
+                            |> List.choose (function TyTag(name, _) -> Some name | _ -> None)
+                            |> Set.ofList
+                            |> Some
+                        else
+                            None
+                    | _ -> None
+                unwrap ty
             for (patterns, expr) in arms do
                 if errors.IsEmpty then
                     let mutable env' = env
@@ -884,9 +908,44 @@ let rec private inferExpr (env: TypeEnv) (state: InferState) (expr: Expression) 
                             Some (Diagnostics.error "Tag union rest parameters require a catch-all match arm")
                     else
                         None
+                let exhaustivenessError =
+                    if restError.IsSome then
+                        None
+                    elif scrutineeTypes.Length = 1 then
+                        let scrutineeTy = scrutineeTypes.[0]
+                        let hasCatchAll =
+                            arms
+                            |> List.exists (fun (patterns, _) ->
+                                match patterns with
+                                | [single] -> isCatchAllPattern single
+                                | _ -> false)
+                        if hasCatchAll then
+                            None
+                        else
+                            match tryGetTagUnion scrutineeTy with
+                            | Some tagUnion ->
+                                let coveredTags =
+                                    arms
+                                    |> List.choose (fun (patterns, _) ->
+                                        match patterns with
+                                        | [single] -> tryGetTagName single
+                                        | _ -> None)
+                                    |> Set.ofList
+                                let missing = Set.difference tagUnion coveredTags |> Set.toList
+                                if missing.IsEmpty then
+                                    None
+                                else
+                                    let missingText = missing |> String.concat ", "
+                                    Some (Diagnostics.error ($"Non-exhaustive match, missing tags: {missingText}"))
+                            | None -> None
+                    else
+                        None
                 match restError with
                 | Some diag -> Error [ diag ]
                 | None ->
+                    match exhaustivenessError with
+                    | Some diag -> Error [ diag ]
+                    | None ->
                     match List.rev armExprs with
                     | [] -> Ok (mkTypedExpr expr (TyPrimitive "unit") None None (Some typedArms), current)
                     | head :: tail ->

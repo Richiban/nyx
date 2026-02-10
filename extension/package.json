@@ -1,20 +1,21 @@
 {
   "name": "nyx",
   "displayName": "Nyx",
-  "description": "A toy language called Nyx",
+  "description": "Nyx language support: syntax highlighting and diagnostics",
   "publisher": "Richibansoft",
   "repository": {
     "type": "git",
     "url": "https://github.com/richiban/nyx"
   },
   "license": "MIT",
-  "version": "0.0.1",
+  "version": "0.1.0",
   "engines": {
     "vscode": "^1.76.0"
   },
   "categories": [
     "Programming Languages"
   ],
+  "main": "./dist/extension.js",
   "contributes": {
     "languages": [
       {
@@ -26,15 +27,51 @@
         "extensions": [
           ".nyx"
         ],
-        "configuration": "./src/language-configuration.json"
+        "configuration": "./language-configuration.json"
       }
     ],
     "grammars": [
       {
         "language": "nyx",
         "scopeName": "source.nyx",
-        "path": "./src/syntaxes/nyx.tmLanguage.json"
+        "path": "./syntaxes/nyx.tmLanguage.json"
       }
-    ]
+    ],
+    "commands": [
+      {
+        "command": "nyx.typecheckFile",
+        "title": "Nyx: Typecheck Current File"
+      }
+    ],
+    "configuration": {
+      "title": "Nyx",
+      "properties": {
+        "nyx.typecheckOnSave": {
+          "type": "boolean",
+          "default": true,
+          "description": "Run Nyx compiler on save to surface diagnostics."
+        },
+        "nyx.compilerProject": {
+          "type": "string",
+          "default": "parser/NyxCompiler.Cli/NyxCompiler.Cli.fsproj",
+          "description": "Relative path to NyxCompiler.Cli.fsproj in the workspace."
+        },
+        "nyx.compilerDotnetPath": {
+          "type": "string",
+          "default": "dotnet",
+          "description": "Path to the dotnet executable."
+        }
+      }
+    }
+  },
+  "scripts": {
+    "compile": "tsc -p ./",
+    "watch": "tsc -watch -p ./",
+    "vscode:prepublish": "npm run compile"
+  },
+  "devDependencies": {
+    "@types/node": "^20.11.30",
+    "@types/vscode": "^1.76.0",
+    "typescript": "^5.5.4"
   }
 }

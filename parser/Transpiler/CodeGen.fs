@@ -516,7 +516,8 @@ and transpileStatement (env: TranspileEnv) (stmt: Statement) : string list * Tra
                 { env with ContextFunctions = env.ContextFunctions |> Map.add name contextMembers }
             else
                 env
-        let definitionName = escapeIdentifier name
+        let definitionName = renderQualifiedName name
+        let isQualified = name.Contains(".")
         let definition =
             if hasContext then
                 let ctxParam = ctxVarName 0
@@ -526,9 +527,15 @@ and transpileStatement (env: TranspileEnv) (stmt: Statement) : string list * Tra
                     | lines -> String.concat " " lines
                 let innerEnv = { nextEnv with ContextVar = Some ctxParam; BoundNames = Set.empty }
                 let bodyExpr = transpileExpressionWithEnv innerEnv expr
-                sprintf "const %s = (%s) => { %s return %s; };" definitionName ctxParam destructure bodyExpr
+                if isQualified then
+                    sprintf "%s = (%s) => { %s return %s; };" definitionName ctxParam destructure bodyExpr
+                else
+                    sprintf "const %s = (%s) => { %s return %s; };" definitionName ctxParam destructure bodyExpr
             else
-                sprintf "const %s = %s;" definitionName (transpileExpressionWithEnv env expr)
+                if isQualified then
+                    sprintf "%s = %s;" definitionName (transpileExpressionWithEnv env expr)
+                else
+                    sprintf "const %s = %s;" definitionName (transpileExpressionWithEnv env expr)
         [ definition ], nextEnv
     | TypeDefStatement _ -> [ "" ], env
     | ImportStatement _ -> [ "" ], env

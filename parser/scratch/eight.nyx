@@ -6,3 +6,14 @@ type Person = (
 def Person.fullName: Person -> string = { p ->
     "{p.firstName} {p.surname}"
 }
+
+def A.a = { s -> s }
+
+def p: Person = (
+    firstName = "",
+    surname = ""
+)
+
+def n = p \ Person.fullName
+
+def n2 = p \ fullName

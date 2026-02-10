@@ -55,6 +55,43 @@ let private numericType =
 let private tupleFieldName index =
     $"item{index}"
 
+let rec private isAssignableType (expected: Ty) (actual: Ty) =
+    match expected, actual with
+    | TyVar _, _ -> true
+    | TyPrimitive left, TyPrimitive right -> left = right
+    | TyNominal(_, underlying, _), _ -> isAssignableType underlying actual
+    | _, TyNominal(_, underlying, _) -> isAssignableType expected underlying
+    | TyRecord expectedFields, TyRecord actualFields ->
+        expectedFields
+        |> Map.forall (fun name expectedTy ->
+            match actualFields |> Map.tryFind name with
+            | Some actualTy -> isAssignableType expectedTy actualTy
+            | None -> false)
+    | TyUnion options, _ -> options |> List.exists (fun optionTy -> isAssignableType optionTy actual)
+    | _ -> true
+
+let private tryResolveAttachedFunction (env: TypeEnv) (lhsType: Ty) (funcName: string) : Result<string option, Diagnostic list> =
+    if funcName.Contains(".") then
+        Ok None
+    else
+        let suffix = $".{funcName}"
+        let candidates =
+            env
+            |> Map.toList
+            |> List.choose (fun (name, scheme) ->
+                if name.EndsWith(suffix) then
+                    match scheme.Type with
+                    | TyFunc(inputTy, _) when isAssignableType inputTy lhsType -> Some name
+                    | _ -> None
+                else
+                    None)
+        match candidates with
+        | [] -> Ok None
+        | [single] -> Ok (Some single)
+        | _ ->
+            let names = String.concat ", " candidates
+            Error [ Diagnostics.error ($"Ambiguous attached function '{funcName}': {names}") ]
+
 let private isContextDef (modifiers: TypeDefModifier list) =
     modifiers |> List.contains Context
 
@@ -463,8 +500,18 @@ let rec private inferExpr (env: TypeEnv) (state: InferState) (expr: Expression) 
                     Ok (mkTypedExpr expr (TyPrimitive "bool") None None None, constrained)
                 | _ -> Ok (mkTypedExpr expr leftExpr.Type None None None, constrained)
     | Pipe(value, name, args) ->
-        let callArgs = value :: args
-        inferExpr env state (FunctionCall(name, callArgs))
+        match inferExpr env state value with
+        | Error err -> Error err
+        | Ok (typedValue, nextState) ->
+            match tryResolveAttachedFunction env typedValue.Type name with
+            | Error err -> Error err
+            | Ok resolvedOpt ->
+                let resolvedName = resolvedOpt |> Option.defaultValue name
+                let callArgs = value :: args
+                match inferExpr env nextState (FunctionCall(resolvedName, callArgs)) with
+                | Ok (typedCall, finalState) ->
+                    Ok ({ typedCall with Expr = Pipe(value, resolvedName, args) }, finalState)
+                | Error err -> Error err
     | UseIn(binding, body) ->
         match inferUseBinding env state binding with
         | Error err -> Error err

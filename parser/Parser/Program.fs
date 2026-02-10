@@ -616,6 +616,12 @@ let typedIdentifier: Parser<Identifier * TypeExpr option, unit> =
         (opt (attempt (wsInline >>. pstring ":" >>. ws >>. typeExpr)))
         (fun name typeOpt -> (name, typeOpt))
 
+let typedQualifiedIdentifier: Parser<Identifier * TypeExpr option, unit> =
+    pipe2
+        qualifiedIdentifier
+        (opt (attempt (wsInline >>. pstring ":" >>. ws >>. typeExpr)))
+        (fun name typeOpt -> (name, typeOpt))
+
 let typeParam: Parser<Identifier * TypeExpr option, unit> =
     pipe2
         identifierNoWs
@@ -1094,7 +1100,7 @@ do
     let defStatement = 
         pipe3
             (opt (attempt (pstring "export" >>. ws)))
-            (pstring "def" >>. ws >>. typedIdentifier .>> wsNoNl() .>> pstring "=" .>> wsNoNl())
+            (pstring "def" >>. ws >>. typedQualifiedIdentifier .>> wsNoNl() .>> pstring "=" .>> wsNoNl())
             (attempt (blockExpr()) <|> (wsNoNl() >>. (sepBy1 expression (pstring "," .>> ws) |>> fun exprs ->
                 match exprs with
                 | [single] -> single
@@ -1114,7 +1120,7 @@ let moduleDecl: Parser<TopLevelItem, unit> =
 let valueDef: Parser<TopLevelItem, unit> =
     pipe3
         (opt (attempt (pstring "export" >>. ws)))
-        (pstring "def" >>. ws >>. typedIdentifier .>> wsNoNl() .>> pstring "=")  // Don't consume newlines after =
+        (pstring "def" >>. ws >>. typedQualifiedIdentifier .>> wsNoNl() .>> pstring "=")  // Don't consume newlines after =
         (attempt (blockExpr()) <|> (wsInline >>. (sepBy1 expression (pstring "," .>> ws) |>> fun exprs ->
             match exprs with
             | [single] -> single

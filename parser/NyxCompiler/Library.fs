@@ -365,7 +365,17 @@ module Compiler =
                         | TypedDef (TypedTypeDef _)
                         | TypedImport _
                         | TypedModuleDecl _ -> item)
-                Ok { Module = desugared
+                let resolvedModule =
+                    resolvedItems
+                    |> List.map (function
+                        | TypedModuleDecl name -> ModuleDecl name
+                        | TypedImport items -> Import items
+                        | TypedDef (TypedValueDef(isExport, name, typeOpt, expr)) ->
+                            Def (ValueDef(isExport, name, typeOpt, expr.Expr))
+                        | TypedDef (TypedTypeDef(name, modifiers, parameters, body)) ->
+                            Def (TypeDef(name, modifiers, parameters, body))
+                        | TypedExprItem expr -> Expr expr.Expr)
+                Ok { Module = resolvedModule
                      Types = resolvedTypes
                      TypeDefs = resolvedTypeDefs
                      Items = resolvedItems }

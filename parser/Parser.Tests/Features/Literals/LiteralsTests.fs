@@ -53,3 +53,13 @@ let ``Parse multiline string literal`` () =
         | [Def (ValueDef(_, "msg", _, LiteralExpr (StringLit value)))] ->
             value |> should equal "Hello\nworld"
         | _ -> failwith "Expected multiline string literal"
+
+[<Fact>]
+let ``Parse dotted def name`` () =
+    let source = "def Person.fullName = { p -> p.firstName }"
+    match parseModule source with
+    | Result.Error err -> failwith $"Parse failed: {err}"
+    | Result.Ok module' ->
+        match module' with
+        | [Def (ValueDef(_, name, _, _))] -> name |> should equal "Person.fullName"
+        | _ -> failwith "Expected dotted def name"

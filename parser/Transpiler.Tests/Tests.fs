@@ -52,6 +52,22 @@ let ``Transpile multiline string literal`` () =
     Assert.Contains("\"Hello\\nworld\"", result)
 
 [<Fact>]
+let ``Transpile dotted def name`` () =
+    let source = "def Person.fullName = { p -> p.firstName }"
+    let result = transpileSource source
+    Assert.Contains("Person.fullName", result)
+
+[<Fact>]
+let ``Transpile pipe resolves attached function`` () =
+    let source =
+        "type Person = (firstName: string)\n" +
+        "def Person.fullName = { p -> p.firstName }\n" +
+        "def p = (firstName = \"\")\n" +
+        "def n2 = p \\ fullName"
+    let result = transpileSource source
+    Assert.Contains("Person.fullName(p)", result)
+
+[<Fact>]
 let ``Transpile boolean literal`` () =
     let expr = LiteralExpr (BoolLit true)
     let result = transpileExpression expr

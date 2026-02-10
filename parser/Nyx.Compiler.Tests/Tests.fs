@@ -30,6 +30,33 @@ let ``Typecheck interpolated string`` () =
     Assert.Equal(TyPrimitive "string", typed.Types.["msg"])
 
 [<Fact>]
+let ``Typecheck dotted def name`` () =
+    let source =
+        "type Person = (firstName: string)\n" +
+        "def Person.fullName: Person -> string = { p -> p.firstName }"
+    let result = Compiler.compile source
+    Assert.True(result.Diagnostics.IsEmpty)
+    let typed = result.Typed.Value
+    match typed.Types.["Person.fullName"] with
+    | TyFunc(TyRecord fields, TyPrimitive "string") when fields.ContainsKey("firstName") ->
+        Assert.True(true)
+    | other -> Assert.True(false, $"Unexpected dotted def type: %A{other}")
+
+[<Fact>]
+let ``Typecheck pipe resolves attached functions`` () =
+    let source =
+        "type Person = (firstName: string surname: string)\n" +
+        "def Person.fullName: Person -> string = { p -> p.firstName }\n" +
+        "def p: Person = (firstName = \"\", surname = \"\")\n" +
+        "def n = p \\ Person.fullName\n" +
+        "def n2 = p \\ fullName"
+    let result = Compiler.compile source
+    Assert.True(result.Diagnostics.IsEmpty)
+    let typed = result.Typed.Value
+    Assert.Equal(TyPrimitive "string", typed.Types.["n"])
+    Assert.Equal(TyPrimitive "string", typed.Types.["n2"])
+
+[<Fact>]
 let ``Typecheck supports polymorphic let`` () =
     let source =
         "def id = { x -> x }\n" +

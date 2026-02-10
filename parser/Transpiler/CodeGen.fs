@@ -1,5 +1,6 @@
 module Transpiler.CodeGen
 
+open System
 open Parser.Program
 
 type TranspileEnv = { ContextMembers: Map<string, Set<string>>; ContextFunctions: Map<string, Set<string>>; RecordTypes: Set<string>; ContextVar: string option; BoundNames: Set<string>; NextCtxId: int }
@@ -8,6 +9,74 @@ let emptyEnv = { ContextMembers = Map.empty; ContextFunctions = Map.empty; Recor
 
 let private ctxVarName (id: int) =
     if id = 0 then "__ctx" else $"__ctx{id}"
+
+let private jsReserved =
+    [ "await"; "async"; "break"; "case"; "catch"; "class"; "const"; "continue"; "debugger"; "default"; "delete"; "do"
+      "else"; "enum"; "export"; "extends"; "false"; "finally"; "for"; "function"; "if"; "import"; "in"; "instanceof"
+      "new"; "null"; "return"; "super"; "switch"; "this"; "throw"; "true"; "try"; "typeof"; "var"; "void"; "while"
+      "with"; "yield"; "let"; "static"; "implements"; "interface"; "package"; "private"; "protected"; "public" ]
+    |> Set.ofList
+
+let private escapeString (value: string) =
+    value.Replace("\\", "\\\\").Replace("\"", "\\\"")
+
+let private isValidJsIdentifier (name: string) =
+    if String.IsNullOrWhiteSpace name then
+        false
+    else
+        let isStart c = c = '_' || c = '$' || Char.IsLetter c
+        let isPart c = isStart c || Char.IsDigit c
+        isStart name.[0] && name |> Seq.skip 1 |> Seq.forall isPart
+
+let private sanitizeIdentifier (name: string) =
+    let sanitized =
+        name
+        |> Seq.map (fun c -> if Char.IsLetterOrDigit c || c = '_' || c = '$' then c else '_')
+        |> Seq.toArray
+        |> String
+    let baseName =
+        if String.IsNullOrWhiteSpace sanitized then
+            "_"
+        elif Char.IsDigit sanitized.[0] then
+            "_" + sanitized
+        else
+            sanitized
+    if jsReserved.Contains baseName then
+        "_" + baseName
+    else
+        baseName
+
+let private escapeIdentifier name = sanitizeIdentifier name
+
+let private isSafePropertyName name = isValidJsIdentifier name && not (jsReserved.Contains name)
+
+let private renderPropertyKey name =
+    if isSafePropertyName name then name else sprintf "\"%s\"" (escapeString name)
+
+let private renderMemberAccess (baseExpr: string) (name: string) =
+    if isSafePropertyName name then sprintf "%s.%s" baseExpr name else sprintf "%s[\"%s\"]" baseExpr (escapeString name)
+
+let private renderQualifiedName (name: string) =
+    let parts = name.Split('.')
+    if parts.Length = 1 then
+        escapeIdentifier name
+    else
+        let first = escapeIdentifier parts.[0]
+        parts
+        |> Array.skip 1
+        |> Array.fold (fun acc part -> renderMemberAccess acc part) first
+
+let private renderDestructure (ctxName: string) (names: Set<string>) =
+    if names.IsEmpty then
+        []
+    else
+        let entries =
+            names
+            |> Set.toList
+            |> List.map (fun name ->
+                let escaped = escapeIdentifier name
+                if escaped = name then name else sprintf "%s: %s" name escaped)
+        [ sprintf "const { %s } = %s;" (String.concat ", " entries) ctxName ]
 
 let private extractContextNames (typeExpr: TypeExpr) : TypeExpr list =
     match typeExpr with
@@ -114,7 +183,7 @@ let private isRecordConstructor (env: TranspileEnv) (name: string) (args: Expres
 
 let rec transpileLiteral (lit: Literal) : string =
     match lit with
-    | StringLit s -> sprintf "\"%s\"" (s.Replace("\"", "\\\""))
+    | StringLit s -> sprintf "\"%s\"" (escapeString s)
     | IntLit i -> string i
     | FloatLit f -> string f
     | BoolLit b -> if b then "true" else "false"
@@ -124,10 +193,10 @@ let rec private transpileExpressionWithEnv (env: TranspileEnv) (expr: Expression
     | UnitExpr -> "undefined"
     | LiteralExpr lit -> transpileLiteral lit
     
-    | IdentifierExpr id -> id
+    | IdentifierExpr id -> escapeIdentifier id
     
     | MemberAccess(obj, field) ->
-        sprintf "%s.%s" (transpileExpressionWithEnv env obj) field
+        renderMemberAccess (transpileExpressionWithEnv env obj) field
     
     | BinaryOp(op, left, right) ->
         let jsOp = 
@@ -145,7 +214,7 @@ let rec private transpileExpressionWithEnv (env: TranspileEnv) (expr: Expression
         let transpileField field =
             match field with
             | NamedField(name, expr) ->
-                sprintf "%s: %s" name (transpileExpressionWithEnv env expr)
+                sprintf "%s: %s" (renderPropertyKey name) (transpileExpressionWithEnv env expr)
             | PositionalField expr ->
                 // For positional fields in a record, we could use numeric keys
                 // For now, this is an error case - records should have named fields
@@ -158,17 +227,18 @@ let rec private transpileExpressionWithEnv (env: TranspileEnv) (expr: Expression
         sprintf "[%s]" items
     
     | FunctionCall(name, args) ->
+        let emittedName = renderQualifiedName name
         if isRecordConstructor env name args then
             match args with
             | [recordExpr] -> transpileExpressionWithEnv env recordExpr
-            | _ -> name
+            | _ -> emittedName
         else
         let baseCall =
             if env.ContextFunctions |> Map.containsKey name then
                 let ctxExpr = env.ContextVar |> Option.defaultValue "{}"
-                sprintf "%s(%s)" name ctxExpr
+                sprintf "%s(%s)" emittedName ctxExpr
             else
-                name
+                emittedName
         match args with
         | [] -> sprintf "%s()" baseCall
         | [single] ->
@@ -182,7 +252,7 @@ let rec private transpileExpressionWithEnv (env: TranspileEnv) (expr: Expression
             sprintf "%s(%s)" baseCall argStrs
     
     | Lambda(params', body) ->
-        let paramStr = params' |> List.map fst |> String.concat ", "
+        let paramStr = params' |> List.map (fst >> escapeIdentifier) |> String.concat ", "
         sprintf "(%s) => %s" paramStr (transpileExpressionWithEnv env body)
     
     | Pipe(expr, funcName, args) ->
@@ -193,9 +263,9 @@ let rec private transpileExpressionWithEnv (env: TranspileEnv) (expr: Expression
         let baseCall =
             if env.ContextFunctions |> Map.containsKey funcName then
                 let ctxExpr = env.ContextVar |> Option.defaultValue "{}"
-                sprintf "%s(%s)" funcName ctxExpr
+                sprintf "%s(%s)" (renderQualifiedName funcName) ctxExpr
             else
-                funcName
+                renderQualifiedName funcName
         match args with
         | [] -> sprintf "%s(%s)" baseCall exprStr
         | [TupleExpr items] ->
@@ -216,11 +286,7 @@ let rec private transpileExpressionWithEnv (env: TranspileEnv) (expr: Expression
             match binding with
             | UseValue expr -> contextMembersFromUseExpr envWithCtx expr
         let newNames = newMembers |> Set.difference envWithCtx.BoundNames
-        let destructure =
-            if newNames.IsEmpty then
-                []
-            else
-                [sprintf "const { %s } = %s;" (newNames |> Set.toList |> String.concat ", ") ctxName]
+        let destructure = renderDestructure ctxName newNames
         let envForBody = { envWithCtx with BoundNames = envWithCtx.BoundNames |> Set.union newMembers }
         let bodyExpr = transpileExpressionWithEnv envForBody body
         let lines =
@@ -276,7 +342,7 @@ let rec private transpileExpressionWithEnv (env: TranspileEnv) (expr: Expression
 
         let rec patternToJs (scrutinee: string) (pat: Pattern) : string list * string list =
             match pat with
-            | IdentifierPattern name -> ([], [sprintf "const %s = %s;" name scrutinee])
+            | IdentifierPattern name -> ([], [sprintf "const %s = %s;" (escapeIdentifier name) scrutinee])
             | WildcardPattern
             | ElsePattern -> ([], [])
             | LiteralPattern lit -> ([sprintf "%s === %s" scrutinee (transpileLiteral lit)], [])
@@ -320,7 +386,7 @@ let rec private transpileExpressionWithEnv (env: TranspileEnv) (expr: Expression
                 let splatBindings =
                     match splatOpt with
                     | Some (IdentifierPattern name) ->
-                        [sprintf "const %s = %s.slice(%d);" name scrutinee minLen]
+                        [sprintf "const %s = %s.slice(%d);" (escapeIdentifier name) scrutinee minLen]
                     | Some _ -> failwith "Unsupported list splat pattern"
                     | None -> []
 
@@ -358,7 +424,7 @@ let rec private transpileExpressionWithEnv (env: TranspileEnv) (expr: Expression
                 let memberConds, memberBinds =
                     members
                     |> List.map (fun (name, pat) ->
-                        let memberAccess = sprintf "%s.%s" scrutinee name
+                        let memberAccess = renderMemberAccess scrutinee name
                         let nameCheck = sprintf "\"%s\" in %s" name scrutinee
                         let conds, binds = patternToJs memberAccess pat
                         (nameCheck :: conds, binds))
@@ -432,19 +498,19 @@ and transpileStatement (env: TranspileEnv) (stmt: Statement) : string list * Tra
                 { env with ContextFunctions = env.ContextFunctions |> Map.add name contextMembers }
             else
                 env
+        let definitionName = escapeIdentifier name
         let definition =
             if hasContext then
                 let ctxParam = ctxVarName 0
                 let destructure =
-                    if contextMembers.IsEmpty then
-                        ""
-                    else
-                        sprintf "const { %s } = %s;" (contextMembers |> Set.toList |> String.concat ", ") ctxParam
+                    match renderDestructure ctxParam contextMembers with
+                    | [] -> ""
+                    | lines -> String.concat " " lines
                 let innerEnv = { nextEnv with ContextVar = Some ctxParam; BoundNames = Set.empty }
                 let bodyExpr = transpileExpressionWithEnv innerEnv expr
-                sprintf "const %s = (%s) => { %s return %s; };" name ctxParam destructure bodyExpr
+                sprintf "const %s = (%s) => { %s return %s; };" definitionName ctxParam destructure bodyExpr
             else
-                sprintf "const %s = %s;" name (transpileExpressionWithEnv env expr)
+                sprintf "const %s = %s;" definitionName (transpileExpressionWithEnv env expr)
         [ definition ], nextEnv
     | TypeDefStatement _ -> [ "" ], env
     | ImportStatement _ -> [ "" ], env
@@ -460,11 +526,7 @@ and transpileStatement (env: TranspileEnv) (stmt: Statement) : string list * Tra
                 match binding with
                 | UseValue expr -> contextMembersFromUseExpr env expr
             let newNames = newMembers |> Set.difference env.BoundNames
-            let destructureLines =
-                if newNames.IsEmpty then
-                    []
-                else
-                    [sprintf "const { %s } = %s;" (newNames |> Set.toList |> String.concat ", ") ctxName]
+            let destructureLines = renderDestructure ctxName newNames
             let nextEnv = { env with BoundNames = env.BoundNames |> Set.union newMembers }
             [ mergedLine ] @ destructureLines, nextEnv
     | ExprStatement expr -> [ sprintf "%s;" (transpileExpressionWithEnv env expr) ], env

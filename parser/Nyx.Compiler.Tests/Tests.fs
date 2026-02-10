@@ -277,6 +277,31 @@ let ``Desugar workflow implicit return`` () =
         | other -> Assert.True(false, $"Unexpected desugared module: %A{other}")
 
 [<Fact>]
+let ``Typecheck workflow context members`` () =
+    let source =
+        "context AsyncWorkflow = (await: (int, (int -> int)) -> int pure: int -> int)\n" +
+        "def async: AsyncWorkflow = (await = { x, f -> f(x) }, pure = { x -> x })\n" +
+        "def result = async {\n" +
+        "  def x = await! 1\n" +
+        "  return! x\n" +
+        "}"
+    let result = Compiler.compile source
+    Assert.True(result.Diagnostics.IsEmpty)
+
+[<Fact>]
+let ``Typecheck workflow requires pure`` () =
+    let source =
+        "context AsyncWorkflow = (await: (int, (int -> int)) -> int)\n" +
+        "def async: AsyncWorkflow = (await = { x, f -> f(x) })\n" +
+        "def result = async {\n" +
+        "  return! 1\n" +
+        "}"
+    let result = Compiler.compile source
+    Assert.False(result.Diagnostics.IsEmpty)
+    let message = result.Diagnostics |> List.head |> fun diag -> diag.Message
+    Assert.Contains("pure", message)
+
+[<Fact>]
 let ``Typecheck supports nominal types`` () =
     let source =
         "type @Email = string\n" +

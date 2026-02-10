@@ -340,27 +340,64 @@ let rec private inferExpr (env: TypeEnv) (state: InferState) (expr: Expression) 
                 let mutable current = state
                 let funcTy, nextState = instantiate current scheme
                 current <- nextState
-                let argResults =
-                    args
-                    |> List.map (fun arg ->
-                        match inferExpr env current arg with
-                        | Ok (ty, next) ->
-                            current <- next
-                            Ok ty
-                        | Error err -> Error err)
-                let errors = argResults |> List.choose (function Error err -> Some err | _ -> None) |> List.concat
-                if errors.IsEmpty then
-                    let argTys =
-                        argResults
-                        |> List.choose (function Ok typedExpr -> Some typedExpr.Type | _ -> None)
-                    let retTy, nextState = freshVar current
-                    let expectedInput, nextState2 = freshVar nextState
-                    let inputTy = inputTypeFromArgs argTys
-                    let withFuncConstraint = addConstraint funcTy (TyFunc(expectedInput, retTy)) nextState2
-                    let withAssignable = addAssignableConstraint inputTy expectedInput withFuncConstraint
-                    Ok (mkTypedExpr expr retTy None None None, withAssignable)
-                else
-                    Error errors
+
+                let recordFieldsOpt =
+                    match funcTy with
+                    | TyRecord fields -> Some fields
+                    | TyNominal(_, underlying, _) ->
+                        match underlying with
+                        | TyRecord fields -> Some fields
+                        | _ -> None
+                    | _ -> None
+
+                let isWorkflowCall =
+                    match args with
+                    | [Lambda(lambdaArgs, _)] when lambdaArgs.IsEmpty -> recordFieldsOpt
+                    | _ -> None
+
+                match isWorkflowCall with
+                | Some fields ->
+                    let missingMembers =
+                        ["await"; "pure"]
+                        |> List.filter (fun memberName -> not (fields |> Map.containsKey memberName))
+                    if not missingMembers.IsEmpty then
+                        let missingText = String.concat ", " missingMembers
+                        Error [ Diagnostics.error ($"Workflow '{name}' is missing context members: {missingText}") ]
+                    else
+                        let envWithCtx = extendEnvWithRecordFields env funcTy
+                        match args with
+                        | [Lambda(lambdaArgs, lambdaBody)] ->
+                            match inferLambdaWithExpected envWithCtx current lambdaArgs lambdaBody (Some (TyPrimitive "unit")) None with
+                            | Ok (typedLambda, next) ->
+                                let returnTy =
+                                    match typedLambda.Type with
+                                    | TyFunc(_, ret) -> ret
+                                    | other -> other
+                                Ok (mkTypedExpr expr returnTy None None None, next)
+                            | Error err -> Error err
+                        | _ -> Error [ Diagnostics.error ($"Workflow '{name}' must be called with a trailing lambda") ]
+                | None ->
+                    let argResults =
+                        args
+                        |> List.map (fun arg ->
+                            match inferExpr env current arg with
+                            | Ok (ty, next) ->
+                                current <- next
+                                Ok ty
+                            | Error err -> Error err)
+                    let errors = argResults |> List.choose (function Error err -> Some err | _ -> None) |> List.concat
+                    if errors.IsEmpty then
+                        let argTys =
+                            argResults
+                            |> List.choose (function Ok typedExpr -> Some typedExpr.Type | _ -> None)
+                        let retTy, nextState = freshVar current
+                        let expectedInput, nextState2 = freshVar nextState
+                        let inputTy = inputTypeFromArgs argTys
+                        let withFuncConstraint = addConstraint funcTy (TyFunc(expectedInput, retTy)) nextState2
+                        let withAssignable = addAssignableConstraint inputTy expectedInput withFuncConstraint
+                        Ok (mkTypedExpr expr retTy None None None, withAssignable)
+                    else
+                        Error errors
             | None ->
                 match state.TypeDefs |> Map.tryFind name with
                 | Some (underlyingTy, isPrivate) ->
@@ -769,7 +806,7 @@ and inferUseBinding (env: TypeEnv) (state: InferState) (binding: UseBinding) : R
     match binding with
     | UseValue expr -> inferExpr env state expr
 
-and inferLambdaWithExpected (env: TypeEnv) (state: InferState) (args: (Identifier * TypeExpr option) list) (body: Expression) (expectedInputOpt: Ty option) (expectedReturnOpt: Ty option) =
+and inferLambdaWithExpected (env: TypeEnv) (state: InferState) (args: (Identifier * TypeExpr option) list) (body: Expression) (expectedInputOpt: Ty option) (expectedReturnOpt: Ty option) : Result<TypedExpr * InferState, Diagnostic list> =
     let mutable current = state
     let mutable env' = env
     let argTys =

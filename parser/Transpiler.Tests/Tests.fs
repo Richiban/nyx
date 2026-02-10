@@ -57,6 +57,15 @@ let ``Transpile identifier`` () =
     result |> should equal "x"
 
 [<Fact>]
+let ``Transpile reserved identifier await`` () =
+    let source =
+        "def await = { 1 }\n" +
+        "def result = await()"
+    let result = transpileSource source
+    Assert.Contains("const _await", result)
+    Assert.Contains("_await()", result)
+
+[<Fact>]
 let ``Transpile member access`` () =
     let expr = MemberAccess(IdentifierExpr "point", "x")
     let result = transpileExpression expr

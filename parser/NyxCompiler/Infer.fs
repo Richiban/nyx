@@ -291,7 +291,7 @@ let private extendEnvWithContexts (env: TypeEnv) (state: InferState) (contexts: 
 let private registerContextRequirement (state: InferState) (name: Identifier) (contexts: TypeExpr list) =
     { state with ContextRequirements = state.ContextRequirements |> Map.add name contexts }
 
-let private ensureContextAvailable (env: TypeEnv) (state: InferState) (name: Identifier) (contexts: TypeExpr list) =
+let private ensureContextAvailable (env: TypeEnv) (state: InferState) (name: Identifier) (contexts: TypeExpr list) (rangeOpt: SourceRange option) =
     let requiredMembers =
         contexts
         |> List.collect (fun ctx ->
@@ -305,7 +305,9 @@ let private ensureContextAvailable (env: TypeEnv) (state: InferState) (name: Ide
         Ok ()
     else
         let missingText = String.concat ", " missing
-        Error [ Diagnostics.error ($"Missing context members for '{name}': {missingText}") ]
+        match rangeOpt with
+        | Some (line, col) -> Error [ Diagnostics.errorAt ($"Missing context members for '{name}': {missingText}") (line, col) ]
+        | None -> Error [ Diagnostics.error ($"Missing context members for '{name}': {missingText}") ]
 
 let private registerTypeDef (state: InferState) (name: Identifier) (modifiers: TypeDefModifier list) (body: TypeExpr) =
     let underlyingTy, next = typeExprToTy state body
@@ -398,7 +400,7 @@ let rec private inferExpr (env: TypeEnv) (state: InferState) (expr: Expression) 
     | FunctionCall(name, rangeOpt, args) ->
         let contextCheck =
             match state.ContextRequirements |> Map.tryFind name with
-            | Some contexts -> ensureContextAvailable env state name contexts
+            | Some contexts -> ensureContextAvailable env state name contexts rangeOpt
             | None -> Ok ()
         match contextCheck with
         | Error err -> Error err

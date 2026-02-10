@@ -81,6 +81,24 @@ let private ensureAttachedTypeExists (state: InferState) (name: Identifier) : Re
         else
             Error [ Diagnostics.error ($"Unknown attached type '{typeName}' for definition '{name}'") ]
 
+let private matchesAttachedInput (inputTy: Ty) (lhsType: Ty) : bool =
+    let rec containsNominal name ty =
+        match ty with
+        | TyNominal(nominalName, _, _) -> nominalName = name
+        | TyUnion options -> options |> List.exists (containsNominal name)
+        | _ -> false
+    match inputTy with
+    | TyNominal(name, _, _) ->
+        match lhsType with
+        | TyNominal(lhsName, _, _) -> lhsName = name
+        | TyUnion options -> options |> List.exists (containsNominal name)
+        | TyVar _ -> true
+        | _ -> false
+    | _ ->
+        match lhsType with
+        | TyNominal _ -> false
+        | _ -> isAssignableType inputTy lhsType
+
 let private tryResolveAttachedFunction (env: TypeEnv) (lhsType: Ty) (funcName: string) (rangeOpt: (int * int) option) : Result<string option, Diagnostic list> =
     if funcName.Contains(".") then
         Ok None
@@ -92,7 +110,7 @@ let private tryResolveAttachedFunction (env: TypeEnv) (lhsType: Ty) (funcName: s
             |> List.choose (fun (name, scheme) ->
                 if name.EndsWith(suffix) then
                     match scheme.Type with
-                    | TyFunc(inputTy, _) when isAssignableType inputTy lhsType -> Some name
+                    | TyFunc(inputTy, _) when matchesAttachedInput inputTy lhsType -> Some name
                     | _ -> None
                 else
                     None)

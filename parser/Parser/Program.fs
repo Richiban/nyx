@@ -168,7 +168,7 @@ let typeNameIdentifier: Parser<Identifier, unit> =
 
 let qualifiedIdentifier: Parser<Identifier, unit> =
     pipe2
-        identifierNoWs
+        typeNameIdentifier
         (many (pchar '.' >>. identifierNoWs))
         (fun head tail -> String.concat "." (head :: tail))
 

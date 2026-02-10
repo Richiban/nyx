@@ -1,0 +1,11 @@
+module nine1
+
+export type @Email = private string
+
+export def createEmail: string -> #some(@Email) | #invalidInput = {
+    #some(@Email(""))
+}
+
+def @Email.toString = { e ->
+    ""
+}

@@ -65,16 +65,8 @@ module Compiler =
         else
             sanitized
 
-    let private importPrefix (item: ImportItem) =
-        match item.Alias with
-        | Some alias -> sanitizeIdentifier alias
-        | None ->
-            match item.Source with
-            | ModuleImport name ->
-                let parts = name.Split([| '/'; '.' |], StringSplitOptions.RemoveEmptyEntries)
-                parts |> Array.tryLast |> Option.defaultValue name |> sanitizeIdentifier
-            | PathImport path ->
-                Path.GetFileNameWithoutExtension path |> sanitizeIdentifier
+    let private importQualifier (item: ImportItem) =
+        item.Alias |> Option.map sanitizeIdentifier
 
     let private resolveImportPath (baseDir: string) (item: ImportItem) : Result<string, Diagnostic> =
         let rawPath =
@@ -119,11 +111,14 @@ module Compiler =
         |> Map.fold (fun acc key value ->
             if Map.containsKey key acc then acc else acc |> Map.add key value) target
 
-    let private extendEnvWithImport (env: TypeEnv) (prefix: string) (types: Map<string, Ty>) =
+    let private extendEnvWithImport (env: TypeEnv) (qualifierOpt: string option) (types: Map<string, Ty>) =
         types
         |> Map.fold (fun acc name ty ->
-            let qualified = $"{prefix}.{name}"
-            acc |> TypeEnv.extend qualified (TypeEnv.mono ty)) env
+            let importedName =
+                match qualifierOpt with
+                | Some qualifier -> $"{qualifier}.{name}"
+                | None -> name
+            acc |> TypeEnv.extend importedName (TypeEnv.mono ty)) env
 
     let private tryParseLineColumn (message: string) : (int * int) option =
         let patterns =
@@ -292,7 +287,7 @@ module Compiler =
                         match typecheckFile importPath (visited.Add fullPath) with
                         | Error diags -> errors <- errors @ diags
                         | Ok typed ->
-                            let prefix = importPrefix item
+                            let qualifier = importQualifier item
                             let exportedValues = exportedValueNames typed.Module
                             let exportedTypes = exportedTypeNames typed.Module
                             let filteredTypes =
@@ -301,7 +296,7 @@ module Compiler =
                             let filteredTypeDefs =
                                 typed.TypeDefs
                                 |> Map.filter (fun name _ -> exportedTypes.Contains name)
-                            env <- extendEnvWithImport env prefix filteredTypes
+                            env <- extendEnvWithImport env qualifier filteredTypes
                             state <- { state with TypeDefs = mergeTypeDefs state.TypeDefs filteredTypeDefs }
                 if not errors.IsEmpty then
                     Error errors

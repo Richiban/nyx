@@ -1,0 +1,9 @@
+module nine
+
+import "nine.1.nyx"
+
+def main = {
+    def email = createEmail("")
+}
+
+main()

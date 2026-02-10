@@ -69,7 +69,10 @@ import (
   io
 )
 
---  Imports can be given a local name to avoid name conflicts:
+--  Bare imports bring all exported members into scope unqualified:
+import math
+
+--  Imports can be given a local name to avoid name conflicts. Aliased imports are qualified-only:
 import io/file as f
 
 --  This means that the contents of the `file` module are not available in scope, but instead through the given name `f`
@@ -77,9 +80,9 @@ def myFile = f.open("/somefile.txt")
 
 --  Importing can be done anywhere in a file, allowing the use of imports inside scopes to limit naming conflicts
 def myFunction() ->
-    import io/file
+  import io/file
 
-    file.open("/somefile.txt")
+  open("/somefile.txt")
 
 
 --  When it comes to writing a library, you will want to have at least one exported module:

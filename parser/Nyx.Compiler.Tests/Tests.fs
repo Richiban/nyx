@@ -1,8 +1,19 @@
 ﻿module Nyx.Compiler.Tests
 
+open System
+open System.IO
 open Xunit
 open NyxCompiler
 open Parser.Program
+
+let private withTempDir (action: string -> unit) =
+    let dir = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString("N"))
+    Directory.CreateDirectory dir |> ignore
+    try
+        action dir
+    finally
+        if Directory.Exists dir then
+            Directory.Delete(dir, true)
 
 [<Fact>]
 let ``Compile returns typed module for valid source`` () =
@@ -28,6 +39,42 @@ let ``Typecheck interpolated string`` () =
     Assert.True(result.Diagnostics.IsEmpty)
     let typed = result.Typed.Value
     Assert.Equal(TyPrimitive "string", typed.Types.["msg"])
+
+[<Fact>]
+let ``Import brings members into scope unqualified`` () =
+    withTempDir (fun dir ->
+        let modulePath = Path.Combine(dir, "mod.nyx")
+        let mainPath = Path.Combine(dir, "main.nyx")
+        File.WriteAllText(modulePath, "module mod\nexport def foo = 1")
+        File.WriteAllText(mainPath, "module main\nimport \"mod.nyx\"\ndef value = foo")
+        let result = Compiler.compileFile mainPath
+        Assert.True(result.Diagnostics.IsEmpty, $"Unexpected diagnostics: %A{result.Diagnostics}")
+        let typed = result.Typed.Value
+        Assert.Equal(TyPrimitive "int", typed.Types.["value"]))
+
+[<Fact>]
+let ``Import with alias is qualified`` () =
+    withTempDir (fun dir ->
+        let modulePath = Path.Combine(dir, "mod.nyx")
+        let mainPath = Path.Combine(dir, "main.nyx")
+        File.WriteAllText(modulePath, "module mod\nexport def foo = 1")
+        File.WriteAllText(mainPath, "module main\nimport \"mod.nyx\" as m1\ndef value = m1.foo")
+        let result = Compiler.compileFile mainPath
+        Assert.True(result.Diagnostics.IsEmpty, $"Unexpected diagnostics: %A{result.Diagnostics}")
+        let typed = result.Typed.Value
+        Assert.Equal(TyPrimitive "int", typed.Types.["value"]))
+
+[<Fact>]
+let ``Import with alias does not bring unqualified names`` () =
+    withTempDir (fun dir ->
+        let modulePath = Path.Combine(dir, "mod.nyx")
+        let mainPath = Path.Combine(dir, "main.nyx")
+        File.WriteAllText(modulePath, "module mod\nexport def foo = 1")
+        File.WriteAllText(mainPath, "module main\nimport \"mod.nyx\" as m1\ndef value = foo")
+        let result = Compiler.compileFile mainPath
+        Assert.False(result.Diagnostics.IsEmpty)
+        let message = result.Diagnostics |> List.head |> fun diag -> diag.Message
+        Assert.Contains("Unknown identifier", message))
 
 [<Fact>]
 let ``Typecheck dotted def name`` () =
@@ -63,6 +110,21 @@ let ``Typecheck pipe resolves attached functions`` () =
     let typed = result.Typed.Value
     Assert.Equal(TyPrimitive "string", typed.Types.["n"])
     Assert.Equal(TyPrimitive "string", typed.Types.["n2"])
+
+[<Fact>]
+let ``Typecheck pipe resolves attached functions on nominals`` () =
+    let source =
+        "type @Email = string\n" +
+        "def @Email.toString: @Email -> string = { e -> \"\" }\n" +
+        "def @Email.format: @Email -> string = { e -> \"\" }\n" +
+        "def email: @Email = \"a@b.com\"\n" +
+        "def s = email \\ toString\n" +
+        "def s2 = email \\ format"
+    let result = Compiler.compile source
+    Assert.True(result.Diagnostics.IsEmpty, $"Unexpected diagnostics: %A{result.Diagnostics}")
+    let typed = result.Typed.Value
+    Assert.Equal(TyPrimitive "string", typed.Types.["s"])
+    Assert.Equal(TyPrimitive "string", typed.Types.["s2"])
 
 [<Fact>]
 let ``Typecheck supports polymorphic let`` () =

@@ -70,6 +70,17 @@ let rec private isAssignableType (expected: Ty) (actual: Ty) =
     | TyUnion options, _ -> options |> List.exists (fun optionTy -> isAssignableType optionTy actual)
     | _ -> true
 
+let private ensureAttachedTypeExists (state: InferState) (name: Identifier) : Result<unit, Diagnostic list> =
+    let dotIndex = name.IndexOf(".")
+    if dotIndex <= 0 then
+        Ok ()
+    else
+        let typeName = name.Substring(0, dotIndex)
+        if state.TypeDefs.ContainsKey typeName then
+            Ok ()
+        else
+            Error [ Diagnostics.error ($"Unknown attached type '{typeName}' for definition '{name}'") ]
+
 let private tryResolveAttachedFunction (env: TypeEnv) (lhsType: Ty) (funcName: string) : Result<string option, Diagnostic list> =
     if funcName.Contains(".") then
         Ok None
@@ -946,6 +957,9 @@ and inferBlock (env: TypeEnv) (state: InferState) (statements: Statement list) :
             match statement with
             | DefStatement(isExport, name, typeOpt, expr) ->
                 if errors.IsEmpty then
+                    match ensureAttachedTypeExists current name with
+                    | Error err -> errors <- err
+                    | Ok () ->
                     let contextOpt, declaredTypeExprOpt = extractContextFromTypeExpr typeOpt
                     let envWithCtx, nextState =
                         match contextOpt with
@@ -1028,6 +1042,9 @@ let inferModuleWithEnv (initialEnv: TypeEnv) (initialState: InferState) (module'
     for item in module' do
         match item with
         | Def (ValueDef(isExport, name, typeOpt, expr)) when errors.IsEmpty ->
+            match ensureAttachedTypeExists state name with
+            | Error err -> errors <- err
+            | Ok () ->
             let contextOpt, declaredTypeExprOpt = extractContextFromTypeExpr typeOpt
             let envWithCtx, nextState =
                 match contextOpt with

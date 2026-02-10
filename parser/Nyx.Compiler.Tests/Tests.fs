@@ -43,6 +43,14 @@ let ``Typecheck dotted def name`` () =
     | other -> Assert.True(false, $"Unexpected dotted def type: %A{other}")
 
 [<Fact>]
+let ``Typecheck rejects attached def with missing type`` () =
+    let source = "def A.a = { s -> s }"
+    let result = Compiler.compile source
+    Assert.False(result.Diagnostics.IsEmpty)
+    let message = result.Diagnostics |> List.head |> fun diag -> diag.Message
+    Assert.Contains("Unknown attached type", message)
+
+[<Fact>]
 let ``Typecheck pipe resolves attached functions`` () =
     let source =
         "type Person = (firstName: string surname: string)\n" +

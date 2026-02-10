@@ -207,17 +207,21 @@ function parseDiagnostics(output) {
     const diagnostics = [];
     const lines = output.split(/\r?\n/);
     for (const line of lines) {
-        const match = line.match(/^\[(error|warning)\]\s*(.+)$/i);
+        const match = line.match(/^\[(error|warning)\]\s*(?:\((\d+):(\d+)\)\s*)?(.+)$/i);
         if (!match) {
             continue;
         }
         const severityText = match[1].toLowerCase();
-        const message = match[2].trim();
+        const lineText = match[2];
+        const colText = match[3];
+        const message = match[4].trim();
         const severity = severityText === "warning" ? node_1.DiagnosticSeverity.Warning : node_1.DiagnosticSeverity.Error;
+        const lineNumber = lineText ? Math.max(0, Number(lineText) - 1) : 0;
+        const colNumber = colText ? Math.max(0, Number(colText) - 1) : 0;
         diagnostics.push({
             severity,
             message,
-            range: node_1.Range.create(0, 0, 0, 1)
+            range: node_1.Range.create(lineNumber, colNumber, lineNumber, colNumber + 1)
         });
     }
     return diagnostics;

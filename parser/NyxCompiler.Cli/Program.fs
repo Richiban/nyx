@@ -14,7 +14,11 @@ let private printDiagnostics (diagnostics: Diagnostic list) =
                 match diag.Severity with
                 | ErrorSeverity -> "error"
                 | WarningSeverity -> "warning"
-            printfn "[%s] %s" severity diag.Message)
+            let rangeText =
+                match diag.Range with
+                | Some (line, col) -> $"({line + 1}:{col + 1}) "
+                | None -> ""
+            printfn "[%s] %s%s" severity rangeText diag.Message)
 
 let private printTypes (types: Map<string, Ty>) =
     if types.IsEmpty then

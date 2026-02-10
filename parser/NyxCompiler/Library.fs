@@ -2,6 +2,7 @@
 
 open System
 open System.IO
+open System.Text.RegularExpressions
 open Parser.Program
 
 type CompilationPhase =
@@ -17,6 +18,40 @@ type CompileResult =
       Typed: TypedModule option }
 
 module Compiler =
+    let private normalizeSource (source: string) =
+        source.Replace("\r\n", "\n").Replace("\r", "\n")
+
+    let private tryFindIdentifierRange (source: string) (identifier: string) : (int * int) option =
+        let normalized = normalizeSource source
+        let lines = normalized.Split('\n')
+        let mutable found: (int * int) option = None
+        let mutable index = 0
+        while found.IsNone && index < lines.Length do
+            let pos = lines.[index].IndexOf(identifier, StringComparison.Ordinal)
+            if pos >= 0 then
+                found <- Some (index, pos)
+            index <- index + 1
+        found
+
+    let private extractQuotedIdentifiers (message: string) : string list =
+        let matches = Regex.Matches(message, "'([^']+)'", RegexOptions.None)
+        [ for m in matches do
+            if m.Groups.Count > 1 then
+                m.Groups.[1].Value ]
+
+    let private annotateDiagnosticsWithSource (source: string) (diagnostics: Diagnostic list) =
+        diagnostics
+        |> List.map (fun diag ->
+            match diag.Range with
+            | Some _ -> diag
+            | None ->
+                let candidates = extractQuotedIdentifiers diag.Message
+                let found =
+                    candidates
+                    |> List.tryPick (fun identifier -> tryFindIdentifierRange source identifier)
+                match found with
+                | Some (line, col) -> { diag with Range = Some (line, col) }
+                | None -> diag)
     let private sanitizeIdentifier (name: string) =
         let sanitized =
             name
@@ -90,10 +125,30 @@ module Compiler =
             let qualified = $"{prefix}.{name}"
             acc |> TypeEnv.extend qualified (TypeEnv.mono ty)) env
 
+    let private tryParseLineColumn (message: string) : (int * int) option =
+        let patterns =
+            [
+                @"Ln:\s*(\d+)\s+Col:\s*(\d+)"
+                @"line\s+(\d+)\s+column\s+(\d+)"
+                @"line\s+(\d+),\s*column\s+(\d+)"
+            ]
+        patterns
+        |> List.tryPick (fun pattern ->
+            let m = Regex.Match(message, pattern, RegexOptions.IgnoreCase)
+            if m.Success then
+                let line = int m.Groups.[1].Value - 1
+                let col = int m.Groups.[2].Value - 1
+                Some (max 0 line, max 0 col)
+            else
+                None)
+
     let private parseWithDiagnostics (source: string) : Result<Module, Diagnostic list> =
         match parseModule source with
         | Result.Ok ast -> Ok ast
-        | Result.Error err -> Error [ Diagnostics.error err ]
+        | Result.Error err ->
+            match tryParseLineColumn err with
+            | Some (line, col) -> Error [ Diagnostics.errorAt err (line, col) ]
+            | None -> Error [ Diagnostics.error err ]
 
     let desugar (module': Module) =
         let isReturnKeyword keyword = keyword = "return"
@@ -388,10 +443,11 @@ module Compiler =
               Diagnostics = [ Diagnostics.error ($"File not found: {filePath}") ]
               Typed = None }
         else
+            let source = File.ReadAllText filePath
             match typecheckFile filePath Set.empty with
             | Result.Error diagnostics ->
                 { Phase = Typed
-                  Diagnostics = diagnostics
+                  Diagnostics = annotateDiagnosticsWithSource source diagnostics
                   Typed = None }
             | Result.Ok typed ->
                 { Phase = Typed
@@ -402,14 +458,14 @@ module Compiler =
         match parse source with
         | Result.Error diagnostics ->
             { Phase = Parsed
-              Diagnostics = diagnostics
+              Diagnostics = annotateDiagnosticsWithSource source diagnostics
               Typed = None }
         | Result.Ok ast ->
             let desugared = desugar ast
             match typecheck desugared with
             | Result.Error diagnostics ->
                 { Phase = Typed
-                  Diagnostics = diagnostics
+                  Diagnostics = annotateDiagnosticsWithSource source diagnostics
                   Typed = None }
             | Result.Ok typed ->
                 { Phase = Typed

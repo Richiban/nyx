@@ -22,3 +22,9 @@ let ``Transpile lambda`` () =
     let expr = Lambda([("x", None); ("y", None)], BinaryOp("+", IdentifierExpr("x", None), IdentifierExpr("y", None)))
     let result = transpileExpression expr
     result |> should equal "(x, y) => (x + y)"
+
+[<Fact>]
+let ``Transpile dbg`` () =
+    let expr = FunctionCall("dbg", None, [IdentifierExpr("x", None)])
+    let result = transpileExpression expr
+    result |> should equal "(() => { const __dbg = x; console.log(__dbg); return __dbg; })()"

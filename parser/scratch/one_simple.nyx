@@ -17,5 +17,12 @@ def f2 : (#a | #b) -> string = {
 }
 
 def sum: list(int) -> int = {
+    | [] -> 0
     | [head, ...tail] -> 1
 }
+
+def main = {
+    dbg(sum([1, 2, 3]))
+}
+
+main()

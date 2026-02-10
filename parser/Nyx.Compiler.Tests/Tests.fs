@@ -127,6 +127,17 @@ let ``Typecheck list type application`` () =
     Assert.True(result.Diagnostics.IsEmpty, $"Unexpected diagnostics: %A{result.Diagnostics}")
 
 [<Fact>]
+let ``Typecheck dbg returns its argument`` () =
+    let source =
+        "def value = dbg(1)\n" +
+        "def text = dbg(\"hi\")"
+    let result = Compiler.compile source
+    Assert.True(result.Diagnostics.IsEmpty)
+    let typed = result.Typed.Value
+    Assert.Equal(TyPrimitive "int", typed.Types.["value"])
+    Assert.Equal(TyPrimitive "string", typed.Types.["text"])
+
+[<Fact>]
 let ``Match rejects non-exhaustive record patterns`` () =
     let source =
         "def point = (x = 1, y = 2)\n" +

@@ -245,6 +245,14 @@ let rec private transpileExpressionWithEnv (env: TranspileEnv) (expr: Expression
         sprintf "[%s]" items
     
     | FunctionCall(name, _, args) ->
+        if name = "dbg" then
+            match args with
+            | [single] ->
+                let valueExpr = transpileExpressionWithEnv env single
+                sprintf "(() => { const __dbg = %s; console.log(__dbg); return __dbg; })()" valueExpr
+            | _ ->
+                failwith "dbg expects a single argument"
+        else
         let emittedName = renderQualifiedName name
         if isRecordConstructor env name args then
             match args with

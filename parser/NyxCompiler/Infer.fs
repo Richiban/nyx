@@ -430,6 +430,17 @@ let rec private inferExpr (env: TypeEnv) (state: InferState) (expr: Expression) 
             | Some (line, col) -> Error [ Diagnostics.errorAt ($"Unknown identifier '{name}'") (line, col) ]
             | None -> Error [ Diagnostics.error ($"Unknown identifier '{name}'") ]
     | FunctionCall(name, rangeOpt, args) ->
+        if name = "dbg" then
+            match args with
+            | [single] ->
+                match inferExpr env state single with
+                | Ok (typedArg, next) -> Ok (mkTypedExpr expr typedArg.Type None None None, next)
+                | Error err -> Error err
+            | _ ->
+                match rangeOpt with
+                | Some (line, col) -> Error [ Diagnostics.errorAt "dbg expects a single argument" (line, col) ]
+                | None -> Error [ Diagnostics.error "dbg expects a single argument" ]
+        else
         let contextCheck =
             match state.ContextRequirements |> Map.tryFind name with
             | Some contexts -> ensureContextAvailable env state name contexts rangeOpt

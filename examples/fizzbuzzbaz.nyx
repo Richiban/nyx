@@ -4,37 +4,7 @@
 --  	For example, 3 -> "fizz", 5 -> "buzz", 7 -> "baz", meaning that a multiple of 3 and 7 would be replaced
 --  	with "fizzbaz" etc.
 
---  OO style
-def NumberGame: (<MapBuilder> () -> ()) -> NumberGame
-  = { ruleBuilder ->
-    def rules = dict { ruleBuilder() }
 
-    def playNumber = { i ->
-      rules
-        \select { divisor, word -> if i % divisor == 0 -> return word }
-        \String.join
-        \match 
-          | "" -> i.toString()
-          | s -> s      
-    }
-
-    (playNumber = playNumber)
-  }
-
-  def apply: int, int -> Seq(string)
-    = { start, end -> start..end \map(playNumber) }
-
-def main() =
-  def fizzbuzz = NumberGame {
-    3 => "fizz"
-    5 => "buzz"
-    7 => "baz"
-  }
-
-  for fizzbuzz(1, 100) | r ->
-    println(r)
-
---  FP style
 
 def playNumber: [Partial(int)] int, int -> ()
   = { divisor, i ->
@@ -42,13 +12,14 @@ def playNumber: [Partial(int)] int, int -> ()
       return word
   }
     
-def numberGame(Map(int, string)) ->
+def numberGame: (Map(int, string)) = { rules ->
   rules
     \flatMap(playNumber)
     \String.join
     \match
       | "" -> i.toString()
       | s -> s 
+}
 
 def fizzbuzz = numberGame(dict {
   3 => "fizz"

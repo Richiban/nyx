@@ -119,6 +119,16 @@ let ``Match accepts list catch-all`` () =
     Assert.True(result.Diagnostics.IsEmpty)
 
 [<Fact>]
+let ``Match accepts exhaustive list patterns`` () =
+    let source =
+        "def values = [1, 2]\n" +
+        "def result = match values\n" +
+        "| [] -> 0\n" +
+        "| [head, ...tail] -> head\n"
+    let result = Compiler.compile source
+    Assert.True(result.Diagnostics.IsEmpty)
+
+[<Fact>]
 let ``Typecheck list type application`` () =
     let source =
         "def sum: list(int) -> int = { xs -> 0 }\n" +

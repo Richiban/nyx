@@ -897,6 +897,18 @@ let rec private inferExpr (env: TypeEnv) (state: InferState) (expr: Expression) 
                     | TyApply("list", _) -> true
                     | _ -> false
                 unwrap ty
+            let listPatternsCoverAll patternsAtPos =
+                let hasEmpty =
+                    patternsAtPos
+                    |> List.exists (function
+                        | ListPattern(patterns, None) when patterns.IsEmpty -> true
+                        | _ -> false)
+                let hasSplat =
+                    patternsAtPos
+                    |> List.exists (function
+                        | ListPattern(_, Some _) -> true
+                        | _ -> false)
+                hasEmpty && hasSplat
             let isRecordType ty =
                 let rec unwrap ty =
                     match ty with
@@ -931,8 +943,11 @@ let rec private inferExpr (env: TypeEnv) (state: InferState) (expr: Expression) 
                                 Some (Diagnostics.error ($"Non-exhaustive match{suffix}, missing tags: {missingText}"))
                         | None ->
                             if isListType scrutineeTy then
-                                let suffix = if scrutineeTypes.Length > 1 then $" (scrutinee {index + 1})" else ""
-                                Some (Diagnostics.error ($"Non-exhaustive match{suffix}, missing list cases"))
+                                if listPatternsCoverAll patternsAtPos then
+                                    None
+                                else
+                                    let suffix = if scrutineeTypes.Length > 1 then $" (scrutinee {index + 1})" else ""
+                                    Some (Diagnostics.error ($"Non-exhaustive match{suffix}, missing list cases"))
                             elif isRecordType scrutineeTy then
                                 let suffix = if scrutineeTypes.Length > 1 then $" (scrutinee {index + 1})" else ""
                                 Some (Diagnostics.error ($"Non-exhaustive match{suffix}, missing record cases"))

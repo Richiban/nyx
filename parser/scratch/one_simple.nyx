@@ -1,7 +1,21 @@
 module one
 
-def main = { x ->
+def f = { x ->
     match x
     | "hi" -> "bye"
     | "one" -> "two"
+}
+
+def g = {
+    | "hi" -> "bye"
+    | "one" -> "two"
+}
+
+def f2 : (#a | #b) -> string = {
+    | #a -> "got a"
+    | #b -> "got b"
+}
+
+def sum: list(int) -> int = {
+    | [head, ...tail] -> 1
 }

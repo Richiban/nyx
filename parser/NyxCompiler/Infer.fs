@@ -1,5 +1,6 @@
 module NyxCompiler.Infer
 
+open System
 open Parser.Program
 open NyxCompiler
 
@@ -47,7 +48,7 @@ let private literalType literal =
     | BoolLit _ -> primitiveType "bool"
 
 let private listType elementTy =
-    TyTag("list", Some elementTy)
+    TyApply("list", [ elementTy ])
 
 let private numericType =
     TyPrimitive "int"
@@ -59,6 +60,11 @@ let rec private isAssignableType (expected: Ty) (actual: Ty) =
     match expected, actual with
     | TyVar _, _ -> true
     | TyPrimitive left, TyPrimitive right -> left = right
+    | TyApply(leftName, leftArgs), TyApply(rightName, rightArgs) ->
+        leftName = rightName
+        && leftArgs.Length = rightArgs.Length
+        && List.forall2 isAssignableType leftArgs rightArgs
+    | TyApply _, TyVar _ -> true
     | TyNominal(_, underlying, _), _ -> isAssignableType underlying actual
     | _, TyNominal(_, underlying, _) -> isAssignableType expected underlying
     | TyRecord expectedFields, TyRecord actualFields ->
@@ -203,7 +209,15 @@ let rec private typeExprToTy (state: InferState) (typeExpr: TypeExpr) : Ty * Inf
                 let ty, next = typeExprToTy current arg
                 current <- next
                 ty)
-        TyUnion (TyPrimitive name :: argTys), current
+        if name.Equals("list", StringComparison.OrdinalIgnoreCase) then
+            let elementTy =
+                match argTys with
+                | [] -> TyPrimitive "unit"
+                | [single] -> single
+                | multiple -> tupleRecordType multiple
+            TyApply("list", [elementTy]), current
+        else
+            TyApply(name, argTys), current
     | TypeFunc(arg, ret) ->
         let argTy, next = typeExprToTy state arg
         let retTy, nextState = typeExprToTy next ret
@@ -865,6 +879,55 @@ let rec private inferExpr (env: TypeEnv) (state: InferState) (expr: Expression) 
                             None
                     | _ -> None
                 unwrap ty
+            let isListType ty =
+                let rec unwrap ty =
+                    match ty with
+                    | TyNominal(_, underlying, _) -> unwrap underlying
+                    | TyApply("list", _) -> true
+                    | _ -> false
+                unwrap ty
+            let isRecordType ty =
+                let rec unwrap ty =
+                    match ty with
+                    | TyNominal(_, underlying, _) -> unwrap underlying
+                    | TyRecord _ -> true
+                    | _ -> false
+                unwrap ty
+            let patternsForIndex index =
+                arms
+                |> List.choose (fun (patterns, _) ->
+                    if index < patterns.Length then Some patterns.[index] else None)
+            let exhaustivenessDiagnostics () =
+                scrutineeTypes
+                |> List.mapi (fun index scrutineeTy ->
+                    let patternsAtPos = patternsForIndex index
+                    let hasCatchAll = patternsAtPos |> List.exists isCatchAllPattern
+                    if hasCatchAll then
+                        None
+                    else
+                        match tryGetTagUnion scrutineeTy with
+                        | Some tagUnion ->
+                            let coveredTags =
+                                patternsAtPos
+                                |> List.choose tryGetTagName
+                                |> Set.ofList
+                            let missing = Set.difference tagUnion coveredTags |> Set.toList
+                            if missing.IsEmpty then
+                                None
+                            else
+                                let missingText = missing |> String.concat ", "
+                                let suffix = if scrutineeTypes.Length > 1 then $" (scrutinee {index + 1})" else ""
+                                Some (Diagnostics.error ($"Non-exhaustive match{suffix}, missing tags: {missingText}"))
+                        | None ->
+                            if isListType scrutineeTy then
+                                let suffix = if scrutineeTypes.Length > 1 then $" (scrutinee {index + 1})" else ""
+                                Some (Diagnostics.error ($"Non-exhaustive match{suffix}, missing list cases"))
+                            elif isRecordType scrutineeTy then
+                                let suffix = if scrutineeTypes.Length > 1 then $" (scrutinee {index + 1})" else ""
+                                Some (Diagnostics.error ($"Non-exhaustive match{suffix}, missing record cases"))
+                            else
+                                None)
+                |> List.choose id
             for (patterns, expr) in arms do
                 if errors.IsEmpty then
                     let mutable env' = env
@@ -908,44 +971,17 @@ let rec private inferExpr (env: TypeEnv) (state: InferState) (expr: Expression) 
                             Some (Diagnostics.error "Tag union rest parameters require a catch-all match arm")
                     else
                         None
-                let exhaustivenessError =
+                let exhaustivenessErrors =
                     if restError.IsSome then
-                        None
-                    elif scrutineeTypes.Length = 1 then
-                        let scrutineeTy = scrutineeTypes.[0]
-                        let hasCatchAll =
-                            arms
-                            |> List.exists (fun (patterns, _) ->
-                                match patterns with
-                                | [single] -> isCatchAllPattern single
-                                | _ -> false)
-                        if hasCatchAll then
-                            None
-                        else
-                            match tryGetTagUnion scrutineeTy with
-                            | Some tagUnion ->
-                                let coveredTags =
-                                    arms
-                                    |> List.choose (fun (patterns, _) ->
-                                        match patterns with
-                                        | [single] -> tryGetTagName single
-                                        | _ -> None)
-                                    |> Set.ofList
-                                let missing = Set.difference tagUnion coveredTags |> Set.toList
-                                if missing.IsEmpty then
-                                    None
-                                else
-                                    let missingText = missing |> String.concat ", "
-                                    Some (Diagnostics.error ($"Non-exhaustive match, missing tags: {missingText}"))
-                            | None -> None
+                        []
                     else
-                        None
+                        exhaustivenessDiagnostics ()
                 match restError with
                 | Some diag -> Error [ diag ]
                 | None ->
-                    match exhaustivenessError with
-                    | Some diag -> Error [ diag ]
-                    | None ->
+                    if not exhaustivenessErrors.IsEmpty then
+                        Error exhaustivenessErrors
+                    else
                     match List.rev armExprs with
                     | [] -> Ok (mkTypedExpr expr (TyPrimitive "unit") None None (Some typedArms), current)
                     | head :: tail ->

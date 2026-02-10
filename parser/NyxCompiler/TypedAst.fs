@@ -15,6 +15,7 @@ type Ty =
     | TyTuple of Ty list
     | TyRecord of Map<string, Ty>
     | TyTag of string * Ty option
+    | TyApply of string * Ty list
     | TyUnion of Ty list
 
 /// A simple typed expression placeholder for future expansion.

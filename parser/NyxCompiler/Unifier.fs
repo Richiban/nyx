@@ -79,6 +79,9 @@ module Unifier =
             match payloadOpt with
             | Some payload -> $"{name}({tyToString payload})"
             | None -> name
+        | TyApply(name, args) ->
+            let argsText = args |> List.map tyToString |> String.concat ", "
+            $"{name}({argsText})"
         | TyUnion items ->
             items
             |> List.map tyToString
@@ -155,6 +158,7 @@ module Unifier =
         | TyRecord fields ->
             fields |> Map.map (fun _ v -> apply subst v) |> TyRecord
         | TyTag(name, payload) -> TyTag(name, payload |> Option.map (apply subst))
+        | TyApply(name, args) -> TyApply(name, args |> List.map (apply subst))
         | TyUnion items -> TyUnion(items |> List.map (apply subst))
         | TyPrimitive _ -> ty
 
@@ -166,6 +170,7 @@ module Unifier =
         | TyTuple items -> items |> List.exists (occurs varId)
         | TyRecord fields -> fields |> Map.exists (fun _ v -> occurs varId v)
         | TyTag(_, payload) -> payload |> Option.exists (occurs varId)
+        | TyApply(_, args) -> args |> List.exists (occurs varId)
         | TyUnion items -> items |> List.exists (occurs varId)
         | TyPrimitive _ -> false
 
@@ -195,6 +200,10 @@ module Unifier =
                         loop newSubst rest
                 | TyPrimitive lName, TyPrimitive rName when lName = rName ->
                     loop subst rest
+                | TyApply(lName, lArgs), TyApply(rName, rArgs) when lName = rName && lArgs.Length = rArgs.Length ->
+                    let pairs = List.zip lArgs rArgs
+                    let pairConstraints = pairs |> List.map (fun (lTy, rTy) -> (lTy, rTy, Equal))
+                    loop subst (pairConstraints @ rest)
                 | TyNominal(lName, lUnderlying, lPrivate), TyNominal(rName, rUnderlying, rPrivate) ->
                     if lName = rName then
                         if lPrivate || rPrivate then

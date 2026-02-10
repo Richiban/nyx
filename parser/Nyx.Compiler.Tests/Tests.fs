@@ -98,6 +98,69 @@ let ``Match accepts exhaustive tag unions`` () =
     Assert.True(result.Diagnostics.IsEmpty)
 
 [<Fact>]
+let ``Match rejects non-exhaustive list patterns`` () =
+    let source =
+        "def values = [1, 2]\n" +
+        "def result = match values\n" +
+        "| [x, y] -> x\n"
+    let result = Compiler.compile source
+    Assert.False(result.Diagnostics.IsEmpty)
+    let message = result.Diagnostics |> List.head |> fun diag -> diag.Message
+    Assert.Contains("Non-exhaustive match", message)
+
+[<Fact>]
+let ``Match accepts list catch-all`` () =
+    let source =
+        "def values = [1, 2]\n" +
+        "def result = match values\n" +
+        "| [x, y] -> x\n" +
+        "| _ -> 0\n"
+    let result = Compiler.compile source
+    Assert.True(result.Diagnostics.IsEmpty)
+
+[<Fact>]
+let ``Typecheck list type application`` () =
+    let source =
+        "def sum: list(int) -> int = { xs -> 0 }\n" +
+        "def values: list(string, int) = []"
+    let result = Compiler.compile source
+    Assert.True(result.Diagnostics.IsEmpty, $"Unexpected diagnostics: %A{result.Diagnostics}")
+
+[<Fact>]
+let ``Match rejects non-exhaustive record patterns`` () =
+    let source =
+        "def point = (x = 1, y = 2)\n" +
+        "def result = match point\n" +
+        "| (x = 1) -> 1\n"
+    let result = Compiler.compile source
+    Assert.False(result.Diagnostics.IsEmpty)
+    let message = result.Diagnostics |> List.head |> fun diag -> diag.Message
+    Assert.Contains("Non-exhaustive match", message)
+
+[<Fact>]
+let ``Match accepts record catch-all`` () =
+    let source =
+        "def point = (x = 1, y = 2)\n" +
+        "def result = match point\n" +
+        "| (x = 1) -> 1\n" +
+        "| _ -> 0\n"
+    let result = Compiler.compile source
+    Assert.True(result.Diagnostics.IsEmpty)
+
+[<Fact>]
+let ``Match rejects non-exhaustive tag unions with multiple scrutinees`` () =
+    let source =
+        "def a: #left | #right = #left\n" +
+        "def b: #up | #down = #up\n" +
+        "def result = match a, b\n" +
+        "| #left, #up -> 1\n" +
+        "| #right, #up -> 2\n"
+    let result = Compiler.compile source
+    Assert.False(result.Diagnostics.IsEmpty)
+    let message = result.Diagnostics |> List.head |> fun diag -> diag.Message
+    Assert.Contains("Non-exhaustive match", message)
+
+[<Fact>]
 let ``Typecheck dotted def name`` () =
     let source =
         "type Person = (firstName: string)\n" +
@@ -600,7 +663,7 @@ let ``Typecheck infers list element type`` () =
     let source = "def numbers = [1, 2, 3]"
     let result = Compiler.compile source
     let typed = result.Typed.Value
-    Assert.Equal(TyTag("list", Some (TyPrimitive "int")), typed.Types.["numbers"])
+    Assert.Equal(TyApply("list", [TyPrimitive "int"]), typed.Types.["numbers"])
 
 [<Fact>]
 let ``Typecheck infers operator results`` () =

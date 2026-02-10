@@ -38,6 +38,10 @@ module TypeEnv =
             |> Seq.fold Set.union Set.empty
         | TyTag(_, payloadOpt) ->
             payloadOpt |> Option.map freeTyVars |> Option.defaultValue Set.empty
+        | TyApply(_, args) ->
+            args
+            |> List.map freeTyVars
+            |> List.fold Set.union Set.empty
         | TyUnion items ->
             items
             |> List.map freeTyVars

@@ -177,9 +177,9 @@ let private contextMembersFromUseExpr (env: TranspileEnv) (expr: Expression) : S
             | NamedField(name, _) -> Some name
             | PositionalField _ -> None)
         |> Set.ofList
-    | FunctionCall(name, _) ->
+    | FunctionCall(name, _, _) ->
         env.ContextMembers |> Map.tryFind name |> Option.defaultValue Set.empty
-    | IdentifierExpr name ->
+    | IdentifierExpr(name, _) ->
         env.ContextMembers |> Map.tryFind name |> Option.defaultValue Set.empty
     | _ -> Set.empty
 
@@ -211,9 +211,9 @@ let rec private transpileExpressionWithEnv (env: TranspileEnv) (expr: Expression
             |> String.concat ""
         sprintf "`%s`" content
     
-    | IdentifierExpr id -> escapeIdentifier id
+    | IdentifierExpr(id, _) -> escapeIdentifier id
     
-    | MemberAccess(obj, field) ->
+    | MemberAccess(obj, field, _) ->
         renderMemberAccess (transpileExpressionWithEnv env obj) field
     
     | BinaryOp(op, left, right) ->
@@ -244,7 +244,7 @@ let rec private transpileExpressionWithEnv (env: TranspileEnv) (expr: Expression
         let items = exprs |> List.map (transpileExpressionWithEnv env) |> String.concat ", "
         sprintf "[%s]" items
     
-    | FunctionCall(name, args) ->
+    | FunctionCall(name, _, args) ->
         let emittedName = renderQualifiedName name
         if isRecordConstructor env name args then
             match args with
@@ -273,7 +273,7 @@ let rec private transpileExpressionWithEnv (env: TranspileEnv) (expr: Expression
         let paramStr = params' |> List.map (fst >> escapeIdentifier) |> String.concat ", "
         sprintf "(%s) => %s" paramStr (transpileExpressionWithEnv env body)
     
-    | Pipe(expr, funcName, args) ->
+    | Pipe(expr, funcName, _, args) ->
         // Transform pipe into function call with expr as first argument
         // expr \f becomes f(expr)
         // expr \f(args) becomes f(expr, ...args)

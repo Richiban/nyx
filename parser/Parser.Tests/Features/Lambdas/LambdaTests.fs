@@ -40,7 +40,7 @@ let ``Parse shorthand-lambdas.nyx file`` () =
         for def in defs do
             match def with
             | Def (ValueDef (_, _, _, Lambda _)) -> ()
-            | Def (ValueDef (_, _, _, FunctionCall (_, args))) ->
+            | Def (ValueDef (_, _, _, FunctionCall (_, _, args))) ->
                 let rec hasLambda arg =
                     match arg with
                     | Lambda _ -> true

@@ -7,19 +7,19 @@ open Transpiler.CodeGen
 
 [<Fact>]
 let ``Transpile identifier`` () =
-    let expr = IdentifierExpr "x"
+    let expr = IdentifierExpr("x", None)
     let result = transpileExpression expr
     result |> should equal "x"
 
 [<Fact>]
 let ``Transpile member access`` () =
-    let expr = MemberAccess(IdentifierExpr "point", "x")
+    let expr = MemberAccess(IdentifierExpr("point", None), "x", None)
     let result = transpileExpression expr
     result |> should equal "point.x"
 
 [<Fact>]
 let ``Transpile nested member access`` () =
-    let expr = MemberAccess(MemberAccess(IdentifierExpr "outer", "inner"), "value")
+    let expr = MemberAccess(MemberAccess(IdentifierExpr("outer", None), "inner", None), "value", None)
     let result = transpileExpression expr
     result |> should equal "outer.inner.value"
 
@@ -31,12 +31,12 @@ let ``Transpile binary operation`` () =
 
 [<Fact>]
 let ``Transpile equality to triple equals`` () =
-    let expr = BinaryOp("==", IdentifierExpr "x", LiteralExpr (IntLit 5))
+    let expr = BinaryOp("==", IdentifierExpr("x", None), LiteralExpr (IntLit 5))
     let result = transpileExpression expr
     result |> should equal "(x === 5)"
 
 [<Fact>]
 let ``Transpile not equals to not triple equals`` () =
-    let expr = BinaryOp("!=", IdentifierExpr "x", LiteralExpr (IntLit 5))
+    let expr = BinaryOp("!=", IdentifierExpr("x", None), LiteralExpr (IntLit 5))
     let result = transpileExpression expr
     result |> should equal "(x !== 5)"

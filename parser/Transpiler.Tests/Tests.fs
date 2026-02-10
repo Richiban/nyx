@@ -82,7 +82,7 @@ let ``Transpile float literal`` () =
 // Expression Tests
 [<Fact>]
 let ``Transpile identifier`` () =
-    let expr = IdentifierExpr "x"
+    let expr = IdentifierExpr("x", None)
     let result = transpileExpression expr
     result |> should equal "x"
 
@@ -97,13 +97,13 @@ let ``Transpile reserved identifier await`` () =
 
 [<Fact>]
 let ``Transpile member access`` () =
-    let expr = MemberAccess(IdentifierExpr "point", "x")
+    let expr = MemberAccess(IdentifierExpr("point", None), "x", None)
     let result = transpileExpression expr
     result |> should equal "point.x"
 
 [<Fact>]
 let ``Transpile nested member access`` () =
-    let expr = MemberAccess(MemberAccess(IdentifierExpr "outer", "inner"), "value")
+    let expr = MemberAccess(MemberAccess(IdentifierExpr("outer", None), "inner", None), "value", None)
     let result = transpileExpression expr
     result |> should equal "outer.inner.value"
 
@@ -115,13 +115,13 @@ let ``Transpile binary operation`` () =
 
 [<Fact>]
 let ``Transpile equality to triple equals`` () =
-    let expr = BinaryOp("==", IdentifierExpr "x", LiteralExpr (IntLit 5))
+    let expr = BinaryOp("==", IdentifierExpr("x", None), LiteralExpr (IntLit 5))
     let result = transpileExpression expr
     result |> should equal "(x === 5)"
 
 [<Fact>]
 let ``Transpile not equals to not triple equals`` () =
-    let expr = BinaryOp("!=", IdentifierExpr "x", LiteralExpr (IntLit 5))
+    let expr = BinaryOp("!=", IdentifierExpr("x", None), LiteralExpr (IntLit 5))
     let result = transpileExpression expr
     result |> should equal "(x !== 5)"
 
@@ -150,26 +150,26 @@ let ``Transpile record to object`` () =
 // Function Tests
 [<Fact>]
 let ``Transpile function call with no args`` () =
-    let expr = FunctionCall("getCurrentTime", [])
+    let expr = FunctionCall("getCurrentTime", None, [])
     let result = transpileExpression expr
     result |> should equal "getCurrentTime()"
 
 [<Fact>]
 let ``Transpile function call with tuple args`` () =
-    let expr = FunctionCall("add", [TupleExpr [LiteralExpr (IntLit 5); LiteralExpr (IntLit 10)]])
+    let expr = FunctionCall("add", None, [TupleExpr [LiteralExpr (IntLit 5); LiteralExpr (IntLit 10)]])
     let result = transpileExpression expr
     result |> should equal "add(5, 10)"
 
 [<Fact>]
 let ``Transpile lambda`` () =
-    let expr = Lambda(["x"; "y"], BinaryOp("+", IdentifierExpr "x", IdentifierExpr "y"))
+    let expr = Lambda(["x"; "y"], BinaryOp("+", IdentifierExpr("x", None), IdentifierExpr("y", None)))
     let result = transpileExpression expr
     result |> should equal "(x, y) => (x + y)"
 
 // Pipe Tests
 [<Fact>]
 let ``Transpile simple pipe`` () =
-    let expr = Pipe(IdentifierExpr "value", "double", [])
+    let expr = Pipe(IdentifierExpr("value", None), "double", None, [])
     let result = transpileExpression expr
     result |> should equal "double(value)"
 
@@ -178,6 +178,7 @@ let ``Transpile pipe with args`` () =
     let expr = Pipe(
         LiteralExpr (IntLit 5),
         "add",
+        None,
         [TupleExpr [LiteralExpr (IntLit 10)]]
     )
     let result = transpileExpression expr
@@ -197,7 +198,7 @@ let ``Transpile if expression`` () =
 [<Fact>]
 let ``Transpile match expression with literals`` () =
     let expr = Match(
-        [IdentifierExpr "x"],
+        [IdentifierExpr("x", None)],
         [
             ([LiteralPattern (IntLit 1)], LiteralExpr (IntLit 10))
             ([WildcardPattern], LiteralExpr (IntLit 0))
@@ -212,9 +213,9 @@ let ``Transpile match expression with literals`` () =
 [<Fact>]
 let ``Transpile match expression with tag payload`` () =
     let expr = Match(
-        [IdentifierExpr "value"],
+        [IdentifierExpr("value", None)],
         [
-            ([TagPattern ("Some", Some (IdentifierPattern "x"))], IdentifierExpr "x")
+            ([TagPattern ("Some", Some (IdentifierPattern "x"))], IdentifierExpr("x", None))
             ([TagPattern ("None", None)], LiteralExpr (IntLit 0))
         ]
     )
@@ -226,7 +227,7 @@ let ``Transpile match expression with tag payload`` () =
 [<Fact>]
 let ``Transpile match expression with guard`` () =
     let expr = Match(
-        [IdentifierExpr "x"],
+    [IdentifierExpr("x", None)],
         [
             ([GuardPattern (">", LiteralExpr (IntLit 5))], LiteralExpr (IntLit 1))
             ([ElsePattern], LiteralExpr (IntLit 0))
@@ -240,7 +241,7 @@ let ``Transpile match expression with guard`` () =
 [<Fact>]
 let ``Transpile match expression with list splat middle`` () =
     let expr = Match(
-        [IdentifierExpr "values"],
+    [IdentifierExpr("values", None)],
         [
             ([ListSplatMiddle ([LiteralPattern (IntLit 1)], [LiteralPattern (IntLit 3)])], LiteralExpr (IntLit 1))
             ([ElsePattern], LiteralExpr (IntLit 0))
@@ -255,9 +256,9 @@ let ``Transpile match expression with list splat middle`` () =
 [<Fact>]
 let ``Transpile match expression with record member patterns`` () =
     let expr = Match(
-        [IdentifierExpr "point"],
+    [IdentifierExpr("point", None)],
         [
-            ([RecordMemberPattern [("x", LiteralPattern (IntLit 1)); ("y", IdentifierPattern "y")]], IdentifierExpr "y")
+            ([RecordMemberPattern [("x", LiteralPattern (IntLit 1)); ("y", IdentifierPattern "y")]], IdentifierExpr("y", None))
             ([ElsePattern], LiteralExpr (IntLit 0))
         ]
     )
@@ -270,9 +271,9 @@ let ``Transpile match expression with record member patterns`` () =
 [<Fact>]
 let ``Transpile match expression with record positional patterns`` () =
     let expr = Match(
-        [IdentifierExpr "point"],
+    [IdentifierExpr("point", None)],
         [
-            ([RecordPattern ("Point", [LiteralPattern (IntLit 1); IdentifierPattern "y"])], IdentifierExpr "y")
+            ([RecordPattern ("Point", [LiteralPattern (IntLit 1); IdentifierPattern "y"])], IdentifierExpr("y", None))
             ([ElsePattern], LiteralExpr (IntLit 0))
         ]
     )

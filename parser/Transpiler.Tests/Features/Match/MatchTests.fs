@@ -7,7 +7,7 @@ open Transpiler.CodeGen
 [<Fact>]
 let ``Transpile match expression with literals`` () =
     let expr = Match(
-        [IdentifierExpr "x"],
+        [IdentifierExpr("x", None)],
         [
             ([LiteralPattern (IntLit 1)], LiteralExpr (IntLit 10))
             ([WildcardPattern], LiteralExpr (IntLit 0))
@@ -22,9 +22,9 @@ let ``Transpile match expression with literals`` () =
 [<Fact>]
 let ``Transpile match expression with tag payload`` () =
     let expr = Match(
-        [IdentifierExpr "value"],
+        [IdentifierExpr("value", None)],
         [
-            ([TagPattern ("Some", Some (IdentifierPattern "x"))], IdentifierExpr "x")
+            ([TagPattern ("Some", Some (IdentifierPattern "x"))], IdentifierExpr("x", None))
             ([TagPattern ("None", None)], LiteralExpr (IntLit 0))
         ]
     )
@@ -36,7 +36,7 @@ let ``Transpile match expression with tag payload`` () =
 [<Fact>]
 let ``Transpile match expression with guard`` () =
     let expr = Match(
-        [IdentifierExpr "x"],
+        [IdentifierExpr("x", None)],
         [
             ([GuardPattern (">", LiteralExpr (IntLit 5))], LiteralExpr (IntLit 1))
             ([ElsePattern], LiteralExpr (IntLit 0))
@@ -50,7 +50,7 @@ let ``Transpile match expression with guard`` () =
 [<Fact>]
 let ``Transpile match expression with list splat middle`` () =
     let expr = Match(
-        [IdentifierExpr "values"],
+        [IdentifierExpr("values", None)],
         [
             ([ListSplatMiddle ([LiteralPattern (IntLit 1)], [LiteralPattern (IntLit 3)])], LiteralExpr (IntLit 1))
             ([ElsePattern], LiteralExpr (IntLit 0))
@@ -65,9 +65,9 @@ let ``Transpile match expression with list splat middle`` () =
 [<Fact>]
 let ``Transpile match expression with record member patterns`` () =
     let expr = Match(
-        [IdentifierExpr "point"],
+        [IdentifierExpr("point", None)],
         [
-            ([RecordMemberPattern [("x", LiteralPattern (IntLit 1)); ("y", IdentifierPattern "y")]], IdentifierExpr "y")
+            ([RecordMemberPattern [("x", LiteralPattern (IntLit 1)); ("y", IdentifierPattern "y")]], IdentifierExpr("y", None))
             ([ElsePattern], LiteralExpr (IntLit 0))
         ]
     )
@@ -80,9 +80,9 @@ let ``Transpile match expression with record member patterns`` () =
 [<Fact>]
 let ``Transpile match expression with record positional patterns`` () =
     let expr = Match(
-        [IdentifierExpr "point"],
+        [IdentifierExpr("point", None)],
         [
-            ([RecordPattern ("Point", [LiteralPattern (IntLit 1); IdentifierPattern "y"])], IdentifierExpr "y")
+            ([RecordPattern ("Point", [LiteralPattern (IntLit 1); IdentifierPattern "y"])], IdentifierExpr("y", None))
             ([ElsePattern], LiteralExpr (IntLit 0))
         ]
     )

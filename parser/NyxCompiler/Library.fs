@@ -155,14 +155,14 @@ module Compiler =
 
         let rec desugarExpr expr =
             match expr with
-            | FunctionCall(name, args) ->
-                FunctionCall(name, args |> List.map desugarExpr)
+            | FunctionCall(name, rangeOpt, args) ->
+                FunctionCall(name, rangeOpt, args |> List.map desugarExpr)
             | Lambda(args, body) ->
                 Lambda(args, desugarExpr body)
             | BinaryOp(op, left, right) ->
                 BinaryOp(op, desugarExpr left, desugarExpr right)
-            | Pipe(value, name, args) ->
-                Pipe(desugarExpr value, name, args |> List.map desugarExpr)
+            | Pipe(value, name, rangeOpt, args) ->
+                Pipe(desugarExpr value, name, rangeOpt, args |> List.map desugarExpr)
             | Block statements ->
                 Block(desugarBlock statements)
             | Match(exprs, arms) ->
@@ -181,16 +181,16 @@ module Compiler =
             | TagExpr(name, payload) -> TagExpr(name, payload |> Option.map desugarExpr)
             | IfExpr(cond, thenExpr, elseExpr) ->
                 IfExpr(desugarExpr cond, desugarExpr thenExpr, desugarExpr elseExpr)
-            | MemberAccess(baseExpr, field) -> MemberAccess(desugarExpr baseExpr, field)
+            | MemberAccess(baseExpr, field, rangeOpt) -> MemberAccess(desugarExpr baseExpr, field, rangeOpt)
             | UseIn(binding, body) ->
                 let binding' = desugarUseBinding binding
                 UseIn(binding', desugarExpr body)
             | WorkflowBindExpr(keyword, value) ->
                 if isReturnKeyword keyword then
-                    FunctionCall("pure", [desugarExpr value])
+                    FunctionCall("pure", None, [desugarExpr value])
                 else
-                    FunctionCall(keyword, [desugarExpr value])
-            | WorkflowReturnExpr value -> FunctionCall("pure", [desugarExpr value])
+                    FunctionCall(keyword, None, [desugarExpr value])
+            | WorkflowReturnExpr value -> FunctionCall("pure", None, [desugarExpr value])
             | InterpolatedString parts ->
                 let mappedParts =
                     parts
@@ -210,7 +210,7 @@ module Compiler =
                 let expr' =
                     match expr with
                     | WorkflowBindExpr(keyword, value) when isReturnKeyword keyword ->
-                        FunctionCall("pure", [desugarExpr value])
+                        FunctionCall("pure", None, [desugarExpr value])
                     | _ -> desugarExpr expr
                 DefStatement(isExport, name, typeOpt, expr')
             | ExprStatement expr -> ExprStatement (desugarExpr expr)
@@ -223,22 +223,22 @@ module Compiler =
             | DefStatement(isExport, name, typeOpt, expr) :: rest ->
                 match expr with
                 | WorkflowBindExpr(keyword, bindExpr) when isReturnKeyword keyword ->
-                    FunctionCall("pure", [desugarExpr bindExpr])
+                    FunctionCall("pure", None, [desugarExpr bindExpr])
                 | WorkflowBindExpr(keyword, bindExpr) ->
                     let nextExpr = desugarWorkflowChain rest
-                    FunctionCall(keyword, [desugarExpr bindExpr; Lambda([name, None], nextExpr)])
+                    FunctionCall(keyword, None, [desugarExpr bindExpr; Lambda([name, None], nextExpr)])
                 | _ ->
                     let expr' = desugarExpr expr
                     let nextExpr = desugarWorkflowChain rest
                     Block [DefStatement(isExport, name, typeOpt, expr'); ExprStatement nextExpr]
             | ExprStatement expr :: rest ->
                 match expr with
-                | WorkflowReturnExpr value -> FunctionCall("pure", [desugarExpr value])
+                | WorkflowReturnExpr value -> FunctionCall("pure", None, [desugarExpr value])
                 | WorkflowBindExpr(keyword, bindExpr) when isReturnKeyword keyword ->
-                    FunctionCall("pure", [desugarExpr bindExpr])
+                    FunctionCall("pure", None, [desugarExpr bindExpr])
                 | WorkflowBindExpr(keyword, bindExpr) ->
                     let nextExpr = desugarWorkflowChain rest
-                    FunctionCall(keyword, [desugarExpr bindExpr; Lambda([("_", None)], nextExpr)])
+                    FunctionCall(keyword, None, [desugarExpr bindExpr; Lambda([("_", None)], nextExpr)])
                 | _ ->
                     let expr' = desugarExpr expr
                     let nextExpr = desugarWorkflowChain rest

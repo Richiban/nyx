@@ -6,6 +6,7 @@ open FParsec
 // AST Types - Simplified for basic parsing
 type Identifier = string
 type ModuleName = string
+type SourceRange = int * int
 
 type Literal =
     | StringLit of string
@@ -50,11 +51,11 @@ and TypeRecordField =
 and Expression =
     | LiteralExpr of Literal
     | UnitExpr
-    | IdentifierExpr of Identifier
-    | FunctionCall of Identifier * Expression list
+    | IdentifierExpr of Identifier * SourceRange option
+    | FunctionCall of Identifier * SourceRange option * Expression list
     | Lambda of (Identifier * TypeExpr option) list * Expression
     | BinaryOp of string * Expression * Expression
-    | Pipe of Expression * Identifier * Expression list  // expr \func or expr \func(args)
+    | Pipe of Expression * Identifier * SourceRange option * Expression list  // expr \func or expr \func(args)
     | Block of Statement list
     | Match of Expression list * MatchArm list  // Can match on multiple values
     | TupleExpr of Expression list  // Positional-only tuple (for backward compat with existing tests)
@@ -62,7 +63,7 @@ and Expression =
     | ListExpr of Expression list
     | TagExpr of Identifier * Expression option  // #tagName or #tagName(expr)
     | IfExpr of Expression * Expression * Expression  // if condition then trueExpr else falseExpr
-    | MemberAccess of Expression * Identifier  // expr.field
+    | MemberAccess of Expression * Identifier * SourceRange option  // expr.field
     | UseIn of UseBinding * Expression
     | WorkflowBindExpr of Identifier * Expression
     | WorkflowReturnExpr of Expression
@@ -170,6 +171,17 @@ let qualifiedIdentifier: Parser<Identifier, unit> =
         identifierNoWs
         (many (pchar '.' >>. identifierNoWs))
         (fun head tail -> String.concat "." (head :: tail))
+
+let posToRange (pos: Position) : SourceRange =
+    (int pos.Line - 1, int pos.Column - 1)
+
+let identifierWithRange: Parser<Identifier * SourceRange option, unit> =
+    getPosition .>>. identifierNoWs
+    |>> (fun (pos, name) -> name, Some (posToRange pos))
+
+let qualifiedIdentifierWithRange: Parser<Identifier * SourceRange option, unit> =
+    getPosition .>>. qualifiedIdentifier
+    |>> (fun (pos, name) -> name, Some (posToRange pos))
 
 
 // Parser for literals
@@ -829,17 +841,17 @@ let primaryExprNoWs =
         literalNoWs |>> LiteralExpr
         listExpr
         tupleOrParenExpr
-        identifierNoWs |>> IdentifierExpr
+        identifierWithRange |>> (fun (name, range) -> IdentifierExpr(name, range))
     ]
 
 do simpleExpressionRef := primaryExprNoWs
 
 // Member access: parse base expression, then chain .field.field.field...
 let memberAccessChain =
-    let dotField = pstring "." >>. identifierNoWs
+    let dotField = pstring "." >>. (getPosition .>>. identifierNoWs |>> fun (pos, field) -> field, Some (posToRange pos))
     primaryExprNoWs >>= fun baseExpr ->
         many dotField |>> fun fields ->
-            List.fold (fun expr field -> MemberAccess(expr, field)) baseExpr fields
+            List.fold (fun expr (field, range) -> MemberAccess(expr, field, range)) baseExpr fields
 
 let primaryExpr = memberAccessChain .>> wsInline  // Consume trailing inline ws for operator parsing
 
@@ -871,19 +883,19 @@ opp.AddOperator(InfixOperator("!=", ws, 3, Associativity.Left, fun x y -> Binary
 // Pipe parser - handles expr \func or expr \func(args)
 let pipeTarget =
     pipe3
-        qualifiedIdentifier
+        qualifiedIdentifierWithRange
         (opt (between (pstring "(") (pstring ")") (ws >>. (sepBy1 expression (pstring "," .>> ws) |>> fun exprs ->
             match exprs with
             | [single] -> single
             | multiple -> TupleExpr multiple))))
         (opt (attempt (wsInline >>. lambda)))
-        (fun funcName argOpt trailingLambdaOpt ->
+        (fun (funcName, funcRange) argOpt trailingLambdaOpt ->
             let baseArgs = match argOpt with Some arg -> [arg] | None -> []
             let args =
                 match trailingLambdaOpt with
                 | Some lambdaExpr -> baseArgs @ [lambdaExpr]
                 | None -> baseArgs
-            (funcName, args)
+            (funcName, funcRange, args)
         )
 
 // Inline operator precedence parser (no newlines in operator whitespace)
@@ -913,7 +925,7 @@ let pipeExpr =
         opp.ExpressionParser
         (many (attempt (pipeOp .>> wsInline)))
         (fun expr pipes ->
-            pipes |> List.fold (fun acc (funcName, args) -> Pipe(acc, funcName, args)) expr
+            pipes |> List.fold (fun acc (funcName, range, args) -> Pipe(acc, funcName, range, args)) expr
         )
 
 let inlinePipeExpr =
@@ -922,7 +934,7 @@ let inlinePipeExpr =
         oppInline.ExpressionParser
         (many (attempt (pipeOp .>> wsInline)))
         (fun expr pipes ->
-            pipes |> List.fold (fun acc (funcName, args) -> Pipe(acc, funcName, args)) expr
+            pipes |> List.fold (fun acc (funcName, range, args) -> Pipe(acc, funcName, range, args)) expr
         )
 
 do inlineExpressionRef := inlinePipeExpr
@@ -970,7 +982,7 @@ do
     let shorthandBinaryOp =
         let operators = ["*"; "/"; "+"; "-"; "<"; ">"; "<="; ">="; "=="; "!="]
         choice (operators |> List.map (fun op ->
-            pstring op >>. ws >>. notFollowedBy (skipAnyOf "0123456789.\"'([{") >>% Lambda([("x", None); ("y", None)], BinaryOp(op, IdentifierExpr "x", IdentifierExpr "y"))
+            pstring op >>. ws >>. notFollowedBy (skipAnyOf "0123456789.\"'([{") >>% Lambda([("x", None); ("y", None)], BinaryOp(op, IdentifierExpr("x", None), IdentifierExpr("y", None)))
         ))
     
     // Shorthand lambda: { * 2 } means { x -> x * 2 }
@@ -983,14 +995,14 @@ do
         ]
         choice (operators |> List.map (fun (op, opStr) ->
             pstring op >>. ws >>. primaryExpr |>> (fun rightExpr ->
-                Lambda([("x", None)], BinaryOp(opStr, IdentifierExpr "x", rightExpr))
+                Lambda([("x", None)], BinaryOp(opStr, IdentifierExpr("x", None), rightExpr))
             )
         ))
     
     // Shorthand lambda: { .name } means { x -> x.name }
     let shorthandPropertyAccess =
         pstring "." >>. identifier |>> (fun propName ->
-            Lambda([("x", None)], MemberAccess(IdentifierExpr "x", propName))
+            Lambda([("x", None)], MemberAccess(IdentifierExpr("x", None), propName, None))
         )
 
     // Shorthand match lambda: { | pat -> expr ... }
@@ -1008,7 +1020,7 @@ do
                 |> List.map (fun index -> ($"arg{index}", None))
             let scrutinees =
                 argNames
-                |> List.map (fun (name, _) -> IdentifierExpr name)
+                |> List.map (fun (name, _) -> IdentifierExpr(name, None))
             Lambda(argNames, Match(scrutinees, arms)))
     
     lambdaRef :=
@@ -1028,7 +1040,7 @@ do
 do 
     // Trailing lambda: function can be called with a lambda after parentheses
     // Examples: f(a, b) { x -> x + 1 } or f { x -> x + 1 } (no parens needed if only lambda arg)
-    // Note: f(a, b) creates single tuple argument: FunctionCall("f", [TupleExpr[a; b]])
+    // Note: f(a, b) creates single tuple argument: FunctionCall("f", None, [TupleExpr[a; b]])
 
     let fieldsToExpr fields =
         match fields with
@@ -1043,23 +1055,23 @@ do
     
     let callWithParensAndTrailing =
         pipe3
-            qualifiedIdentifier
+            qualifiedIdentifierWithRange
             (between (pstring "(") (pstring ")") 
                 (opt (ws >>. (sepBy1 (ws >>. recordField) (pstring "," .>> ws) |>> fieldsToExpr) .>> ws)))
             (opt (attempt (skipMany (skipAnyOf " \t") >>. lambda)))
-            (fun name exprOpt trailingLambdaOpt ->
+            (fun (name, range) exprOpt trailingLambdaOpt ->
                 let baseArgs = match exprOpt with Some e -> [e] | None -> []
                 match trailingLambdaOpt with
-                | Some lambdaExpr -> FunctionCall(name, baseArgs @ [lambdaExpr])
-                | None -> FunctionCall(name, baseArgs))
+                | Some lambdaExpr -> FunctionCall(name, range, baseArgs @ [lambdaExpr])
+                | None -> FunctionCall(name, range, baseArgs))
     
     let callWithOnlyTrailing =
         attempt (
-            qualifiedIdentifier >>= fun name ->
+            qualifiedIdentifierWithRange >>= fun (name, range) ->
                 skipMany (skipAnyOf " \t") >>.
                 lookAhead (pchar '{') >>.
                 lambda |>> fun lambdaExpr ->
-                    FunctionCall(name, [lambdaExpr])
+                    FunctionCall(name, range, [lambdaExpr])
         )
     
     functionCallRef :=

@@ -81,7 +81,7 @@ let private ensureAttachedTypeExists (state: InferState) (name: Identifier) : Re
         else
             Error [ Diagnostics.error ($"Unknown attached type '{typeName}' for definition '{name}'") ]
 
-let private tryResolveAttachedFunction (env: TypeEnv) (lhsType: Ty) (funcName: string) : Result<string option, Diagnostic list> =
+let private tryResolveAttachedFunction (env: TypeEnv) (lhsType: Ty) (funcName: string) (rangeOpt: (int * int) option) : Result<string option, Diagnostic list> =
     if funcName.Contains(".") then
         Ok None
     else
@@ -101,7 +101,9 @@ let private tryResolveAttachedFunction (env: TypeEnv) (lhsType: Ty) (funcName: s
         | [single] -> Ok (Some single)
         | _ ->
             let names = String.concat ", " candidates
-            Error [ Diagnostics.error ($"Ambiguous attached function '{funcName}': {names}") ]
+            match rangeOpt with
+            | Some (line, col) -> Error [ Diagnostics.errorAt ($"Ambiguous attached function '{funcName}': {names}") (line, col) ]
+            | None -> Error [ Diagnostics.error ($"Ambiguous attached function '{funcName}': {names}") ]
 
 let private isContextDef (modifiers: TypeDefModifier list) =
     modifiers |> List.contains Context
@@ -384,13 +386,16 @@ let rec private inferExpr (env: TypeEnv) (state: InferState) (expr: Expression) 
             Error errors
     | UnitExpr ->
         Ok (mkTypedExpr expr (TyPrimitive "unit") None None None, state)
-    | IdentifierExpr name ->
+    | IdentifierExpr(name, rangeOpt) ->
         match TypeEnv.tryFind name env with
         | Some scheme ->
             let ty, next = instantiate state scheme
             Ok (mkTypedExpr expr ty None None None, next)
-        | None -> Error [ Diagnostics.error ($"Unknown identifier '{name}'") ]
-    | FunctionCall(name, args) ->
+        | None ->
+            match rangeOpt with
+            | Some (line, col) -> Error [ Diagnostics.errorAt ($"Unknown identifier '{name}'") (line, col) ]
+            | None -> Error [ Diagnostics.error ($"Unknown identifier '{name}'") ]
+    | FunctionCall(name, rangeOpt, args) ->
         let contextCheck =
             match state.ContextRequirements |> Map.tryFind name with
             | Some contexts -> ensureContextAvailable env state name contexts
@@ -425,7 +430,9 @@ let rec private inferExpr (env: TypeEnv) (state: InferState) (expr: Expression) 
                         |> List.filter (fun memberName -> not (fields |> Map.containsKey memberName))
                     if not missingMembers.IsEmpty then
                         let missingText = String.concat ", " missingMembers
-                        Error [ Diagnostics.error ($"Workflow '{name}' is missing context members: {missingText}") ]
+                        match rangeOpt with
+                        | Some (line, col) -> Error [ Diagnostics.errorAt ($"Workflow '{name}' is missing context members: {missingText}") (line, col) ]
+                        | None -> Error [ Diagnostics.error ($"Workflow '{name}' is missing context members: {missingText}") ]
                     else
                         let envWithCtx = extendEnvWithRecordFields env funcTy
                         match args with
@@ -438,7 +445,10 @@ let rec private inferExpr (env: TypeEnv) (state: InferState) (expr: Expression) 
                                     | other -> other
                                 Ok (mkTypedExpr expr returnTy None None None, next)
                             | Error err -> Error err
-                        | _ -> Error [ Diagnostics.error ($"Workflow '{name}' must be called with a trailing lambda") ]
+                        | _ ->
+                            match rangeOpt with
+                            | Some (line, col) -> Error [ Diagnostics.errorAt ($"Workflow '{name}' must be called with a trailing lambda") (line, col) ]
+                            | None -> Error [ Diagnostics.error ($"Workflow '{name}' must be called with a trailing lambda") ]
                 | None ->
                     let argResults =
                         args
@@ -485,7 +495,10 @@ let rec private inferExpr (env: TypeEnv) (state: InferState) (expr: Expression) 
                         Ok (mkTypedExpr expr resultTy None None None, constrained)
                     else
                         Error errors
-                | None -> Error [ Diagnostics.error ($"Unknown function '{name}'") ]
+                | None ->
+                    match rangeOpt with
+                    | Some (line, col) -> Error [ Diagnostics.errorAt ($"Unknown function '{name}'") (line, col) ]
+                    | None -> Error [ Diagnostics.error ($"Unknown function '{name}'") ]
     | Lambda(args, body) ->
         inferLambdaWithExpected env state args body None None
     | BinaryOp(_, left, right) ->
@@ -510,18 +523,18 @@ let rec private inferExpr (env: TypeEnv) (state: InferState) (expr: Expression) 
                 | BinaryOp(op, _, _) when ["=="; "!="] |> List.contains op ->
                     Ok (mkTypedExpr expr (TyPrimitive "bool") None None None, constrained)
                 | _ -> Ok (mkTypedExpr expr leftExpr.Type None None None, constrained)
-    | Pipe(value, name, args) ->
+    | Pipe(value, name, rangeOpt, args) ->
         match inferExpr env state value with
         | Error err -> Error err
         | Ok (typedValue, nextState) ->
-            match tryResolveAttachedFunction env typedValue.Type name with
+            match tryResolveAttachedFunction env typedValue.Type name rangeOpt with
             | Error err -> Error err
             | Ok resolvedOpt ->
                 let resolvedName = resolvedOpt |> Option.defaultValue name
                 let callArgs = value :: args
-                match inferExpr env nextState (FunctionCall(resolvedName, callArgs)) with
+                match inferExpr env nextState (FunctionCall(resolvedName, rangeOpt, callArgs)) with
                 | Ok (typedCall, finalState) ->
-                    Ok ({ typedCall with Expr = Pipe(value, resolvedName, args) }, finalState)
+                    Ok ({ typedCall with Expr = Pipe(value, resolvedName, rangeOpt, args) }, finalState)
                 | Error err -> Error err
     | UseIn(binding, body) ->
         match inferUseBinding env state binding with
@@ -861,9 +874,9 @@ let rec private inferExpr (env: TypeEnv) (state: InferState) (expr: Expression) 
                         Ok (mkTypedExpr expr head.Type None None (Some typedArms), constrained)
             else
                 Error errors
-    | MemberAccess(baseExpr, memberName) ->
+    | MemberAccess(baseExpr, memberName, rangeOpt) ->
         match baseExpr with
-        | IdentifierExpr baseName ->
+        | IdentifierExpr(baseName, _) ->
             let qualifiedName = $"{baseName}.{memberName}"
             match TypeEnv.tryFind qualifiedName env with
             | Some scheme ->
@@ -884,7 +897,9 @@ let rec private inferExpr (env: TypeEnv) (state: InferState) (expr: Expression) 
                     match fieldTypeOpt with
                     | Some fieldTy -> Ok (mkTypedExpr expr fieldTy None None None, next)
                     | None ->
-                        Error [ Diagnostics.error ($"Record '{baseName}' has no member '{memberName}'") ]
+                        match rangeOpt with
+                        | Some (line, col) -> Error [ Diagnostics.errorAt ($"Record '{baseName}' has no member '{memberName}'") (line, col) ]
+                        | None -> Error [ Diagnostics.error ($"Record '{baseName}' has no member '{memberName}'") ]
         | _ ->
             match inferExpr env state baseExpr with
             | Error err -> Error err
@@ -899,7 +914,10 @@ let rec private inferExpr (env: TypeEnv) (state: InferState) (expr: Expression) 
                     | _ -> None
                 match fieldTypeOpt with
                 | Some fieldTy -> Ok (mkTypedExpr expr fieldTy None None None, next)
-                | None -> Error [ Diagnostics.error ($"Unknown member '{memberName}'") ]
+                | None ->
+                    match rangeOpt with
+                    | Some (line, col) -> Error [ Diagnostics.errorAt ($"Unknown member '{memberName}'") (line, col) ]
+                    | None -> Error [ Diagnostics.error ($"Unknown member '{memberName}'") ]
 
 and inferUseBinding (env: TypeEnv) (state: InferState) (binding: UseBinding) : Result<TypedExpr * InferState, Diagnostic list> =
     match binding with

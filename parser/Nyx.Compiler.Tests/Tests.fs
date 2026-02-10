@@ -299,9 +299,16 @@ let ``Desugar workflow bind and return`` () =
     | Result.Ok ast ->
         let desugared = Compiler.desugar ast
         match desugared with
-        | [Def (ValueDef(_, "result", _, FunctionCall("async", [Lambda([], Block [ExprStatement expr])])))] ->
+        | [Def (ValueDef(_, "result", _, FunctionCall("async", _, [Lambda([], Block [ExprStatement expr])])))] ->
             match expr with
-            | FunctionCall("await", [FunctionCall("foo", []); Lambda([("x", None)], FunctionCall("pure", [MemberAccess(IdentifierExpr "x", "y")]))]) ->
+            | FunctionCall(
+                "await",
+                _,
+                [
+                    FunctionCall("foo", _, [])
+                    Lambda([("x", None)], FunctionCall("pure", _, [MemberAccess(IdentifierExpr("x", _), "y", _)]))
+                ]
+              ) ->
                 Assert.True(true)
             | other -> Assert.True(false, $"Unexpected workflow desugar: %A{other}")
         | other -> Assert.True(false, $"Unexpected desugared module: %A{other}")
@@ -317,7 +324,7 @@ let ``Desugar workflow implicit return`` () =
     | Result.Ok ast ->
         let desugared = Compiler.desugar ast
         match desugared with
-        | [Def (ValueDef(_, "result", _, FunctionCall("async", [Lambda([], Block [ExprStatement (LiteralExpr (IntLit 1))])])))] ->
+        | [Def (ValueDef(_, "result", _, FunctionCall("async", _, [Lambda([], Block [ExprStatement (LiteralExpr (IntLit 1))])])))] ->
             Assert.True(true)
         | other -> Assert.True(false, $"Unexpected desugared module: %A{other}")
 

@@ -136,6 +136,13 @@ module Compiler =
                 else
                     FunctionCall(keyword, [desugarExpr value])
             | WorkflowReturnExpr value -> FunctionCall("pure", [desugarExpr value])
+            | InterpolatedString parts ->
+                let mappedParts =
+                    parts
+                    |> List.map (function
+                        | StringText text -> StringText text
+                        | StringExpr expr -> StringExpr (desugarExpr expr))
+                InterpolatedString mappedParts
             | UnitExpr
             | LiteralExpr _
             | IdentifierExpr _ -> expr

@@ -27,7 +27,7 @@ let main argv =
         let outputFile =
             match fileArgs with
             | _ :: output :: _ -> output
-            | _ -> Path.ChangeExtension(inputFile, ".js")
+            | _ -> inputFile + ".js"
         
         if String.IsNullOrWhiteSpace inputFile || not (File.Exists inputFile) then
             printfn "Error: Input file not found: %s" inputFile

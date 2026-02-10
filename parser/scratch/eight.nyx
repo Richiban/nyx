@@ -1,0 +1,8 @@
+type Person = (
+    firstName: string
+    surname: string
+)
+
+def Person.fullName: Person -> string = { p ->
+    "{p.firstName} {p.surname}"
+}

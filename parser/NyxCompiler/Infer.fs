@@ -292,6 +292,7 @@ let private argTypesFromExpected (state: InferState) (args: (Identifier * TypeEx
     let mutable current = state
     let argTys =
         match expectedInput with
+        | TyRecord _ when args.Length = 1 -> [ expectedInput ]
         | TyRecord fields ->
             args
             |> List.mapi (fun index (name, _) ->
@@ -319,6 +320,20 @@ let rec private inferExpr (env: TypeEnv) (state: InferState) (expr: Expression) 
     match expr with
     | LiteralExpr literal ->
         Ok (mkTypedExpr expr (literalType literal) None None None, state)
+    | InterpolatedString parts ->
+        let mutable current = state
+        let mutable errors: Diagnostic list = []
+        for part in parts do
+            match part with
+            | StringText _ -> ()
+            | StringExpr inner ->
+                match inferExpr env current inner with
+                | Ok (_, next) -> current <- next
+                | Error err -> errors <- errors @ err
+        if errors.IsEmpty then
+            Ok (mkTypedExpr expr (TyPrimitive "string") None None None, current)
+        else
+            Error errors
     | UnitExpr ->
         Ok (mkTypedExpr expr (TyPrimitive "unit") None None None, state)
     | IdentifierExpr name ->
@@ -797,10 +812,36 @@ let rec private inferExpr (env: TypeEnv) (state: InferState) (expr: Expression) 
                 let ty, next = instantiate state scheme
                 Ok (mkTypedExpr expr ty None None None, next)
             | None ->
-                Error [ Diagnostics.error ($"Module {baseName} has no exported member '{memberName}'") ]
+                match inferExpr env state baseExpr with
+                | Error err -> Error err
+                | Ok (typedBase, next) ->
+                    let fieldTypeOpt =
+                        match typedBase.Type with
+                        | TyRecord fields -> fields |> Map.tryFind memberName
+                        | TyNominal(_, underlying, _) ->
+                            match underlying with
+                            | TyRecord fields -> fields |> Map.tryFind memberName
+                            | _ -> None
+                        | _ -> None
+                    match fieldTypeOpt with
+                    | Some fieldTy -> Ok (mkTypedExpr expr fieldTy None None None, next)
+                    | None ->
+                        Error [ Diagnostics.error ($"Record '{baseName}' has no member '{memberName}'") ]
         | _ ->
-            let ty, next = freshVar state
-            Ok (mkTypedExpr expr ty None None None, next)
+            match inferExpr env state baseExpr with
+            | Error err -> Error err
+            | Ok (typedBase, next) ->
+                let fieldTypeOpt =
+                    match typedBase.Type with
+                    | TyRecord fields -> fields |> Map.tryFind memberName
+                    | TyNominal(_, underlying, _) ->
+                        match underlying with
+                        | TyRecord fields -> fields |> Map.tryFind memberName
+                        | _ -> None
+                    | _ -> None
+                match fieldTypeOpt with
+                | Some fieldTy -> Ok (mkTypedExpr expr fieldTy None None None, next)
+                | None -> Error [ Diagnostics.error ($"Unknown member '{memberName}'") ]
 
 and inferUseBinding (env: TypeEnv) (state: InferState) (binding: UseBinding) : Result<TypedExpr * InferState, Diagnostic list> =
     match binding with

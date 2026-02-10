@@ -20,6 +20,16 @@ let ``Typecheck infers literal types`` () =
     Assert.Equal(TyPrimitive "string", typed.Types.["message"])
 
 [<Fact>]
+let ``Typecheck interpolated string`` () =
+    let source =
+        "def name = \"Ada\"\n" +
+        "def msg = \"Hello {name}\""
+    let result = Compiler.compile source
+    Assert.True(result.Diagnostics.IsEmpty)
+    let typed = result.Typed.Value
+    Assert.Equal(TyPrimitive "string", typed.Types.["msg"])
+
+[<Fact>]
 let ``Typecheck supports polymorphic let`` () =
     let source =
         "def id = { x -> x }\n" +

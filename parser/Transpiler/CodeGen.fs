@@ -18,7 +18,16 @@ let private jsReserved =
     |> Set.ofList
 
 let private escapeString (value: string) =
-    value.Replace("\\", "\\\\").Replace("\"", "\\\"")
+    let normalized = value.Replace("\r\n", "\n")
+    normalized
+        .Replace("\\", "\\\\")
+        .Replace("\"", "\\\"")
+        .Replace("\n", "\\n")
+        .Replace("\r", "\\r")
+        .Replace("\t", "\\t")
+
+let private escapeTemplateText (value: string) =
+    value.Replace("\\", "\\\\").Replace("`", "\\`").Replace("${", "\\${")
 
 let private isValidJsIdentifier (name: string) =
     if String.IsNullOrWhiteSpace name then
@@ -192,6 +201,15 @@ let rec private transpileExpressionWithEnv (env: TranspileEnv) (expr: Expression
     match expr with
     | UnitExpr -> "undefined"
     | LiteralExpr lit -> transpileLiteral lit
+
+    | InterpolatedString parts ->
+        let content =
+            parts
+            |> List.map (function
+                | StringText text -> escapeTemplateText text
+                | StringExpr inner -> "$" + "{" + transpileExpressionWithEnv env inner + "}")
+            |> String.concat ""
+        sprintf "`%s`" content
     
     | IdentifierExpr id -> escapeIdentifier id
     

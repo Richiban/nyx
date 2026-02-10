@@ -38,6 +38,20 @@ let ``Transpile string literal`` () =
     result |> should equal "\"hello\""
 
 [<Fact>]
+let ``Transpile interpolated string`` () =
+    let source =
+        "def name = \"Ada\"\n" +
+        "def msg = \"Hello {name}\""
+    let result = transpileSource source
+    Assert.Contains("`Hello ${name}`", result)
+
+[<Fact>]
+let ``Transpile multiline string literal`` () =
+    let source = "def msg = \"Hello\nworld\""
+    let result = transpileSource source
+    Assert.Contains("\"Hello\\nworld\"", result)
+
+[<Fact>]
 let ``Transpile boolean literal`` () =
     let expr = LiteralExpr (BoolLit true)
     let result = transpileExpression expr

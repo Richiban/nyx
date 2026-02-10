@@ -66,6 +66,11 @@ and Expression =
     | UseIn of UseBinding * Expression
     | WorkflowBindExpr of Identifier * Expression
     | WorkflowReturnExpr of Expression
+    | InterpolatedString of StringPart list
+
+and StringPart =
+    | StringText of string
+    | StringExpr of Expression
 
 // Record field: either named (x = expr) or positional (expr)
 and RecordField =
@@ -169,8 +174,13 @@ let qualifiedIdentifier: Parser<Identifier, unit> =
 
 // Parser for literals
 let stringLiteralNoWs: Parser<Literal, unit> =
-    between (pstring "\"") (pstring "\"") (manyChars (noneOf "\""))
-    |>> StringLit
+    let doubleQuoted =
+        between (pstring "\"") (pstring "\"") (manyChars (noneOf "\""))
+        |>> StringLit
+    let singleQuoted =
+        between (pstring "'") (pstring "'") (manyChars (noneOf "'"))
+        |>> StringLit
+    attempt doubleQuoted <|> singleQuoted
     <?> "string literal"
 
 let stringLiteral: Parser<Literal, unit> = stringLiteralNoWs  // Don't consume ws
@@ -264,6 +274,26 @@ let typeExpr, typeExprRef = createParserForwardedToRef<TypeExpr, unit>()
 
 // Pattern parsers
 let pattern, patternRef = createParserForwardedToRef<Pattern, unit>()
+
+// Interpolated double-quoted strings with {expr} holes
+let interpolatedStringExprNoWs: Parser<Expression, unit> =
+    let textPart = many1Chars (noneOf "\"{") |>> StringText
+    let holePart =
+        between (pchar '{' .>> ws) (ws >>. pchar '}') expression
+        |>> StringExpr
+    let partsParser = many (choice [attempt holePart; textPart])
+    between (pstring "\"") (pstring "\"") partsParser
+    |>> fun parts ->
+        match parts with
+        | [] -> LiteralExpr (StringLit "")
+        | _ when parts |> List.exists (function StringExpr _ -> true | _ -> false) ->
+            InterpolatedString parts
+        | _ ->
+            let text =
+                parts
+                |> List.choose (function StringText value -> Some value | _ -> None)
+                |> String.concat ""
+            LiteralExpr (StringLit text)
 
 let wildcardPattern = pstring "_" >>% WildcardPattern
 let elsePattern = pstring "else" >>% ElsePattern
@@ -780,6 +810,7 @@ let useInExpr =
 // Version without trailing whitespace consumption (for use in block contexts)
 let primaryExprNoWs =
     choice [
+        attempt interpolatedStringExprNoWs
         attempt workflowReturnExpr
         attempt workflowBindExpr
         attempt useInExpr

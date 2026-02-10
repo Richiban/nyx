@@ -14,7 +14,7 @@ def rangeCase = match value
 
 def tagInline = match result
   | #ok data -> data
-  | #error msg -> "Error: {msg}"
+  | #error msg -> 'Error: {msg}'
   | else -> "unexpected"
 
 def guardCase = match value

@@ -78,9 +78,9 @@ let filePath = Path.Combine(testDataDir, filename)
 ```
 
 ### Manual Testing
-From the parser root directory:
+From the `compiler` directory:
 ```bash
-.\Parser\bin\Debug\net9.0\NyxParser.exe Parser.Tests\testdata\<filename>.nyx
+.\Nyx.Parser\bin\Debug\net9.0\NyxParser.exe Nyx.Parser.Tests\testdata\<filename>.nyx
 ```
 
 ### Special Cases

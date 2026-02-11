@@ -44,8 +44,8 @@
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\Transpiler\Transpiler.fsproj" />
-    <ProjectReference Include="..\Parser\NyxParser.fsproj" />
+    <ProjectReference Include="..\Nyx.Transpiler.JS\Transpiler.fsproj" />
+    <ProjectReference Include="..\Nyx.Parser\NyxParser.fsproj" />
   </ItemGroup>
 
 </Project>

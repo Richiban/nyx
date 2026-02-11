@@ -11,7 +11,7 @@
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\NyxCompiler\NyxCompiler.fsproj" />
+    <ProjectReference Include="..\Nyx.Compiler\NyxCompiler.fsproj" />
   </ItemGroup>
 
 </Project>

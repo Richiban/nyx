@@ -33,37 +33,40 @@ Currently supports parsing:
 ## Project Structure
 
 ```
-parser/
-├── Parser/                    # Main parser library (F#)
-│   ├── Program.fs            # Parser implementation and AST
+compiler/
+├── Nyx.Parser/                # Main parser library (F#)
+│   ├── Program.fs             # Parser implementation and AST
 │   └── NyxParser.fsproj
-├── Parser.Tests/             # Unit tests (F#)
-│   ├── ParserTests.fs        # 56 comprehensive tests
+├── Nyx.Parser.Tests/          # Parser-focused unit tests
+│   ├── ParserTests.fs
 │   ├── Parser.Tests.fsproj
-│   └── testdata/             # Test .nyx files
-│       ├── literals.nyx
-│       ├── function-calls.nyx
-│       ├── lambdas.nyx
-│       ├── shorthand-lambdas.nyx
-│       ├── piping.nyx
-│       ├── binary-operators.nyx
-│       └── comprehensive.nyx
-├── sample-*.nyx              # Sample Nyx files
-└── parser.sln
+│   └── testdata/
+├── Nyx.Compiler/              # Type-checker core library
+│   └── NyxCompiler.fsproj
+├── Nyx.Compiler.Cli/          # CLI entry point wrapping the compiler
+│   └── NyxCompiler.Cli.fsproj
+├── Nyx.Compiler.Tests/        # Compiler-level unit/integration tests
+│   └── Nyx.Compiler.Tests.fsproj
+├── Nyx.Transpiler.JS/         # JS transpiler
+│   └── Transpiler.fsproj
+├── Nyx.Transpiler.JS.Tests/   # Transpiler tests
+│   └── Transpiler.Tests.fsproj
+├── Nyx.Compiler.sln           # Solution covering all projects
+└── README.md
 ```
 
 ## Building
 
 ```powershell
-cd parser
-dotnet build
+cd compiler
+dotnet build Nyx.Compiler.sln
 ```
 
 ## Running Tests
 
 ```powershell
-cd parser
-dotnet test
+cd compiler
+dotnet test Nyx.Compiler.sln
 ```
 
 All 56 tests should pass:
@@ -87,7 +90,7 @@ dotnet test --filter "Parse literals.nyx"
 ## Running the Parser
 
 ```powershell
-dotnet run --project Parser sample.nyx
+dotnet run --project compiler/Nyx.Parser/NyxParser.fsproj sample.nyx
 ```
 
 ## AST Structure

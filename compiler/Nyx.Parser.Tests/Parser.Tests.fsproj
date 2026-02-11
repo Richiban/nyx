@@ -56,7 +56,7 @@
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\Parser\NyxParser.fsproj" />
+    <ProjectReference Include="..\Nyx.Parser\NyxParser.fsproj" />
   </ItemGroup>
 
 </Project>

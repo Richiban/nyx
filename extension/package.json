@@ -57,8 +57,8 @@
         },
         "nyx.compilerProject": {
           "type": "string",
-          "default": "parser/NyxCompiler.Cli/NyxCompiler.Cli.fsproj",
-          "description": "Relative path to NyxCompiler.Cli.fsproj in the workspace."
+          "default": "compiler/Nyx.Compiler.Cli/Nyx.Compiler.Cli.fsproj",
+          "description": "Relative path to Nyx.Compiler.Cli.fsproj in the workspace."
         },
         "nyx.compilerDotnetPath": {
           "type": "string",

@@ -28,7 +28,7 @@ interface NyxSettings {
 
 const defaultSettings: NyxSettings = {
   typecheckOnSave: true,
-  compilerProject: "parser/NyxCompiler.Cli/NyxCompiler.Cli.fsproj",
+  compilerProject: "compiler/Nyx.Compiler.Cli/Nyx.Compiler.Cli.fsproj",
   compilerDotnetPath: "dotnet"
 };
 

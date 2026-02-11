@@ -30,8 +30,8 @@ def getName: Person -> string = { .name }
 def x = (a = "a", b = "b", c = "c")
 
 def b = match x
--- | "hi" -> "bye"
--- | "one" -> "two"
+    | "hi" -> "bye"
+    | "one" -> "two"
     | (a = "a", b = "b", c = c) ->
         dbg("c = {c}")
         c

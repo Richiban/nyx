@@ -67,6 +67,8 @@ module Unifier =
                     |> String.concat ", "
                 if namedText = "" then
                     $"({tupleText})"
+                elif tupleText = "" then
+                    $"({namedText})"
                 else
                     $"({tupleText}, {namedText})"
             | None, _ ->

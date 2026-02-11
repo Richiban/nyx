@@ -249,7 +249,7 @@ let rec private transpileExpressionWithEnv (env: TranspileEnv) (expr: Expression
             match args with
             | [single] ->
                 let valueExpr = transpileExpressionWithEnv env single
-                sprintf "(() => { const __dbg = %s; console.log(__dbg); return __dbg; })()" valueExpr
+                sprintf "dbg(%s)" valueExpr
             | _ ->
                 failwith "dbg expects a single argument"
         else
@@ -335,16 +335,32 @@ let rec private transpileExpressionWithEnv (env: TranspileEnv) (expr: Expression
             else
                 env.ContextVar |> Option.defaultValue "", env, []
 
+        let initStmts, lastStmtOpt =
+            match List.rev stmts with
+            | [] -> [], None
+            | last :: restRev -> List.rev restRev, Some last
+
         let mutable currentEnv = envWithCtx
-        let stmtLines =
-            stmts
+        let initStmtLines =
+            initStmts
             |> List.collect (fun stmt ->
                 let lines, nextEnv = transpileStatement currentEnv stmt
                 currentEnv <- nextEnv
                 lines)
             |> List.filter (fun stmt -> stmt <> "")
 
-        let allLines = initLines @ stmtLines
+        let lastLines, returnLine =
+            match lastStmtOpt with
+            | Some (ExprStatement expr) ->
+                [], sprintf "return %s;" (transpileExpressionWithEnv currentEnv expr)
+            | Some lastStmt ->
+                let lines, nextEnv = transpileStatement currentEnv lastStmt
+                currentEnv <- nextEnv
+                let filtered = lines |> List.filter (fun stmt -> stmt <> "")
+                filtered, "return undefined;"
+            | None -> [], "return undefined;"
+
+        let allLines = initLines @ initStmtLines @ lastLines @ [returnLine]
         sprintf "(() => {\n  %s\n})()" (String.concat "\n  " allLines)
     
     | IfExpr(cond, thenExpr, elseExpr) ->
@@ -577,6 +593,59 @@ let private transpileTopLevelItem (env: TranspileEnv) (item: TopLevelItem) : str
     | Import _ -> [ "" ], env
     | Expr expr -> [ sprintf "%s;" (transpileExpressionWithEnv env expr) ], env
 
+let private moduleDefinesDbg (module': Module) : bool =
+    module'
+    |> List.exists (function
+        | Def (ValueDef(_, "dbg", _, _)) -> true
+        | _ -> false)
+
+let private moduleUsesDbg (module': Module) : bool =
+    let rec exprUsesDbg expr =
+        match expr with
+        | FunctionCall("dbg", _, _) -> true
+        | Pipe(inner, funcName, _, args) ->
+            funcName = "dbg" || exprUsesDbg inner || args |> List.exists exprUsesDbg
+        | Lambda(_, body) -> exprUsesDbg body
+        | IfExpr(cond, thenExpr, elseExpr) ->
+            exprUsesDbg cond || exprUsesDbg thenExpr || exprUsesDbg elseExpr
+        | Match(scrutinees, arms) ->
+            (scrutinees |> List.exists exprUsesDbg)
+            || (arms |> List.exists (fun (_, body) -> exprUsesDbg body))
+        | Block statements ->
+            statements
+            |> List.exists (function
+                | DefStatement(_, _, _, valueExpr) -> exprUsesDbg valueExpr
+                | ExprStatement innerExpr -> exprUsesDbg innerExpr
+                | UseStatement (UseValue innerExpr) -> exprUsesDbg innerExpr
+                | _ -> false)
+        | TupleExpr items
+        | ListExpr items -> items |> List.exists exprUsesDbg
+        | RecordExpr fields ->
+            fields
+            |> List.exists (function
+                | NamedField(_, valueExpr)
+                | PositionalField valueExpr -> exprUsesDbg valueExpr)
+        | TagExpr(_, payloadOpt) -> payloadOpt |> Option.exists exprUsesDbg
+        | MemberAccess(inner, _, _) -> exprUsesDbg inner
+        | BinaryOp(_, left, right) -> exprUsesDbg left || exprUsesDbg right
+        | UseIn(binding, body) ->
+            match binding with
+            | UseValue innerExpr -> exprUsesDbg innerExpr || exprUsesDbg body
+        | InterpolatedString parts ->
+            parts
+            |> List.exists (function
+                | StringExpr innerExpr -> exprUsesDbg innerExpr
+                | _ -> false)
+        | UnitExpr
+        | LiteralExpr _
+        | IdentifierExpr _ -> false
+
+    module'
+    |> List.exists (function
+        | Def (ValueDef(_, _, _, expr)) -> exprUsesDbg expr
+        | Expr expr -> exprUsesDbg expr
+        | _ -> false)
+
 let transpileModule (module': Module) : string =
     let typeDefs =
         module'
@@ -587,6 +656,7 @@ let transpileModule (module': Module) : string =
     let contextMembers = resolveContextMembers typeDefs
     let recordTypes = resolveRecordTypes typeDefs
     let mutable env = { emptyEnv with ContextMembers = contextMembers; RecordTypes = recordTypes }
+    let dbgPreludeNeeded = moduleUsesDbg module' && not (moduleDefinesDbg module')
     let lines =
         module'
         |> List.collect (fun item ->
@@ -594,7 +664,12 @@ let transpileModule (module': Module) : string =
             env <- nextEnv
             itemLines)
         |> List.filter (fun line -> line <> "")
-    String.concat "\n" lines
+    let prelude =
+        if dbgPreludeNeeded then
+            ["const dbg = (x) => { console.log(x); return x; }"]
+        else
+            []
+    String.concat "\n" (prelude @ lines)
 
 let transpileExpression (expr: Expression) : string =
     transpileExpressionWithEnv emptyEnv expr

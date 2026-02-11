@@ -28,15 +28,16 @@ def s: String = ""
 def getName: Person -> string = { .name }
 
 def x = (a = "a", b = "b", c = "c")
+
 def b = match x
 -- | "hi" -> "bye"
 -- | "one" -> "two"
-| (a = "a", b = "b", c = c) ->
-    dbg(c)
-    c
-| _ -> dbg("something else")
+    | (a = "a", b = "b", c = c) ->
+        dbg("c = {c}")
+        c
+    | _ -> dbg("something else")
 
-dbg(b)
+dbg("b = {b}")
 
 def items = [1, 2, 3]
 

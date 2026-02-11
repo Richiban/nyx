@@ -1119,51 +1119,60 @@ and inferBlock (env: TypeEnv) (state: InferState) (statements: Statement list) :
                     match ensureAttachedTypeExists current name with
                     | Error err -> errors <- err
                     | Ok () ->
-                    let contextOpt, declaredTypeExprOpt = extractContextFromTypeExpr typeOpt
-                    let envWithCtx, nextState =
-                        match contextOpt with
-                        | Some contexts -> extendEnvWithContexts env' current contexts
-                        | None -> env', current
-                    let expectedInputOpt, expectedReturnOpt, expectedDeclaredOpt, nextState2 =
-                        match declaredTypeExprOpt with
-                        | Some declaredExpr ->
-                            let ty, st = typeExprToTy nextState declaredExpr
-                            match ty with
-                            | TyFunc(inputTy, returnTy) -> Some inputTy, Some returnTy, Some ty, st
-                            | _ -> None, None, Some ty, st
-                        | None -> None, None, None, nextState
-                    let nextState2 =
-                        match contextOpt with
-                        | Some contexts -> registerContextRequirement nextState2 name contexts
-                        | None -> nextState2
-                    let inferResult =
-                        match expr with
-                        | Lambda(args, body) when expectedDeclaredOpt.IsSome ->
-                            inferLambdaWithExpected envWithCtx nextState2 args body expectedInputOpt expectedReturnOpt
-                        | _ -> inferExpr envWithCtx nextState2 expr
-                    match inferResult with
-                    | Ok (typedExpr, next) ->
-                        let declaredTy, finalState =
+                        let contextOpt, declaredTypeExprOpt = extractContextFromTypeExpr typeOpt
+                        let envWithCtx, nextState =
+                            match contextOpt with
+                            | Some contexts -> extendEnvWithContexts env' current contexts
+                            | None -> env', current
+                        let expectedInputOpt, expectedReturnOpt, expectedDeclaredOpt, nextState2 =
+                            match declaredTypeExprOpt with
+                            | Some declaredExpr ->
+                                let ty, st = typeExprToTy nextState declaredExpr
+                                match ty with
+                                | TyFunc(inputTy, returnTy) -> Some inputTy, Some returnTy, Some ty, st
+                                | _ -> None, None, Some ty, st
+                            | None -> None, None, None, nextState
+                        let preboundTy, preboundState, envWithRec, preboundFresh =
                             match expectedDeclaredOpt with
-                            | Some declaredTy ->
-                                match expr with
-                                | Lambda _ -> declaredTy, next
-                                | _ ->
+                            | Some declaredTy -> declaredTy, nextState2, TypeEnv.extend name (TypeEnv.mono declaredTy) envWithCtx, false
+                            | None ->
+                                let ty, st = freshVar nextState2
+                                ty, st, TypeEnv.extend name (TypeEnv.mono ty) envWithCtx, true
+                        let nextStateWithReq =
+                            match contextOpt with
+                            | Some contexts -> registerContextRequirement preboundState name contexts
+                            | None -> preboundState
+                        let inferResult =
+                            match expr with
+                            | Lambda(args, body) when expectedDeclaredOpt.IsSome ->
+                                inferLambdaWithExpected envWithRec nextStateWithReq args body expectedInputOpt expectedReturnOpt
+                            | _ -> inferExpr envWithRec nextStateWithReq expr
+                        match inferResult with
+                        | Ok (typedExpr, next) ->
+                            let declaredTy, finalState =
+                                match expectedDeclaredOpt with
+                                | Some declaredTy ->
+                                    match expr with
+                                    | Lambda _ -> declaredTy, next
+                                    | _ ->
+                                        let updatedState =
+                                            match declaredTy with
+                                            | TyNominal(name, underlying, _) when current.LocalNominals.Contains name ->
+                                                match typedExpr.Type with
+                                                | TyNominal _ -> addAssignableConstraint typedExpr.Type declaredTy next
+                                                | _ -> addAssignableConstraint typedExpr.Type underlying next
+                                            | _ -> addAssignableConstraint typedExpr.Type declaredTy next
+                                        declaredTy, updatedState
+                                | None ->
                                     let updatedState =
-                                        match declaredTy with
-                                        | TyNominal(name, underlying, _) when current.LocalNominals.Contains name ->
-                                            match typedExpr.Type with
-                                            | TyNominal _ -> addAssignableConstraint typedExpr.Type declaredTy next
-                                            | _ -> addAssignableConstraint typedExpr.Type underlying next
-                                        | _ -> addAssignableConstraint typedExpr.Type declaredTy next
-                                    declaredTy, updatedState
-                            | None -> typedExpr.Type, next
-                        current <- finalState
-                        let scheme = TypeEnv.generalize env' declaredTy
-                        env' <- TypeEnv.extend name scheme env'
-                        typedStatements <- typedStatements @ [ TypedDefStatement(isExport, name, typeOpt, typedExpr) ]
-                        lastExpr <- typedExpr
-                    | Error err -> errors <- err
+                                        if preboundFresh then addConstraint preboundTy typedExpr.Type next else next
+                                    typedExpr.Type, updatedState
+                            current <- finalState
+                            let scheme = TypeEnv.generalize env' declaredTy
+                            env' <- TypeEnv.extend name scheme env'
+                            typedStatements <- typedStatements @ [ TypedDefStatement(isExport, name, typeOpt, typedExpr) ]
+                            lastExpr <- typedExpr
+                        | Error err -> errors <- err
             | ImportStatement items ->
                 typedStatements <- typedStatements @ [ TypedImportStatement items ]
             | TypeDefStatement(name, modifiers, parameters, body) ->
@@ -1204,51 +1213,60 @@ let inferModuleWithEnv (initialEnv: TypeEnv) (initialState: InferState) (module'
             match ensureAttachedTypeExists state name with
             | Error err -> errors <- err
             | Ok () ->
-            let contextOpt, declaredTypeExprOpt = extractContextFromTypeExpr typeOpt
-            let envWithCtx, nextState =
-                match contextOpt with
-                | Some contexts -> extendEnvWithContexts env state contexts
-                | None -> env, state
-            let expectedInputOpt, expectedReturnOpt, expectedDeclaredOpt, nextState2 =
-                match declaredTypeExprOpt with
-                | Some declaredExpr ->
-                    let ty, st = typeExprToTy nextState declaredExpr
-                    match ty with
-                    | TyFunc(inputTy, returnTy) -> Some inputTy, Some returnTy, Some ty, st
-                    | _ -> None, None, Some ty, st
-                | None -> None, None, None, nextState
-            let nextState2WithReq =
-                match contextOpt with
-                | Some contexts -> registerContextRequirement nextState2 name contexts
-                | None -> nextState2
-            let inferResult =
-                match expr with
-                | Lambda(args, body) when expectedDeclaredOpt.IsSome ->
-                    inferLambdaWithExpected envWithCtx nextState2WithReq args body expectedInputOpt expectedReturnOpt
-                | _ -> inferExpr envWithCtx nextState2WithReq expr
-            match inferResult with
-            | Ok (typedExpr, next) ->
-                let declaredTy, finalState =
+                let contextOpt, declaredTypeExprOpt = extractContextFromTypeExpr typeOpt
+                let envWithCtx, nextState =
+                    match contextOpt with
+                    | Some contexts -> extendEnvWithContexts env state contexts
+                    | None -> env, state
+                let expectedInputOpt, expectedReturnOpt, expectedDeclaredOpt, nextState2 =
+                    match declaredTypeExprOpt with
+                    | Some declaredExpr ->
+                        let ty, st = typeExprToTy nextState declaredExpr
+                        match ty with
+                        | TyFunc(inputTy, returnTy) -> Some inputTy, Some returnTy, Some ty, st
+                        | _ -> None, None, Some ty, st
+                    | None -> None, None, None, nextState
+                let preboundTy, preboundState, envWithRec, preboundFresh =
                     match expectedDeclaredOpt with
-                    | Some declaredTy ->
-                        match expr with
-                        | Lambda _ -> declaredTy, next
-                        | _ ->
+                    | Some declaredTy -> declaredTy, nextState2, TypeEnv.extend name (TypeEnv.mono declaredTy) envWithCtx, false
+                    | None ->
+                        let ty, st = freshVar nextState2
+                        ty, st, TypeEnv.extend name (TypeEnv.mono ty) envWithCtx, true
+                let nextStateWithReq =
+                    match contextOpt with
+                    | Some contexts -> registerContextRequirement preboundState name contexts
+                    | None -> preboundState
+                let inferResult =
+                    match expr with
+                    | Lambda(args, body) when expectedDeclaredOpt.IsSome ->
+                        inferLambdaWithExpected envWithRec nextStateWithReq args body expectedInputOpt expectedReturnOpt
+                    | _ -> inferExpr envWithRec nextStateWithReq expr
+                match inferResult with
+                | Ok (typedExpr, next) ->
+                    let declaredTy, finalState =
+                        match expectedDeclaredOpt with
+                        | Some declaredTy ->
+                            match expr with
+                            | Lambda _ -> declaredTy, next
+                            | _ ->
+                                let updatedState =
+                                    match declaredTy with
+                                    | TyNominal(name, underlying, _) when state.LocalNominals.Contains name ->
+                                        match typedExpr.Type with
+                                        | TyNominal _ -> addAssignableConstraint typedExpr.Type declaredTy next
+                                        | _ -> addAssignableConstraint typedExpr.Type underlying next
+                                    | _ -> addAssignableConstraint typedExpr.Type declaredTy next
+                                declaredTy, updatedState
+                        | None ->
                             let updatedState =
-                                match declaredTy with
-                                | TyNominal(name, underlying, _) when state.LocalNominals.Contains name ->
-                                    match typedExpr.Type with
-                                    | TyNominal _ -> addAssignableConstraint typedExpr.Type declaredTy next
-                                    | _ -> addAssignableConstraint typedExpr.Type underlying next
-                                | _ -> addAssignableConstraint typedExpr.Type declaredTy next
-                            declaredTy, updatedState
-                    | None -> typedExpr.Type, next
-                state <- finalState
-                let scheme = TypeEnv.generalize env declaredTy
-                env <- TypeEnv.extend name scheme env
-                types <- types |> Map.add name declaredTy
-                items <- items @ [ TypedDef (TypedValueDef(isExport, name, typeOpt, typedExpr)) ]
-            | Error err -> errors <- err
+                                if preboundFresh then addConstraint preboundTy typedExpr.Type next else next
+                            typedExpr.Type, updatedState
+                    state <- finalState
+                    let scheme = TypeEnv.generalize env declaredTy
+                    env <- TypeEnv.extend name scheme env
+                    types <- types |> Map.add name declaredTy
+                    items <- items @ [ TypedDef (TypedValueDef(isExport, name, typeOpt, typedExpr)) ]
+                | Error err -> errors <- err
         | Expr expr when errors.IsEmpty ->
             match inferExpr env state expr with
             | Ok (typedExpr, next) ->

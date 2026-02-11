@@ -22,7 +22,9 @@ def sum: list(int) -> int = {
 }
 
 def main = {
-    dbg(sum([1, 2, 3]))
+    sum([1, 2, 3]) \dbg
+    f2(#a) \dbg
+    #a \dbg
 }
 
 main()

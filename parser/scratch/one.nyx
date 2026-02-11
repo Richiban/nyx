@@ -33,6 +33,7 @@ def main = { x ->
     | "hi" -> "bye"
     | "one" -> "two"
     | (a = "a", b = "b", c = c) ->
+        dbg(c)
         c
 
     console.log(b)

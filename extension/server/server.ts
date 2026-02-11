@@ -103,44 +103,8 @@ documents.listen(connection);
 connection.listen();
 
 async function runDiagnostics(document: TextDocument, requireSaved: boolean) {
-  const settings = await getSettings(document.uri);
-  if (!settings.typecheckOnSave && !requireSaved) {
-    return;
-  }
-
-  const filePath = fileUrlToPath(document.uri);
-  if (!filePath) {
-    return;
-  }
-
-  if (!fs.existsSync(filePath)) {
-    return;
-  }
-
-  const workspaceRoot = resolveWorkspaceRoot(filePath);
-  if (!workspaceRoot) {
-    return;
-  }
-
-  const projectPath = resolveProjectPath(workspaceRoot, settings.compilerProject);
-  if (!fs.existsSync(projectPath)) {
-    connection.console.warn(`Nyx compiler project not found at ${projectPath}`);
-    return;
-  }
-
-  try {
-    const output = await runCompiler(settings.compilerDotnetPath, projectPath, filePath);
-    const diagnostics = parseDiagnostics(output);
-    connection.sendDiagnostics({ uri: document.uri, diagnostics });
-  } catch (error) {
-    const message = error instanceof Error ? error.message : String(error);
-    const diag: Diagnostic = {
-      severity: DiagnosticSeverity.Error,
-      message: `Nyx typecheck failed: ${message}`,
-      range: Range.create(0, 0, 0, 1)
-    };
-    connection.sendDiagnostics({ uri: document.uri, diagnostics: [diag] });
-  }
+  // Typechecking is disabled: do not spawn dotnet or run any diagnostics.
+  connection.sendDiagnostics({ uri: document.uri, diagnostics: [] });
 }
 
 async function getSettings(_uri: string): Promise<NyxSettings> {

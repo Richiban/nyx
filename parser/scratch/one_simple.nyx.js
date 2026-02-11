@@ -45,5 +45,7 @@ const sum = (arg1) => (() => {
 })();
 const main = () => (() => {
   (() => { const __dbg = sum([1, 2, 3]); console.log(__dbg); return __dbg; })();
+  (() => { const __dbg = f2({ tag: "a" }); console.log(__dbg); return __dbg; })();
+  (() => { const __dbg = { tag: "a" }; console.log(__dbg); return __dbg; })();
 })();
 main();

@@ -148,6 +148,16 @@ let ``Typecheck dbg returns its argument`` () =
     Assert.Equal(TyPrimitive "string", typed.Types.["text"])
 
 [<Fact>]
+let ``Typecheck self recursive function`` () =
+    let source =
+        "def fact = { n -> if n == 0 then 1 else n * fact(n - 1) }\n" +
+        "def result = fact(3)"
+    let result = Compiler.compile source
+    Assert.True(result.Diagnostics.IsEmpty)
+    let typed = result.Typed.Value
+    Assert.Equal(TyPrimitive "int", typed.Types.["result"])
+
+[<Fact>]
 let ``Match rejects non-exhaustive record patterns`` () =
     let source =
         "def point = (x = 1, y = 2)\n" +

@@ -717,6 +717,11 @@ let rec private inferExpr (env: TypeEnv) (state: InferState) (expr: Expression) 
             let scrutineeExprs = scrutineeResults |> List.choose (function Ok ty -> Some ty | _ -> None)
             let scrutineeTypes = scrutineeExprs |> List.map (fun typedExpr -> typedExpr.Type)
             let mkTypedPattern pattern ty = { Pattern = pattern; Type = ty }
+            let rec tryRecordFields ty =
+                match ty with
+                | TyRecord fields -> Some fields
+                | TyNominal(_, underlying, _) -> tryRecordFields underlying
+                | _ -> None
             let rec inferPattern (env': TypeEnv) (state': InferState) (scrutineeTy: Ty) (pattern: Pattern) =
                 match pattern with
                 | WildcardPattern
@@ -850,16 +855,26 @@ let rec private inferExpr (env: TypeEnv) (state: InferState) (expr: Expression) 
                     let mutable innerEnv = env'
                     let mutable innerState = state'
                     let mutable innerErrors: Diagnostic list = []
-                    for (_, pat) in members do
-                        let memberTy, nextState = freshVar innerState
+                    let fieldHints = tryRecordFields scrutineeTy |> Option.defaultValue Map.empty
+                    let mutable fieldMap = Map.empty
+                    for (name, pat) in members do
+                        let hintTy = fieldHints |> Map.tryFind name
+                        let memberTy, nextState =
+                            match hintTy with
+                            | Some ty -> ty, innerState
+                            | None -> freshVar innerState
                         innerState <- nextState
                         match inferPattern innerEnv innerState memberTy pat with
                         | Ok (nextEnv, nextState, _) ->
                             innerEnv <- nextEnv
                             innerState <- nextState
+                            if hintTy.IsNone then
+                                fieldMap <- fieldMap.Add(name, memberTy)
                         | Error err -> innerErrors <- err
                     if innerErrors.IsEmpty then
-                        Ok (innerEnv, innerState, mkTypedPattern pattern scrutineeTy)
+                        let constrained =
+                            if fieldMap.IsEmpty then innerState else addConstraint scrutineeTy (TyRecord fieldMap) innerState
+                        Ok (innerEnv, constrained, mkTypedPattern pattern scrutineeTy)
                     else
                         Error innerErrors
 

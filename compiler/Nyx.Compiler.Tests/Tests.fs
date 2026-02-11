@@ -179,6 +179,19 @@ let ``Match accepts record catch-all`` () =
     Assert.True(result.Diagnostics.IsEmpty)
 
 [<Fact>]
+let ``Match rejects incompatible record patterns`` () =
+    let source =
+        "def point = (x = 1)\n" +
+        "def result = match point\n" +
+        "| (x = 1) -> 1\n" +
+        "| \"oops\" -> 0\n" +
+        "| _ -> 0\n"
+    let result = Compiler.compile source
+    Assert.False(result.Diagnostics.IsEmpty)
+    let message = result.Diagnostics |> List.head |> fun diag -> diag.Message
+    Assert.Contains("Type mismatch", message)
+
+[<Fact>]
 let ``Match rejects non-exhaustive tag unions with multiple scrutinees`` () =
     let source =
         "def a: #left | #right = #left\n" +

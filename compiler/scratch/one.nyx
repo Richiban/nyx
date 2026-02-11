@@ -13,36 +13,40 @@ type Option(a) =
     | #some(a)
     | #none
 
-def main = { x -> 
-    -- This is a comment
-    console.log(message)
+-- This is a comment
+dbg(message)
 
-    def gt5 = { > 5 }
+def gt5 = { > 5 }
 
-    def passes = 6 
-        \gt5
-        \gt5
+def passes = 6 
+    \gt5
+    \dbg
 
-    def myTag = #some("data")
+def myTag = #some("data")
 
-    def s: String = ""
-    def getName: Person -> string = { .name }
-    
-    def x = (a = "a", b = "b", c = "c")
-    def b = match x
-    | "hi" -> "bye"
-    | "one" -> "two"
-    | (a = "a", b = "b", c = c) ->
-        dbg(c)
-        c
+def s: String = ""
+def getName: Person -> string = { .name }
 
-    console.log(b)
+def x = (a = "a", b = "b", c = "c")
+def b = match x
+-- | "hi" -> "bye"
+-- | "one" -> "two"
+| (a = "a", b = "b", c = c) ->
+    dbg(c)
+    c
+| _ -> dbg("something else")
 
-    def items = [1, 2, 3]
+dbg(b)
 
-    def map = {a, b -> ""}
+def items = [1, 2, 3]
 
-    def items2 = items \map { .name }
-}
+def map: (list(a), (a -> b)) -> list(b) = {a, b -> []}
 
-main()
+def items2 = items \map { + 1 }
+
+def p = Person(
+    name = "Alice",
+    age = 30
+)
+
+p \getName \dbg

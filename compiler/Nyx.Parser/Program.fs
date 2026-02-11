@@ -640,6 +640,25 @@ let typeParam: Parser<Identifier * TypeExpr option, unit> =
         (opt (attempt (ws >>. pstring "::" >>. ws >>. typeExpr)))
         (fun name typeOpt -> (name, typeOpt))
 
+// Block parser - parses indented statements after a newline
+let blockExpr() : Parser<Expression, unit> =
+    skipMany (skipAnyOf " \t") >>. newline >>.
+    many (pchar ' ' <|> pchar '\t') >>= fun indentChars ->
+        let indentLevel = indentChars.Length
+        if indentLevel > 0 then
+            let statementAtIndent =
+                attempt (manyMinMaxSatisfy indentLevel indentLevel (fun c -> c = ' ' || c = '\t') >>. statement)
+
+            pipe2
+                statement
+                (many (attempt (newline >>. statementAtIndent)))
+                (fun first rest -> Block (first :: rest))
+        else
+            pzero
+
+let matchArmBody: Parser<Expression, unit> =
+    attempt (blockExpr()) <|> (wsNoNl() >>. exprWithoutCrossingNewlines)
+
 let typeDefCore: Parser<Definition, unit> =
     let typeModifiers =
         many (attempt (
@@ -711,7 +730,7 @@ let valueDefCore: Parser<Definition, unit> =
 // Match expression parser
 do
     let matchArm =
-        pstring "|" >>. ws >>. sepBy1 pattern (pstring "," .>> ws) .>>. (pstring "->" >>. ws >>. exprWithoutCrossingNewlines)
+        pstring "|" >>. ws >>. sepBy1 pattern (pstring "," .>> ws) .>>. (pstring "->" >>. matchArmBody)
         <?> "match arm"
     
     let matchArmWithLeadingWs =
@@ -1008,7 +1027,7 @@ do
     // Shorthand match lambda: { | pat -> expr ... }
     let shorthandMatchLambda =
         let matchArm =
-            pstring "|" >>. ws >>. sepBy1 pattern (pstring "," .>> ws) .>>. (pstring "->" >>. ws >>. exprWithoutCrossingNewlines)
+            pstring "|" >>. ws >>. sepBy1 pattern (pstring "," .>> ws) .>>. (pstring "->" >>. matchArmBody)
         let matchArms = many1 (attempt (ws >>. matchArm))
         matchArms |>> (fun arms ->
             let maxArity =
@@ -1077,22 +1096,6 @@ do
     functionCallRef :=
         callWithOnlyTrailing <|> callWithParensAndTrailing
         <?> "function call"
-
-// Block parser - parses indented statements after a newline
-let blockExpr() : Parser<Expression, unit> =
-    skipMany (skipAnyOf " \t") >>. newline >>.
-    many (pchar ' ' <|> pchar '\t') >>= fun indentChars ->
-        let indentLevel = indentChars.Length
-        if indentLevel > 0 then
-            let statementAtIndent =
-                attempt (manyMinMaxSatisfy indentLevel indentLevel (fun c -> c = ' ' || c = '\t') >>. statement)
-
-            pipe2
-                statement
-                (many (attempt (newline >>. statementAtIndent)))
-                (fun first rest -> Block (first :: rest))
-        else
-            pzero
 
 // Wire up statement parser
 do

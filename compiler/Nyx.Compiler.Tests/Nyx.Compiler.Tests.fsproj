@@ -3,6 +3,7 @@
   <PropertyGroup>
     <TargetFramework>net10.0</TargetFramework>
     <IsPackable>false</IsPackable>
+    <WarningsAsErrors>0025</WarningsAsErrors>
   </PropertyGroup>
 
   <ItemGroup>

@@ -603,6 +603,7 @@ let private moduleUsesDbg (module': Module) : bool =
     let rec exprUsesDbg expr =
         match expr with
         | FunctionCall("dbg", _, _) -> true
+        | FunctionCall(_, _, args) -> args |> List.exists exprUsesDbg
         | Pipe(inner, funcName, _, args) ->
             funcName = "dbg" || exprUsesDbg inner || args |> List.exists exprUsesDbg
         | Lambda(_, body) -> exprUsesDbg body
@@ -631,6 +632,8 @@ let private moduleUsesDbg (module': Module) : bool =
         | UseIn(binding, body) ->
             match binding with
             | UseValue innerExpr -> exprUsesDbg innerExpr || exprUsesDbg body
+        | WorkflowBindExpr(_, innerExpr) -> exprUsesDbg innerExpr
+        | WorkflowReturnExpr innerExpr -> exprUsesDbg innerExpr
         | InterpolatedString parts ->
             parts
             |> List.exists (function

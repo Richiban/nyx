@@ -22,7 +22,7 @@ def passes = 6
     \gt5
     \dbg
 
-def myTag = #some("data")
+def myTag: Option(string) = #some("data")
 
 def s: String = ""
 def getName: Person -> string = { .name }

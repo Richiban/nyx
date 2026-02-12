@@ -25,15 +25,21 @@ export function useMDXComponents(components: MDXComponents): MDXComponents {
     ),
     li: ({ children }) => <li className="text-base">{children}</li>,
     pre: ({ children }) => (
-      <pre className="mt-6 overflow-x-auto rounded-2xl bg-[#14171d] p-5 text-sm text-slate-100">
+      <pre className="mt-6 overflow-x-auto rounded-2xl bg-[#0f1116] p-5 text-sm text-slate-50">
         {children}
       </pre>
     ),
-    code: ({ children }) => (
-      <code className="rounded bg-black/5 px-2 py-1 text-sm text-[#2b2e36]">
-        {children}
-      </code>
-    ),
+    code: ({ children, className }) => {
+      const isBlock = className?.includes("language-");
+      if (isBlock) {
+        return <code className="text-slate-50">{children}</code>;
+      }
+      return (
+        <code className="rounded bg-black/5 px-2 py-1 text-sm text-[#2b2e36]">
+          {children}
+        </code>
+      );
+    },
     ...components,
   };
 }

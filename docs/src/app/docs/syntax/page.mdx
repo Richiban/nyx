@@ -1,0 +1,22 @@
+# Syntax
+
+Nyx uses indentation for blocks and keeps punctuation minimal. Most expressions
+are composable.
+
+## Function literals
+
+```nyx
+{ x -> x + 1 }
+```
+
+## Pipelines
+
+```nyx
+value \transform \normalize
+```
+
+## Records and tags
+
+```nyx
+def user = (name = "Ada", role = #admin)
+```

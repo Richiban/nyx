@@ -1,0 +1,16 @@
+# Types
+
+Nyx types are descriptive and readable. Use record types for shape and tags for
+variants.
+
+## Record types
+
+```nyx
+type Person = (name: string, age: int)
+```
+
+## Tag unions
+
+```nyx
+type Result(a) = #ok(a) | #error(string)
+```

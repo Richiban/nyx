@@ -1,0 +1,21 @@
+# Pattern matching
+
+Pattern matching is the core of Nyx control flow. It is explicit and exhaustive.
+
+## Matching records
+
+```nyx
+def point = (x = 1, y = 2)
+match point
+| (x = 1, y = y) -> y
+| _ -> 0
+```
+
+## Matching tags
+
+```nyx
+def value = #some(42)
+match value
+| #some(x) -> x
+| #none -> 0
+```

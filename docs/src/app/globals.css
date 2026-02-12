@@ -1,0 +1,95 @@
+@import "tailwindcss";
+
+:root {
+  --nyx-ink: #1b1d21;
+  --nyx-muted: #5a5f6a;
+  --nyx-paper: #f6f2ea;
+  --nyx-surface: #ffffff;
+  --nyx-accent: #e4572e;
+  --nyx-accent-2: #2e6de4;
+  --nyx-border: #1f232b1f;
+  --nyx-shadow: 0 18px 40px rgba(17, 18, 23, 0.18);
+  --nyx-glow: 0 0 0 1px rgba(228, 87, 46, 0.16), 0 20px 50px rgba(228, 87, 46, 0.18);
+}
+
+@theme inline {
+  --font-sans: var(--font-heading);
+  --font-mono: var(--font-mono);
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  color: var(--nyx-ink);
+  background: radial-gradient(1200px 600px at 10% -10%, #ffe7d9 0%, transparent 60%),
+    radial-gradient(1000px 800px at 90% -20%, #d9e6ff 0%, transparent 60%),
+    var(--nyx-paper);
+  font-family: var(--font-body), serif;
+  min-height: 100vh;
+}
+
+h1,
+h2,
+h3,
+h4 {
+  font-family: var(--font-heading), sans-serif;
+  letter-spacing: -0.02em;
+}
+
+code,
+pre {
+  font-family: var(--font-mono), monospace;
+}
+
+.nyx-surface {
+  background: var(--nyx-surface);
+  border: 1px solid var(--nyx-border);
+  box-shadow: var(--nyx-shadow);
+}
+
+.nyx-glow {
+  box-shadow: var(--nyx-glow);
+}
+
+.nyx-pill {
+  border: 1px solid var(--nyx-border);
+  background: rgba(255, 255, 255, 0.7);
+  backdrop-filter: blur(12px);
+}
+
+.nyx-grid {
+  background-image: linear-gradient(var(--nyx-border) 1px, transparent 1px),
+    linear-gradient(90deg, var(--nyx-border) 1px, transparent 1px);
+  background-size: 48px 48px;
+}
+
+.nyx-fade-in {
+  animation: nyxFade 0.8s ease both;
+}
+
+.nyx-float {
+  animation: nyxFloat 12s ease-in-out infinite;
+}
+
+@keyframes nyxFade {
+  from {
+    opacity: 0;
+    transform: translateY(14px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes nyxFloat {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-12px);
+  }
+}

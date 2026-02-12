@@ -1,0 +1,12 @@
+
+def ctx = (
+  println = { s -> dbg(s) }
+)
+
+def main = {
+  use ctx
+
+  println("Hello world")
+}
+
+main()

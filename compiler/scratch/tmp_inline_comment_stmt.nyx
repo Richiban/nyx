@@ -1,0 +1,3 @@
+def main = {
+  dbg(1)  -- inline comment
+}

@@ -123,6 +123,7 @@ type Module = TopLevelItem list
 
 // Helper: whitespace and comment handling
 let comment () = pstring "--" >>. skipRestOfLine true
+let inlineCommentNoNl () = pstring "--" >>. skipRestOfLine false
 let ws: Parser<unit, unit> = skipMany (skipMany1 spaces1 <|> comment ())
 let wsAll: Parser<unit, unit> = ws
 let wsInline = skipMany (skipAnyOf " \t")
@@ -1099,6 +1100,9 @@ do
 
 // Wire up statement parser
 do
+    let statementTail =
+        wsNoNl() >>. opt (attempt (inlineCommentNoNl ())) >>% ()
+
     let importStatement =
         pstring "import" >>. wsNoNl() >>. importItems |>> ImportStatement
 
@@ -1122,7 +1126,11 @@ do
                 | multiple -> TupleExpr multiple)))
             (fun exportOpt (name, typeOpt) expr -> DefStatement(exportOpt.IsSome, name, typeOpt, expr))
     
-    let exprStatement = wsNoNl() >>. exprWithoutCrossingNewlines |>> ExprStatement  // Only consume spaces/tabs, not newlines
+    let exprStatement =
+        wsNoNl()
+        >>. exprWithoutCrossingNewlines
+        .>> statementTail
+        |>> ExprStatement  // Consume trailing inline comments without consuming newlines
     
     statementRef := (attempt importStatement <|> attempt typeDefStatement <|> attempt defStatement <|> attempt useStatement <|> exprStatement) <?> "statement"
 

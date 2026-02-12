@@ -11,5 +11,18 @@ def bind1: [Monad(m)] (m(a), a -> m(b)) -> m(b) = { m, f ->
 }
 
 def main = {
-  use 
+  def asyncMonad: Monad(Async) = (
+    pure = { x -> #done(x) },
+    bind = { m, f ->
+      match m
+      | #done(v) -> f(v)
+      | #pending(thunk) -> #pending({ bind(thunk(), f) })
+    }
+  )
+  use asyncMonad
+
+  def x: Async(int) = #done(5)
+  def y = bind1(x, { v -> #done(v + 1) })
+  -- Should print #done(6)
+  dbg(y)
 }

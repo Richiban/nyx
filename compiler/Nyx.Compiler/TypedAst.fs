@@ -44,4 +44,6 @@ type TypedTopLevelItem =
     | TypedDef of TypedDefinition
     | TypedExprItem of TypedExpr
 
-type TypedModule = { Module: Module; Types: Map<string, Ty>; TypeDefs: Map<string, Ty * bool>; Items: TypedTopLevelItem list }
+type TypeDefInfo = { Parameters: TyVar list; Underlying: Ty; IsPrivate: bool }
+
+type TypedModule = { Module: Module; Types: Map<string, Ty>; TypeDefs: Map<string, TypeDefInfo>; Items: TypedTopLevelItem list }

@@ -11,7 +11,7 @@ type InferState =
         { NextId: int;
             Constraints: ConstraintSet;
             TypeVars: Map<string, TyVar>;
-            TypeDefs: Map<string, Ty * bool>;
+            TypeDefs: Map<string, TypeDefInfo>;
             ContextDefs: Map<string, TypeExpr>;
             ContextRequirements: Map<string, TypeExpr list>;
             LocalNominals: Set<string>;
@@ -164,8 +164,8 @@ let rec private typeExprToTy (state: InferState) (typeExpr: TypeExpr) : Ty * Inf
         | Some prim -> prim, state
         | None ->
             match state.TypeDefs |> Map.tryFind name with
-            | Some (underlying, isPrivate) when name.StartsWith("@") -> TyNominal(name, underlying, isPrivate), state
-            | Some (underlying, _) -> underlying, state
+            | Some info when name.StartsWith("@") -> TyNominal(name, info.Underlying, info.IsPrivate), state
+            | Some info -> info.Underlying, state
             | None -> TyPrimitive name, state
     | TypeVar name ->
         match state.TypeVars |> Map.tryFind name with
@@ -217,7 +217,17 @@ let rec private typeExprToTy (state: InferState) (typeExpr: TypeExpr) : Ty * Inf
                 | multiple -> tupleRecordType multiple
             TyApply("list", [elementTy]), current
         else
-            TyApply(name, argTys), current
+            match current.TypeDefs |> Map.tryFind name with
+            | Some info when not (name.StartsWith("@")) ->
+                if info.Parameters.Length = argTys.Length then
+                    let substitutions =
+                        (info.Parameters, argTys)
+                        ||> List.zip
+                        |> List.fold (fun acc (paramVar, argTy) -> acc |> Map.add paramVar.Id argTy) Map.empty
+                    Unifier.apply substitutions info.Underlying, current
+                else
+                    TyApply(name, argTys), current
+            | _ -> TyApply(name, argTys), current
     | TypeFunc(arg, ret) ->
         let argTy, next = typeExprToTy state arg
         let retTy, nextState = typeExprToTy next ret
@@ -341,9 +351,24 @@ let private ensureContextAvailable (env: TypeEnv) (state: InferState) (name: Ide
         | Some (line, col) -> Error [ Diagnostics.errorAt ($"Missing context members for '{name}': {missingText}") (line, col) ]
         | None -> Error [ Diagnostics.error ($"Missing context members for '{name}': {missingText}") ]
 
-let private registerTypeDef (state: InferState) (name: Identifier) (modifiers: TypeDefModifier list) (body: TypeExpr) =
-    let underlyingTy, next = typeExprToTy state body
+let private registerTypeDef (state: InferState) (name: Identifier) (modifiers: TypeDefModifier list) (parameters: (Identifier * TypeExpr option) list) (body: TypeExpr) =
+    let originalTypeVars = state.TypeVars
+    let mutable current = state
+    let paramEntries =
+        parameters
+        |> List.map (fun (paramName, _) ->
+            let tyVar, next = freshVar current
+            current <- next
+            match tyVar with
+            | TyVar var -> paramName, var
+            | _ -> failwith "Expected TyVar")
+    let updatedTypeVars =
+        paramEntries
+        |> List.fold (fun acc (paramName, var) -> acc |> Map.add paramName var) current.TypeVars
+    let stateWithParams = { current with TypeVars = updatedTypeVars }
+    let underlyingTy, next = typeExprToTy stateWithParams body
     let isPrivate = isPrivateType modifiers
+    let paramVars = paramEntries |> List.map snd
     let nextNominals =
         if name.StartsWith("@") then next.LocalNominals |> Set.add name else next.LocalNominals
     let nextPrivate =
@@ -351,7 +376,8 @@ let private registerTypeDef (state: InferState) (name: Identifier) (modifiers: T
     let nextContexts =
         if isContextDef modifiers then next.ContextDefs |> Map.add name body else next.ContextDefs
     { next with
-        TypeDefs = next.TypeDefs |> Map.add name (underlyingTy, isPrivate)
+        TypeVars = originalTypeVars
+        TypeDefs = next.TypeDefs |> Map.add name { Parameters = paramVars; Underlying = underlyingTy; IsPrivate = isPrivate }
         ContextDefs = nextContexts
         LocalNominals = nextNominals
         LocalPrivateNominals = nextPrivate }
@@ -518,7 +544,7 @@ let rec private inferExpr (env: TypeEnv) (state: InferState) (expr: Expression) 
                         Error errors
             | None ->
                 match state.TypeDefs |> Map.tryFind name with
-                | Some (underlyingTy, isPrivate) ->
+                | Some info ->
                     let mutable current = state
                     let argResults =
                         args
@@ -534,9 +560,9 @@ let rec private inferExpr (env: TypeEnv) (state: InferState) (expr: Expression) 
                             argResults
                             |> List.choose (function Ok typedExpr -> Some typedExpr.Type | _ -> None)
                         let inputTy = inputTypeFromArgs argTys
-                        let constrained = addAssignableConstraint inputTy underlyingTy current
+                        let constrained = addAssignableConstraint inputTy info.Underlying current
                         let resultTy =
-                            if name.StartsWith("@") then TyNominal(name, underlyingTy, isPrivate) else underlyingTy
+                            if name.StartsWith("@") then TyNominal(name, info.Underlying, info.IsPrivate) else info.Underlying
                         Ok (mkTypedExpr expr resultTy None None None, constrained)
                     else
                         Error errors
@@ -779,11 +805,11 @@ let rec private inferExpr (env: TypeEnv) (state: InferState) (expr: Expression) 
                 | TagPattern(tagName, payloadOpt) ->
                     match payloadOpt with
                     | None ->
-                        let constrained = addConstraint scrutineeTy (TyTag(tagName, None)) state'
+                        let constrained = addAssignableConstraint (TyTag(tagName, None)) scrutineeTy state'
                         Ok (env', constrained, mkTypedPattern pattern scrutineeTy)
                     | Some payload ->
                         let payloadTy, nextState = freshVar state'
-                        let constrained = addConstraint scrutineeTy (TyTag(tagName, Some payloadTy)) nextState
+                        let constrained = addAssignableConstraint (TyTag(tagName, Some payloadTy)) scrutineeTy nextState
                         match inferPattern env' constrained payloadTy payload with
                         | Ok (nextEnv, nextState, _) ->
                             Ok (nextEnv, nextState, mkTypedPattern pattern scrutineeTy)
@@ -935,6 +961,34 @@ let rec private inferExpr (env: TypeEnv) (state: InferState) (expr: Expression) 
                 arms
                 |> List.choose (fun (patterns, _) ->
                     if index < patterns.Length then Some patterns.[index] else None)
+            let mutable scrutineeOverrides: Map<int, Ty> = Map.empty
+            for (index, scrutineeTy) in scrutineeTypes |> List.indexed do
+                let patternsAtPos = patternsForIndex index
+                let nonCatchAll = patternsAtPos |> List.filter (fun pat -> not (isCatchAllPattern pat))
+                let allTagPatterns =
+                    not nonCatchAll.IsEmpty
+                    && (nonCatchAll |> List.forall (function TagPattern _ -> true | _ -> false))
+                if allTagPatterns then
+                    let tagInfos =
+                        nonCatchAll
+                        |> List.choose (function TagPattern(tagName, payloadOpt) -> Some (tagName, payloadOpt) | _ -> None)
+                        |> List.groupBy fst
+                        |> List.sortBy fst
+                    if tagInfos.Length > 1 then
+                        let mutable stateForUnion = current
+                        let unionItems =
+                            tagInfos
+                            |> List.map (fun (tagName, entries) ->
+                                let hasPayload = entries |> List.exists (fun (_, payloadOpt) -> payloadOpt.IsSome)
+                                if hasPayload then
+                                    let payloadTy, nextState = freshVar stateForUnion
+                                    stateForUnion <- nextState
+                                    TyTag(tagName, Some payloadTy)
+                                else
+                                    TyTag(tagName, None))
+                        let unionTy = TyUnion unionItems
+                        scrutineeOverrides <- scrutineeOverrides |> Map.add index unionTy
+                        current <- addConstraint scrutineeTy unionTy stateForUnion
             let exhaustivenessDiagnostics () =
                 scrutineeTypes
                 |> List.mapi (fun index scrutineeTy ->
@@ -973,7 +1027,10 @@ let rec private inferExpr (env: TypeEnv) (state: InferState) (expr: Expression) 
                 if errors.IsEmpty then
                     let mutable env' = env
                     let mutable state' = current
-                    let patternPairs = List.zip patterns scrutineeTypes
+                    let effectiveScrutineeTypes =
+                        scrutineeTypes
+                        |> List.mapi (fun idx ty -> scrutineeOverrides |> Map.tryFind idx |> Option.defaultValue ty)
+                    let patternPairs = List.zip patterns effectiveScrutineeTypes
                     let mutable typedPatterns: TypedPattern list = []
                     for (pattern, scrutineeTy) in patternPairs do
                         match inferPattern env' state' scrutineeTy pattern with
@@ -1191,7 +1248,7 @@ and inferBlock (env: TypeEnv) (state: InferState) (statements: Statement list) :
             | ImportStatement items ->
                 typedStatements <- typedStatements @ [ TypedImportStatement items ]
             | TypeDefStatement(name, modifiers, parameters, body) ->
-                current <- registerTypeDef current name modifiers body
+                current <- registerTypeDef current name modifiers parameters body
                 typedStatements <- typedStatements @ [ TypedTypeDefStatement(name, modifiers, parameters, body) ]
             | UseStatement binding ->
                 if errors.IsEmpty then
@@ -1292,7 +1349,7 @@ let inferModuleWithEnv (initialEnv: TypeEnv) (initialState: InferState) (module'
         | Import itemsList -> items <- items @ [ TypedImport itemsList ]
         | ModuleDecl name -> items <- items @ [ TypedModuleDecl name ]
         | Def (TypeDef(name, modifiers, parameters, body)) ->
-            state <- registerTypeDef state name modifiers body
+            state <- registerTypeDef state name modifiers parameters body
             items <- items @ [ TypedDef (TypedTypeDef(name, modifiers, parameters, body)) ]
         | Def (ValueDef _) -> ()
 

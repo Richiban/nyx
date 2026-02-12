@@ -266,6 +266,15 @@ let ``Typecheck supports polymorphic let`` () =
     Assert.Equal(TyPrimitive "string", typed.Types.["b"])
 
 [<Fact>]
+let ``Typecheck expands generic type aliases in annotations`` () =
+    let source =
+        "type Async(a) = #done(a) | #pending(a)\n" +
+        "def fromResult: a -> Async(a) = { r -> #done(r) }\n" +
+        "def value = fromResult(5)"
+    let result = Compiler.compile source
+    Assert.True(result.Diagnostics.IsEmpty, $"Unexpected diagnostics: %A{result.Diagnostics}")
+
+[<Fact>]
 let ``Typecheck uses tuple input for multi-arg functions`` () =
     let source =
         "def f = { x, y -> x }\n" +

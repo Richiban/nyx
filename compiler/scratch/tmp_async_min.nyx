@@ -1,0 +1,3 @@
+type Async(a) = #done(a) | #pending(a)
+def fromResult: a -> Async(a) = { r -> #done(r) }
+def x = fromResult(5)

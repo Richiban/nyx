@@ -279,7 +279,13 @@ let rec private transpileExpressionWithEnv (env: TranspileEnv) (expr: Expression
     
     | Lambda(params', body) ->
         let paramStr = params' |> List.map (fst >> escapeIdentifier) |> String.concat ", "
-        sprintf "(%s) => %s" paramStr (transpileExpressionWithEnv env body)
+        let bodyExpr = transpileExpressionWithEnv env body
+        let emittedBody =
+            match body with
+            | RecordExpr _
+            | TagExpr _ -> sprintf "(%s)" bodyExpr
+            | _ -> bodyExpr
+        sprintf "(%s) => %s" paramStr emittedBody
     
     | Pipe(expr, funcName, _, args) ->
         // Transform pipe into function call with expr as first argument

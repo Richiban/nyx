@@ -152,6 +152,7 @@ module Unifier =
         match ty with
         | TyVar v ->
             match subst |> Map.tryFind v.Id with
+            | Some replacement when replacement = ty -> ty
             | Some replacement -> apply subst replacement
             | None -> ty
         | TyNominal(name, underlying, isPrivate) -> TyNominal(name, apply subst underlying, isPrivate)

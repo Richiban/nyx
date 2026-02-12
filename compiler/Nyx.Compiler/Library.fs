@@ -106,7 +106,7 @@ module Compiler =
             | _ -> None)
         |> Set.ofList
 
-    let private mergeTypeDefs (target: Map<string, Ty * bool>) (incoming: Map<string, Ty * bool>) =
+    let private mergeTypeDefs (target: Map<string, TypeDefInfo>) (incoming: Map<string, TypeDefInfo>) =
         incoming
         |> Map.fold (fun acc key value ->
             if Map.containsKey key acc then acc else acc |> Map.add key value) target
@@ -311,7 +311,9 @@ module Compiler =
                                 |> Map.map (fun _ ty -> Unifier.apply subst ty)
                             let resolvedTypeDefs =
                                 state.TypeDefs
-                                |> Map.map (fun _ (ty, isPrivate) -> Unifier.apply subst ty, isPrivate)
+                                |> Map.map (fun _ info ->
+                                    let resolvedUnderlying = Unifier.apply subst info.Underlying
+                                    { info with Underlying = resolvedUnderlying })
                             let rec applyTypedExpr (typedExpr: TypedExpr) =
                                 let mappedBody = typedExpr.Body |> Option.map applyTypedExpr
                                 let mappedStatements =
@@ -404,7 +406,9 @@ module Compiler =
 
                 let resolvedTypeDefs =
                     state.TypeDefs
-                    |> Map.map (fun _ (ty, isPrivate) -> Unifier.apply subst ty, isPrivate)
+                    |> Map.map (fun _ info ->
+                        let resolvedUnderlying = Unifier.apply subst info.Underlying
+                        { info with Underlying = resolvedUnderlying })
                 let resolvedItems =
                     items
                     |> List.map (fun item ->

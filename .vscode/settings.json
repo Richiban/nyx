@@ -1,0 +1,8 @@
+{
+    "chat.tools.terminal.autoApprove": {
+        "/^dotnet run --project \\.\\.\\\\Nyx\\.Transpiler\\.JS\\\\ -- seven\\.nyx; node seven\\.nyx\\.js$/": {
+            "approve": true,
+            "matchCommandLine": true
+        }
+    }
+}

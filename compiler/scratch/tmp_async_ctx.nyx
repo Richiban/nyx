@@ -1,0 +1,13 @@
+type Async(a) = #done(a) | #pending(a)
+context Monad(m) = (
+  pure: a -> m(a)
+  bind: (m(a), a -> m(b)) -> m(b)
+)
+def await = {
+  | #pending(v), cont -> #pending(cont(v))
+  | #done(v), cont -> #pending(cont(v))
+}
+def fromResult: a -> Async(a) = { r -> #done(r) }
+def a = fromResult(5)
+def c = await(a, {b -> b + 1})
+dbg(c)

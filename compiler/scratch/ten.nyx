@@ -1,0 +1,15 @@
+
+context Monad(m) = (
+  pure: a -> m(a)
+  bind: (m(a), a -> m(b)) -> m(b)
+)
+
+type Async(a) = #done(a) | #pending(() -> a)
+
+def bind1: [Monad(m)] (m(a), a -> m(b)) -> m(b) = { m, f ->
+  bind(m, f)
+}
+
+def main = {
+  use 
+}

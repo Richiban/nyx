@@ -3,6 +3,7 @@
         "/^dotnet run --project \\.\\.\\\\Nyx\\.Transpiler\\.JS\\\\ -- seven\\.nyx; node seven\\.nyx\\.js$/": {
             "approve": true,
             "matchCommandLine": true
-        }
+        },
+        "nyx": true
     }
 }

@@ -1,12 +1,21 @@
 
-def ctx = (
+context Print = (
+  println: string -> ()
+)
+
+def printContext = (
   println = { s -> dbg(s) }
 )
 
-def main = {
-  use ctx
+def f: [Print] string -> () = { s ->
+    println("Printy print:")
+    println(s)
+  }
 
-  println("Hello world")
+def main = {
+  use printContext
+
+  f("Hello world")
 }
 
 main()

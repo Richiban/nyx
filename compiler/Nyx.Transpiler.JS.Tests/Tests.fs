@@ -318,7 +318,8 @@ let ``Transpile context functions as curried`` () =
         "}"
     let result = transpileSource source
     Assert.Contains("const g = (__ctx) =>", result)
-    Assert.Contains("const { add, println } = __ctx;", result)
+    Assert.DoesNotContain("const {", result)
+    Assert.Contains("return __ctx.println(s);", result)
     Assert.Contains("g(__ctx)(\"Hello\")", result)
 
 [<Fact>]
@@ -333,6 +334,7 @@ let ``Transpile nested use merges context`` () =
     Assert.Contains("let __ctx = {};", result)
     Assert.Contains("__ctx = { ...__ctx, ...{ println:", result)
     Assert.Contains("__ctx = { ...__ctx, ...{ add:", result)
+    Assert.Contains("return __ctx.println(\"hi\");", result)
 
 // File Tests
 [<Fact>]

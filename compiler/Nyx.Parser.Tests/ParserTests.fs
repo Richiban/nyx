@@ -128,6 +128,52 @@ let ``Parse multiple definitions`` () =
             | _ -> failwith "Expected all Def"
     | Result.Error err -> failwith $"Parse should succeed, got: {err}"
 
+[<Fact>]
+let ``Parse definition with newline before equals`` () =
+    let input = "def x\n  = 1"
+    let result = parseModule input
+
+    result |> isOk |> should equal true
+    match result with
+    | Result.Ok module' ->
+        module' |> should haveLength 1
+        match module'.[0] with
+        | Def (ValueDef (_, name, _, LiteralExpr (IntLit value))) ->
+            name |> should equal "x"
+            value |> should equal 1
+        | _ -> failwith "Expected Def with IntLit"
+    | Result.Error err -> failwith $"Parse should succeed, got: {err}"
+
+[<Fact>]
+let ``Parse typed definition with newline before equals`` () =
+    let input = "def f: string -> ()\n  = { s -> dbg(s) }"
+    let result = parseModule input
+
+    result |> isOk |> should equal true
+    match result with
+    | Result.Ok module' ->
+        module' |> should haveLength 1
+        match module'.[0] with
+        | Def (ValueDef (_, name, Some _, Lambda _)) ->
+            name |> should equal "f"
+        | _ -> failwith "Expected typed Def with Lambda"
+    | Result.Error err -> failwith $"Parse should succeed, got: {err}"
+
+[<Fact>]
+let ``Parse context-typed definition with newline before equals`` () =
+    let input = "def f: [Print] string -> ()\n  = { s -> dbg(s) }"
+    let result = parseModule input
+
+    result |> isOk |> should equal true
+    match result with
+    | Result.Ok module' ->
+        module' |> should haveLength 1
+        match module'.[0] with
+        | Def (ValueDef (_, name, Some _, Lambda _)) ->
+            name |> should equal "f"
+        | _ -> failwith "Expected context-typed Def with Lambda"
+    | Result.Error err -> failwith $"Parse should succeed, got: {err}"
+
 // Identifier Tests
 [<Fact>]
 let ``Parse identifier expression`` () =

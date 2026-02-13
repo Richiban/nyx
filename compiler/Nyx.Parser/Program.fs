@@ -154,6 +154,23 @@ let greaterIndentation (refCol: int64) =
         if pos.Column > refCol then preturn ()
         else pzero
 
+let newlineIndentedContinuation (refCol: int64) : Parser<unit, unit> =
+    attempt (
+        skipMany (skipAnyOf " \t") >>. newline >>.
+        many (pchar ' ' <|> pchar '\t') >>.
+        getPosition >>= fun pos ->
+            if pos.Column > refCol then preturn () else pzero
+    )
+
+let defEqualsContinuation (refCol: int64) : Parser<unit, unit> =
+    attempt (wsNoNl() >>. followedBy (pstring "=")) <|> newlineIndentedContinuation refCol
+
+let parseDefWith (identParser: Parser<Identifier * TypeExpr option, unit>) (exprParser: Parser<Expression, unit>) =
+    getPosition .>>. (pstring "def" >>. ws >>. identParser .>> wsNoNl())
+    >>= fun (startPos, (name, typeOpt)) ->
+        defEqualsContinuation startPos.Column >>. pstring "=" >>. wsNoNl() >>. exprParser
+        |>> fun expr -> (name, typeOpt, expr)
+
 // Parser for identifiers
 let identifierNoWs: Parser<Identifier, unit> =
     let isIdentStart c = isLetter c || c = '_'
@@ -718,14 +735,13 @@ let typeDefCore: Parser<Definition, unit> =
     <?> "type definition"
 
 let valueDefCore: Parser<Definition, unit> =
-    pipe3
+    pipe2
         (opt (attempt (pstring "export" >>. ws)))
-        (pstring "def" >>. ws >>. typedIdentifier .>> wsNoNl() .>> pstring "=")
-        (wsInline >>. (sepBy1 expression (pstring "," .>> ws) |>> fun exprs ->
+        (parseDefWith typedIdentifier (wsInline >>. (sepBy1 expression (pstring "," .>> ws) |>> fun exprs ->
             match exprs with
             | [single] -> single
-            | multiple -> TupleExpr multiple))
-        (fun exportOpt (name, typeOpt) expr -> ValueDef(exportOpt.IsSome, name, typeOpt, expr))
+            | multiple -> TupleExpr multiple)))
+        (fun exportOpt (name, typeOpt, expr) -> ValueDef(exportOpt.IsSome, name, typeOpt, expr))
     <?> "value definition"
 
 // Match expression parser
@@ -1117,14 +1133,16 @@ do
             | _ -> failwith "Expected type definition"
 
     let defStatement = 
-        pipe3
-            (opt (attempt (pstring "export" >>. ws)))
-            (pstring "def" >>. ws >>. typedQualifiedIdentifier .>> wsNoNl() .>> pstring "=" .>> wsNoNl())
-            (attempt (blockExpr()) <|> (wsNoNl() >>. (sepBy1 expression (pstring "," .>> ws) |>> fun exprs ->
+        let exprParser =
+            attempt (blockExpr()) <|> (sepBy1 expression (pstring "," .>> ws) |>> fun exprs ->
                 match exprs with
                 | [single] -> single
-                | multiple -> TupleExpr multiple)))
-            (fun exportOpt (name, typeOpt) expr -> DefStatement(exportOpt.IsSome, name, typeOpt, expr))
+                | multiple -> TupleExpr multiple)
+
+        pipe2
+            (opt (attempt (pstring "export" >>. ws)))
+            (parseDefWith typedQualifiedIdentifier exprParser)
+            (fun exportOpt (name, typeOpt, expr) -> DefStatement(exportOpt.IsSome, name, typeOpt, expr))
     
     let exprStatement =
         wsNoNl()
@@ -1141,14 +1159,16 @@ let moduleDecl: Parser<TopLevelItem, unit> =
 
 // Parser for value definition (top-level)
 let valueDef: Parser<TopLevelItem, unit> =
-    pipe3
-        (opt (attempt (pstring "export" >>. ws)))
-        (pstring "def" >>. ws >>. typedQualifiedIdentifier .>> wsNoNl() .>> pstring "=")  // Don't consume newlines after =
-        (attempt (blockExpr()) <|> (wsInline >>. (sepBy1 expression (pstring "," .>> ws) |>> fun exprs ->
+    let exprParser =
+        attempt (blockExpr()) <|> (wsInline >>. (sepBy1 expression (pstring "," .>> ws) |>> fun exprs ->
             match exprs with
             | [single] -> single
-            | multiple -> TupleExpr multiple)))
-        (fun exportOpt (name, typeOpt) expr -> Def(ValueDef(exportOpt.IsSome, name, typeOpt, expr)))
+            | multiple -> TupleExpr multiple))
+
+    pipe2
+        (opt (attempt (pstring "export" >>. ws)))
+        (parseDefWith typedQualifiedIdentifier exprParser)
+        (fun exportOpt (name, typeOpt, expr) -> Def(ValueDef(exportOpt.IsSome, name, typeOpt, expr)))
     <?> "value definition"
 
 // Parser for type definition (top-level)

@@ -1,8 +1,8 @@
-import { createHighlighter } from "shiki";
+import { createHighlighter, type Highlighter } from "shiki";
 import nyxGrammar from "../../public/grammars/nyx.tmLanguage.json";
 
 // We'll cache the highlighter instance
-let highlighterPromise: Promise<any> | null = null;
+let highlighterPromise: Promise<Highlighter> | null = null;
 
 async function getHighlighter() {
   if (!highlighterPromise) {
@@ -13,6 +13,7 @@ async function getHighlighter() {
       });
       
       // Load the Nyx language grammar
+      // Note: Using any here because the TextMate grammar format isn't fully typed in Shiki
       await highlighter.loadLanguage({
         name: "nyx",
         scopeName: "source.nyx",

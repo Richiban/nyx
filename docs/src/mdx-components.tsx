@@ -1,5 +1,6 @@
 import type { MDXComponents } from "mdx/types";
 import { CodeBlock } from "./components/CodeBlock";
+import type { ComponentPropsWithoutRef } from "react";
 
 export function useMDXComponents(components: MDXComponents): MDXComponents {
   return {
@@ -26,7 +27,7 @@ export function useMDXComponents(components: MDXComponents): MDXComponents {
     ),
     li: ({ children }) => <li className="text-base">{children}</li>,
     pre: ({ children }) => <>{children}</>,
-    code: CodeBlock as any,
+    code: (props: ComponentPropsWithoutRef<"code">) => <CodeBlock {...props} />,
     ...components,
   };
 }

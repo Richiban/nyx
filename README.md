@@ -160,7 +160,7 @@ def count = 42
 def isActive = true
 
 -- Function definition with type annotation
-def add: int, int -> int = { x, y ->
+def add: (int, int) -> int = { x, y ->
   x + y
 }
 ```
@@ -173,11 +173,11 @@ Functions are first-class values in Nyx:
 -- Named function
 def double: int -> int = { x -> x * 2 }
 
--- Multi-parameter function
-def multiply: int, int -> int = { x, y -> x * y }
+-- Multi-parameter function  
+def multiply: (int, int) -> int = { x, y -> x * y }
 
 -- Higher-order function
-def apply: (a -> b), a -> b = { f, x -> f(x) }
+def apply: ((a -> b), a) -> b = { f, x -> f(x) }
 
 -- Shorthand lambda for binary operators
 def doubles = [1, 2, 3] \map { * 2 }
@@ -321,9 +321,9 @@ type Result(a) =
 
 -- Tag union with multiple variants
 type Shape =
-  | #circle(radius: float)
-  | #rectangle(width: float, height: float)
-  | #triangle(base: float, height: float)
+  | #circle(float)
+  | #rectangle(float, float)
+  | #triangle(float, float)
 
 -- Using tag unions
 def area: Shape -> float = { shape ->
@@ -390,7 +390,7 @@ context type Raise = (
   ctx raise: string -> a
 )
 
-def safeDivide: <Raise> int, int -> int = { x, y ->
+def safeDivide: <Raise> (int, int) -> int = { x, y ->
   if y == 0 -> raise("Division by zero")
   else -> x / y
 }
@@ -436,7 +436,7 @@ type Monoid(a, ~combine, ~neutral) = (
   ~combine: (a, a) -> a
 )
 
-def fold: [Monoid(a, `+`, `0`)] list(a) -> a = { xs ->
+def fold: [Monoid(a, `+`, `0`)] (list(a)) -> a = { xs ->
   xs \fold(`0`, `+`)
 }
 ```
@@ -553,7 +553,7 @@ Given `example.nyx`:
 ```nyx
 module Example
 
-def add: int, int -> int = { x, y -> x + y }
+def add: (int, int) -> int = { x, y -> x + y }
 def result = add(5, 10)
 ```
 
@@ -575,7 +575,7 @@ The `examples/` directory contains numerous Nyx programs demonstrating various f
 ### FizzBuzzBaz - Configurable FizzBuzz
 
 ```nyx
-def numberGame: Map(int, string) -> (int -> string) = { rules ->
+def numberGame: (Map(int, string)) -> (int -> string) = { rules ->
   { i ->
     rules
       \flatMap(playNumber(i))
@@ -618,7 +618,7 @@ def uncaesar: string -> string = { s ->
 ```nyx
 type Casing = #camel | #pascal | #kebab | #snake | #title
 
-def rejoin: list(string), Casing -> string = { words, casing ->
+def rejoin: (list(string), Casing) -> string = { words, casing ->
   match casing
     | #kebab -> words \map { .toLowerCase() } \String.join('-')
     | #snake -> words \map { .toLowerCase() } \String.join('_')

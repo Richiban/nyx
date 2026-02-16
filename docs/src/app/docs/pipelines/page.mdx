@@ -1,10 +1,118 @@
 # Pipelines
 
-Pipelines keep transformations readable and linear.
+The pipeline operator `\` is one of Nyx's most distinctive features. It lets you chain transformations in a readable, left-to-right manner that emphasizes the flow of data through your program.
+
+## Basic Pipelines
+
+The simplest use of the pipeline operator passes a value to a function:
 
 ```nyx
 def normalize = { x -> x }
 value \normalize
 ```
 
-Use pipelines to emphasize order of operations without extra nesting.
+This is equivalent to calling `normalize(value)`, but reads more naturally when chaining operations.
+
+## Chaining Transformations
+
+Pipelines shine when you need to apply multiple transformations:
+
+```nyx
+data
+  \parse
+  \validate
+  \transform
+  \save
+```
+
+Without pipelines, this would be written as nested function calls:
+```nyx
+save(transform(validate(parse(data))))
+```
+
+The pipeline version reads like a step-by-step recipe, making the data flow obvious.
+
+## Pipelines with Arguments
+
+You can pass additional arguments to functions in a pipeline:
+
+```nyx
+-- Additional arguments are passed after the piped value
+data \process(config, options)
+
+-- Equivalent to: process(data, config, options)
+```
+
+## Real-World Examples
+
+### String Transformation
+
+```nyx
+"hello world"
+  \split(" ")
+  \map { .toUpperCase() }
+  \join("-")
+  \dbg  -- prints "HELLO-WORLD"
+```
+
+### Data Processing
+
+```nyx
+def processUser = { user ->
+  user
+    \validateEmail
+    \normalizeData
+    \saveToDatabase
+    \sendWelcomeEmail
+}
+```
+
+### Number Game (FizzBuzz)
+
+```nyx
+def numberGame: (Map(int, string)) -> (int -> string) = { rules ->
+  { i ->
+    rules
+      \flatMap(playNumber(i))
+      \String.join
+      \match
+        | "" -> i.toString()
+        | s -> s
+  }
+}
+```
+
+## Pipelines with Shorthand Lambdas
+
+Combine pipelines with shorthand lambdas for concise code:
+
+```nyx
+numbers
+  \map { * 2 }
+  \filter { > 10 }
+  \sum
+
+users
+  \filter { .age > 18 }
+  \map { .name }
+  \sort
+```
+
+## Debugging with Pipelines
+
+The `\dbg` operator is perfect for pipeline debugging:
+
+```nyx
+data
+  \parse
+  \dbg  -- see intermediate result
+  \validate
+  \dbg  -- see validated result
+  \transform
+```
+
+## Pipeline Philosophy
+
+Pipelines emphasize the **order of operations** without extra nesting. They make code read like a narrative: "Take this data, do this, then do that, then do this other thing."
+
+This style encourages you to think about your program as a series of transformations, which is a core concept in functional programming.

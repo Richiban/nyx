@@ -1,0 +1,301 @@
+# Workflows
+
+Workflows in Nyx represent sequences of operations that can be composed, chained, and managed through contexts. They're a key part of Nyx's approach to building maintainable, testable applications.
+
+## What is a Workflow?
+
+A workflow is a series of transformations or operations that process data from input to output. Nyx's pipeline operator and contexts make workflows explicit and composable.
+
+## Basic Workflows
+
+Use the pipeline operator to create clear data flows:
+
+```nyx
+def processUser: User -> Result(User, Error) = { user ->
+  user
+    \validateEmail
+    \normalizeData
+    \enrichWithDefaults
+    \saveToDatabase
+}
+```
+
+## Workflow with Error Handling
+
+Handle errors explicitly at each step:
+
+```nyx
+type ProcessingError =
+  | #validationFailed(string)
+  | #databaseError(string)
+  | #networkError(string)
+
+def processOrder: Order -> Result(Order, ProcessingError) = { order ->
+  order
+    \validateOrder
+    \flatMap(calculateTotal)
+    \flatMap(chargePayment)
+    \flatMap(sendConfirmation)
+}
+```
+
+## Effectful Workflows
+
+Use contexts to manage effects in workflows:
+
+```nyx
+context Http = (
+  get: string -> Response
+  post: (string, Data) -> Response
+)
+
+context Database = (
+  save: Data -> Result(Id, DbError)
+  query: Query -> Result(list(Data), DbError)
+)
+
+def fetchAndStore: <Http, Database> string -> Result(Id, Error) = { url ->
+  def response = Http.get(url)
+  def data = response \parseJson
+  Database.save(data)
+}
+```
+
+## State Workflows
+
+Manage state through workflows with contexts:
+
+```nyx
+context State(s) = (
+  get: () -> s
+  set: s -> ()
+  modify: (s -> s) -> ()
+)
+
+def counterWorkflow: <State(int)> () -> int = {
+  modify({ + 1 })
+  def current = get()
+  modify({ * 2 })
+  current
+}
+```
+
+## Multi-Step Workflows
+
+Break complex workflows into steps:
+
+```nyx
+def orderProcessingWorkflow: Order -> Result(Receipt, Error) = { order ->
+  -- Step 1: Validation
+  def validated = order \validateOrder
+  
+  -- Step 2: Inventory check
+  def checked = validated \flatMap(checkInventory)
+  
+  -- Step 3: Payment
+  def paid = checked \flatMap(processPayment)
+  
+  -- Step 4: Fulfillment
+  def fulfilled = paid \flatMap(createShipment)
+  
+  -- Step 5: Receipt
+  fulfilled \map(generateReceipt)
+}
+```
+
+## Parallel Workflows
+
+Execute independent workflows in parallel:
+
+```nyx
+def enrichUserData: User -> EnrichedUser = { user ->
+  def profile = fetchProfile(user.id)
+  def preferences = fetchPreferences(user.id)
+  def history = fetchHistory(user.id)
+  
+  -- Combine results
+  (
+    user = user
+    profile = profile
+    preferences = preferences
+    history = history
+  )
+}
+```
+
+## Workflow Composition
+
+Combine workflows into larger workflows:
+
+```nyx
+def dataIngestionWorkflow = { data ->
+  data
+    \extractWorkflow
+    \transformWorkflow  
+    \loadWorkflow
+}
+
+def extractWorkflow = { raw ->
+  raw \parse \validate
+}
+
+def transformWorkflow = { data ->
+  data \clean \normalize \enrich
+}
+
+def loadWorkflow = { data ->
+  data \batch \save \index
+}
+```
+
+## Retry Logic in Workflows
+
+Add resilience to workflows:
+
+```nyx
+def fetchWithRetry: <Http> (string, int) -> Result(Data, Error) = { url, maxRetries ->
+  def attempt = { retries ->
+    match Http.get(url)
+      | #ok(response) -> #ok(response)
+      | #error(err) if retries > 0 ->
+          attempt(retries - 1)
+      | #error(err) -> #error(err)
+  }
+  
+  attempt(maxRetries)
+}
+```
+
+## Transaction Workflows
+
+Ensure atomic operations:
+
+```nyx
+context Transaction = (
+  begin: () -> ()
+  commit: () -> Result((), Error)
+  rollback: () -> ()
+)
+
+def transferMoney: <Database, Transaction> (Account, Account, Amount) -> Result((), Error) = { from, to, amount ->
+  Transaction.begin()
+  
+  def debit = Database.updateAccount(from, { - amount })
+  def credit = Database.updateAccount(to, { + amount })
+  
+  match (debit, credit)
+    | (#ok(_), #ok(_)) -> Transaction.commit()
+    | _ -> 
+        Transaction.rollback()
+        #error(#transactionFailed)
+}
+```
+
+## Event-Driven Workflows
+
+Model workflows as event handlers:
+
+```nyx
+type OrderEvent =
+  | #orderPlaced(Order)
+  | #paymentReceived(PaymentId)
+  | #orderShipped(ShipmentId)
+  | #orderDelivered
+
+def handleOrderEvent: OrderEvent -> Result((), Error) = { event ->
+  match event
+    | #orderPlaced(order) ->
+        order \validateAndProcess
+    | #paymentReceived(paymentId) ->
+        paymentId \confirmPayment \sendReceipt
+    | #orderShipped(shipmentId) ->
+        shipmentId \notifyCustomer
+    | #orderDelivered ->
+        #ok(())
+}
+```
+
+## Workflow Testing
+
+Workflows with contexts are easy to test:
+
+```nyx
+-- Production implementation
+def runInProduction = {
+  use Http(
+    get = { url -> -- real HTTP call }
+  )
+  use Database(
+    save = { data -> -- real database save }
+  )
+  
+  fetchAndStore("https://api.example.com/data")
+}
+
+-- Test implementation
+def testWorkflow = {
+  use Http(
+    get = { url -> #ok(mockResponse) }
+  )
+  use Database(
+    save = { data -> #ok(testId) }
+  )
+  
+  fetchAndStore("test-url")
+}
+```
+
+## Workflow Patterns
+
+### Pipeline Pattern
+
+```nyx
+def process = { data ->
+  data
+    \step1
+    \step2
+    \step3
+}
+```
+
+### Map-Reduce Pattern
+
+```nyx
+def mapReduce = { data ->
+  data
+    \map(transform)
+    \reduce(combine)
+}
+```
+
+### Filter-Map Pattern
+
+```nyx
+def filterMap = { data ->
+  data
+    \filter(isValid)
+    \map(transform)
+}
+```
+
+### Validation Pattern
+
+```nyx
+def validate = { input ->
+  input
+    \validateFormat
+    \flatMap(validateBusiness)
+    \flatMap(validateSecurity)
+}
+```
+
+## Best Practices
+
+1. **Keep workflows linear**: Use pipelines to make data flow obvious
+2. **Handle errors explicitly**: Don't hide failure modes
+3. **Make effects explicit**: Use contexts for side effects
+4. **Compose small workflows**: Build complex workflows from simple ones
+5. **Test with mock contexts**: Easy to test when effects are explicit
+6. **Document workflow steps**: Make the purpose of each step clear
+
+Workflows in Nyx are all about making the flow of data and effects through your program explicit, composable, and testable.

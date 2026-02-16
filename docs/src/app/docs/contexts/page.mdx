@@ -1,8 +1,168 @@
 # Contexts
 
-Contexts describe ambient capabilities. They make dependencies explicit without
-threading parameters everywhere.
+Contexts in Nyx provide a way to handle effects explicitly without threading parameters through every function. They're Nyx's take on algebraic effect handlers, designed to be simple yet powerful.
+
+## Why Contexts?
+
+In functional programming, we want to separate pure code from code that has side effects. Contexts make this separation explicit while keeping your code clean and composable.
+
+## Defining a Context
+
+A context is defined similarly to a type, but represents ambient capabilities:
 
 ```nyx
-context Console = (println: string -> ())
+context Console = (
+  println: string -> ()
+  readLine: () -> string
+)
 ```
+
+This defines what capabilities are available in a Console context, without specifying how they're implemented.
+
+## Using Contexts in Functions
+
+Functions can declare that they need a context:
+
+```nyx
+def greet: <Console> string -> () = { name ->
+  println("Hello, {name}!")
+  println("How are you?")
+  def response = readLine()
+  println("You said: {response}")
+}
+```
+
+The `<Console>` annotation means this function requires a Console context to run.
+
+## Providing Context Implementations
+
+When calling a function that requires a context, you provide the implementation:
+
+```nyx
+def runGreeting = {
+  use Console(
+    println = { s -> -- actual console output }
+    readLine = { -- actual console input }
+  )
+  
+  greet("Alice")
+}
+```
+
+## State Effect Example
+
+Contexts can manage state:
+
+```nyx
+context State(a) = (
+  get: () -> a
+  set: a -> ()
+)
+
+def counter: <State(int)> () -> int = {
+  def current = get()
+  set(current + 1)
+  current
+}
+
+def runCounter = {
+  state(10) {  -- Initialize state with 10
+    counter()  -- Returns 10, sets state to 11
+    counter()  -- Returns 11, sets state to 12
+  }
+}
+```
+
+## Exception Handling via Contexts
+
+Contexts can model exception handling:
+
+```nyx
+context Raise = (
+  ctx raise: string -> a
+)
+
+def safeDivide: <Raise> (int, int) -> int = { x, y ->
+  if y == 0 -> raise("Division by zero")
+  else -> x / y
+}
+
+def handleDivision = {
+  use Raise(
+    ctx raise = { msg -> 
+      dbg("Error: {msg}")
+      resume 0  -- resume with default value
+    }
+  )
+  
+  safeDivide(10, 0)  -- Returns 0 instead of crashing
+}
+```
+
+## Composing Contexts
+
+Functions can require multiple contexts:
+
+```nyx
+def processUser: <Console, Database, Logger> User -> () = { user ->
+  log("Processing user {user.id}")
+  def data = queryDatabase(user.id)
+  println("Found user: {data.name}")
+}
+```
+
+## Context Benefits
+
+### Explicit Effects
+
+Contexts make it clear when a function has side effects:
+
+```nyx
+-- Pure function - no effects
+def double: int -> int = { x -> x * 2 }
+
+-- Effectful function - requires Console
+def interactive: <Console> () -> () = { 
+  println("Hello!") 
+}
+```
+
+### Testability
+
+By providing different implementations, you can easily test effectful code:
+
+```nyx
+-- Production implementation
+use Console(
+  println = { s -> -- real console output }
+)
+
+-- Test implementation
+use Console(
+  println = { s -> testBuffer.append(s) }
+)
+```
+
+### Separation of Concerns
+
+Contexts let you separate what effects you need from how they're implemented. Your business logic can focus on what it does, while the implementation details are handled elsewhere.
+
+## Advanced: Custom Handlers
+
+You can create sophisticated effect handlers with contexts:
+
+```nyx
+context Async(a) = (
+  await: Promise(a) -> a
+  async: (() -> a) -> Promise(a)
+)
+
+def fetchUser: <Async> UserId -> User = { id ->
+  def promise = Http.get("/users/{id}")
+  await(promise)
+}
+```
+
+## Contexts vs Monads
+
+If you're familiar with Haskell or other functional languages, contexts are similar to monad transformers but with a cleaner syntax and easier composition. They provide the power of algebraic effects without the complexity.

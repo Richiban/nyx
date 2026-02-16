@@ -1,24 +1,28 @@
 import { createHighlighter } from "shiki";
 import nyxGrammar from "../../public/grammars/nyx.tmLanguage.json";
 
-let highlighterInstance: Awaited<ReturnType<typeof createHighlighter>> | null = null;
+// We'll cache the highlighter instance
+let highlighterPromise: Promise<any> | null = null;
 
 async function getHighlighter() {
-  if (!highlighterInstance) {
-    highlighterInstance = await createHighlighter({
-      themes: ["github-dark"],
-      langs: [],
-    });
-
-    // Load the Nyx language
-    await highlighterInstance.loadLanguage({
-      id: "nyx",
-      scopeName: "source.nyx",
-      grammar: nyxGrammar as any,
-      aliases: ["nyx"],
-    } as any);
+  if (!highlighterPromise) {
+    highlighterPromise = (async () => {
+      const highlighter = await createHighlighter({
+        themes: ["github-dark"],
+        langs: ["javascript", "typescript", "bash"],
+      });
+      
+      // Load the Nyx language grammar
+      await highlighter.loadLanguage({
+        name: "nyx",
+        scopeName: "source.nyx",
+        ...nyxGrammar,
+      } as any);
+      
+      return highlighter;
+    })();
   }
-  return highlighterInstance;
+  return highlighterPromise;
 }
 
 export async function CodeBlock({
@@ -46,18 +50,28 @@ export async function CodeBlock({
   }
 
   // Block code with syntax highlighting
-  const highlighter = await getHighlighter();
   const code = String(children).replace(/\n$/, "");
   
-  const html = highlighter.codeToHtml(code, {
-    lang: lang === "nyx" ? "nyx" : lang,
-    theme: "github-dark",
-  });
+  try {
+    const highlighter = await getHighlighter();
+    const html = highlighter.codeToHtml(code, {
+      lang: lang,
+      theme: "github-dark",
+    });
 
-  return (
-    <div
-      className="syntax-highlighter mt-6 overflow-x-auto rounded-2xl [&_pre]:!bg-transparent [&_pre]:p-5 [&_pre]:text-sm"
-      dangerouslySetInnerHTML={{ __html: html }}
-    />
-  );
+    return (
+      <div
+        className="syntax-highlighter mt-6 overflow-x-auto rounded-2xl [&_pre]:!bg-transparent [&_pre]:p-5 [&_pre]:text-sm"
+        dangerouslySetInnerHTML={{ __html: html }}
+      />
+    );
+  } catch (error) {
+    console.error("Failed to highlight code:", error);
+    // Fallback to plain code block
+    return (
+      <pre className="mt-6 overflow-x-auto rounded-2xl bg-[#0f1116] p-5 text-sm text-slate-50">
+        <code>{code}</code>
+      </pre>
+    );
+  }
 }

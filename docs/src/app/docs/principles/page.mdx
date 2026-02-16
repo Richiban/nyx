@@ -1,0 +1,189 @@
+# Design Principles
+
+Nyx is built on a foundation of carefully considered design principles that guide its development and define its character.
+
+## Simple ≠ Easy
+
+We believe in the creed "Simple and easy are not the same". We prefer a language that gets things right to one that makes things easy. Such a language might take longer to learn in the short run, but its simplicity pays off in the long run.
+
+Nyx favors conceptual simplicity over ease of initial use. The language is consistent and orthogonal, which makes it easier to master over time.
+
+## Correctness Above All
+
+Nyx aims to ensure program correctness and considers it more important than raw performance.
+
+- **Static type checking**: Catch errors at compile time
+- **Exhaustive pattern matching**: Never miss a case
+- **No null values**: Use Option types instead
+- **Explicit error handling**: No hidden exceptions
+
+Languages such as C and C++ often rely on undefined behaviour to achieve stellar performance, whereas Nyx eschews undefined behaviour in favor of runtime checks for things that are hard to statically ensure.
+
+## Inform, Don't Block
+
+The Nyx compiler has both warning and error diagnostics. A warning in Nyx is considered a build failure with no option to ignore it. We believe that warnings are often ignored or turned off, leading to code that will cause problems later.
+
+However, Nyx is unique in that, while a warning will "fail" the build, when building in debug mode the compiler can still produce an executable. This allows the developer to run or test the program despite warnings, maintaining a tight feedback loop.
+
+This is important for allowing iterative development - even type errors or name errors are warnings rather than errors. Only when building in release mode will such issues block the build.
+
+**Compiler errors** (such as syntax errors) will always cause the compiler to abort compilation.
+
+## Everything is an Expression
+
+Nyx is a functional language and embraces the idea that everything should be an expression.
+
+```nyx
+-- If expression
+def result = if x > 0 -> "positive" else -> "non-positive"
+
+-- Match expression
+def value = match opt
+  | #some(x) -> x
+  | #none -> 0
+
+-- Block expression
+def total = {
+  def subtotal = calculateSubtotal()
+  def tax = calculateTax(subtotal)
+  subtotal + tax
+}
+```
+
+Nyx has no local variable declarations or if-then-else statements - instead it has let-bindings and if-then-else expressions. However, Nyx does not take this idea as far as Scheme languages. Nyx still has declarations, namespaces, and so forth that are not expressions.
+
+## Separate Pure and Impure Code
+
+Nyx supports functional, imperative, and logic programming. The context system cleanly and safely separates pure code from impure code.
+
+If a function is pure, the programmer can trust that the function behaves like a mathematical function: it returns the same value when given the same arguments and it has no side effects.
+
+```nyx
+-- Pure function
+def double: int -> int = { x -> x * 2 }
+
+-- Effectful function with explicit context
+def greet: <Console> string -> () = { name ->
+  println("Hello, {name}!")
+}
+```
+
+## Principle of Least Surprise
+
+We strive to adhere to the principle of least surprise. We favor sane defaults, and when there is no immediately obvious default, we force the programmer to be explicit about their intention.
+
+Wherever possible, the easiest thing should also be the safest thing:
+- Immutable data structures are the default
+- Mutable data structures require explicit annotation
+- Side effects require context annotations
+- Partial functions require explicit handling
+
+## Local Type Inference
+
+The Nyx type system is based on Hindley-Milner which supports full type inference. As a design choice, we require (with a warning) all exported members to be annotated with their argument and return types.
+
+Type signatures serve as useful documentation and aid program understanding. Requiring type signatures has three distinct advantages:
+
+1. **Type signatures improve program readability** and accurately assign blame for type errors
+2. **Type signatures enable parallel type checking**
+3. **"Pinning" type signatures** of exported members helps avoid the accidental changing of APIs
+
+```nyx
+-- Recommended: exported function with type signature
+def process: Data -> Result(Output, Error) = { data ->
+  -- implementation
+}
+
+-- OK: local helper without annotation (type inferred)
+private def helper = { x -> x * 2 }
+```
+
+## Syntax Mirrors Semantics
+
+Nyx aims to have consistent and predictable syntax. We try to have the syntax of types mirror that of expressions:
+
+- Function application: `f(a, b, c)` mirrors type application `F(A, B, C)`
+- Function expression: `{x -> x + 1}` mirrors function type `int -> int`
+- Tuple: `(true, 12345)` mirrors tuple type `(bool, int)`
+
+As much as possible, each symbol (or pair of symbols) should have a single meaning. For example:
+- Braces `{}` are always used for function bodies
+- `=` is always used for definitions
+- `\` is always used for pipelines
+
+## No Global State
+
+Nyx has no global variables or shared mutable state. All state must be explicitly threaded through the program or managed via contexts.
+
+This makes programs easier to reason about, test, and parallelize.
+
+## Closed World Assumption
+
+Nyx requires all code to be available at compile-time. This enables a range of compilation techniques:
+
+- **Monomorphization**: Avoid unnecessary boxing of primitives
+- **Dead code elimination**: Remove unused functions ("tree shaking")
+- **Inlining**: Across namespaces
+- **Whole-program analysis**: Comprehensive optimization
+
+## Nothing is Executed Before Main
+
+In Nyx, `main` is the entry point of a program. No user-defined code is ever executed before main.
+
+- No static initializers
+- No static fields
+- No class loaders
+
+Main is always first. This makes it easy to reason about startup behavior.
+
+## Human-Readable Errors
+
+In the spirit of languages like Elm and Rust, Nyx aims to have human-readable and understandable compiler messages.
+
+Messages should be:
+- **Crisp and concise**: Get straight to the point
+- **Clear**: Easy to understand at a glance
+- **Helpful**: Provide context and suggestions
+
+A Nyx compiler message consists of three components:
+
+1. **Title**: A one-sentence summary shown on hover
+2. **Context**: Multi-line text with relevant details
+3. **Explanation**: Why the problem occurs and how to fix it
+
+The language should be friendly or neutral, written in passive voice (not "you did this" or "I couldn't do that").
+
+## Declare Before Use
+
+In Nyx, things must be defined before they can be used. This makes it easy to assign blame - we assume declarations to be correct and check every use against its declaration.
+
+For example, algebraic data types declare a set of cases, and the compiler checks that every use refers to one of these cases, and that every case is covered.
+
+## One Language
+
+Nyx is one programming language. The Nyx compiler does not have feature flags or compiler plugins that change or extend the semantics of the language.
+
+We want to avoid fragmentation in the ecosystem where programs end up being written in different "dialects" of the language. There is one language, now and forever.
+
+Of course, we can still expect the language to evolve over time.
+
+## Small but Comprehensive Standard Library
+
+Nyx has a small standard library with a few common data types (Option, List, Set, Map), but for these it offers a comprehensive collection of functionality.
+
+We want the standard library to offer a common set of abstractions usable by most programs, but not much else. The focus is on quality over quantity.
+
+## Summary
+
+These principles guide every decision in Nyx's design:
+
+- ✅ Favor correctness over convenience
+- ✅ Keep the language simple and consistent
+- ✅ Make effects and state explicit
+- ✅ Provide great error messages
+- ✅ Separate pure and impure code
+- ✅ Use types to prevent errors
+- ✅ Avoid global state and hidden behavior
+- ✅ Keep one unified language
+
+The result is a language that may take time to learn but rewards that investment with reliability, maintainability, and clarity.

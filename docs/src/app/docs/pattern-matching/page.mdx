@@ -1,21 +1,176 @@
-# Pattern matching
+# Pattern Matching
 
-Pattern matching is the core of Nyx control flow. It is explicit and exhaustive.
+Pattern matching is the core of Nyx control flow. It's a powerful feature that lets you destructure data, test conditions, and handle different cases in a type-safe, exhaustive manner.
 
-## Matching records
+## Match Expressions
+
+The most common way to pattern match in Nyx is with a `match` expression:
 
 ```nyx
-def point = (x = 1, y = 2)
-match point
-| (x = 1, y = y) -> y
-| _ -> 0
+def oddOrEven = { n ->
+  match n % 2
+    | 0 -> "even"
+    | _ -> "odd"
+}
 ```
 
-## Matching tags
+The `_` pattern matches anything, acting as a catch-all.
+
+## Matching on Tag Unions
+
+Pattern matching is especially powerful with tag unions:
 
 ```nyx
-def value = #some(42)
-match value
-| #some(x) -> x
-| #none -> 0
+def describe: Option(int) -> string = { opt ->
+  match opt
+    | #some(x) -> "Got value: {x}"
+    | #none -> "No value"
+}
+
+-- Multiple tag variants
+def area: Shape -> float = { shape ->
+  match shape
+    | #circle(r) -> 3.14159 * r * r
+    | #rectangle(w, h) -> w * h
+    | #triangle(b, h) -> 0.5 * b * h
+}
+```
+
+## Matching on Records
+
+You can destructure records in pattern matches:
+
+```nyx
+def greet: Person -> string = { person ->
+  match person
+    | (name = "Alice", age = age) -> "Hi Alice, age {age}!"
+    | (name = name, age = a) if a >= 18 -> "Hello adult {name}"
+    | (name = name, _) -> "Hi young {name}"
+}
+```
+
+## Matching on Literals
+
+Match specific values:
+
+```nyx
+def classify: int -> string = { x ->
+  match x
+    | 0 -> "zero"
+    | 1 -> "one"
+    | n if n < 0 -> "negative"
+    | n if n > 100 -> "large"
+    | _ -> "other"
+}
+```
+
+## Comparison Patterns
+
+Use comparison operators directly in patterns:
+
+```nyx
+def sign: int -> string = { x ->
+  match x
+    | < 0 -> "negative"
+    | > 0 -> "positive"
+    | _ -> "zero"
+}
+```
+
+## List Destructuring
+
+Pattern match on lists with head/tail patterns:
+
+```nyx
+rec sumList: list(int) -> int = {
+  | [] -> 0
+  | [head, ...tail] -> head + sumList(tail)
+}
+```
+
+## Guards
+
+Add conditions to patterns with `if`:
+
+```nyx
+def classifyNumber: int -> string = { 
+  | 0 -> "zero"
+  | 1..10 -> "small"
+  | n if n > 10 -> "really big!"
+  | _ -> "unknown"
+}
+```
+
+## Pattern Matching in Function Definitions
+
+Functions can pattern match directly on their arguments:
+
+```nyx
+rec sumList 
+  : list(int) -> int 
+  = { 
+    | [] -> 0
+    | [head, ...tail] -> head + sumList(tail) 
+  }
+
+-- Multiple arguments
+def divide
+  : int, int -> Result(int, #divideByZero)
+  = { 
+    | _, 0 -> #error(#divideByZero)
+    | x, y -> #ok(x / y)
+  }
+```
+
+## Exhaustiveness
+
+The compiler checks that your patterns are exhaustive - they must cover all possible cases:
+
+```nyx
+-- Compiler error: missing pattern for #none
+def bad: Option(int) -> int = { opt ->
+  match opt
+    | #some(x) -> x
+    -- Missing: | #none -> ...
+}
+```
+
+## Nested Patterns
+
+Patterns can be arbitrarily nested:
+
+```nyx
+def process: list(Option(int)) -> int = { data ->
+  match data
+    | [#some(x), #some(y), ...] -> x + y
+    | [#some(x), #none, ...] -> x
+    | _ -> 0
+}
+```
+
+## Labeled Patterns
+
+Use labels when destructuring to keep the original value:
+
+```nyx
+def [[x, ...xs] list1, [y, ...ys] list2] = [[1,2,3], [4,5,6]]
+x      -- => 1
+xs     -- => [2,3]
+list1  -- => [1,2,3]
+```
+
+## Total vs Partial Patterns
+
+Some patterns always match (total), others might fail (partial):
+
+```nyx
+-- Total pattern - always matches
+def (x, y) = (4, 5)
+
+-- Partial pattern - compiler error if used in definition
+-- def (4, y) = record  -- Error! Use match instead
+
+-- Partial patterns must use match or if
+if record is (4, y) ->
+  println(y)
 ```

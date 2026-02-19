@@ -1,4 +1,5 @@
 import { createHighlighter, type Highlighter } from "shiki";
+import type { ReactNode } from "react";
 import nyxGrammar from "../../public/grammars/nyx.tmLanguage.json";
 
 // We'll cache the highlighter instance
@@ -13,12 +14,12 @@ async function getHighlighter() {
       });
       
       // Load the Nyx language grammar
-      // Note: Using any here because the TextMate grammar format isn't fully typed in Shiki
+      // Note: Type assertion needed because the TextMate grammar format isn't fully typed in Shiki
       await highlighter.loadLanguage({
+        ...nyxGrammar,
         name: "nyx",
         scopeName: "source.nyx",
-        ...nyxGrammar,
-      } as any);
+      } as unknown as Parameters<typeof highlighter.loadLanguage>[0]);
       
       return highlighter;
     })();
@@ -26,14 +27,20 @@ async function getHighlighter() {
   return highlighterPromise;
 }
 
+async function highlightCode(code: string, lang: string): Promise<string> {
+  const highlighter = await getHighlighter();
+  return highlighter.codeToHtml(code, {
+    lang: lang,
+    theme: "github-dark",
+  });
+}
+
 export async function CodeBlock({
   children,
   className,
-  ...props
 }: {
-  children: string;
+  children?: ReactNode;
   className?: string;
-  [key: string]: any;
 }) {
   const match = /language-(\w+)/.exec(className || "");
   const lang = match ? match[1] : "";
@@ -41,38 +48,33 @@ export async function CodeBlock({
   if (!lang) {
     // Inline code
     return (
-      <code
-        className="rounded bg-black/5 px-2 py-1 text-sm text-[#2b2e36]"
-        {...props}
-      >
+      <code className="rounded bg-black/5 px-2 py-1 text-sm text-[#2b2e36]">
         {children}
       </code>
     );
   }
 
   // Block code with syntax highlighting
-  const code = String(children).replace(/\n$/, "");
+  const code = String(children || "").replace(/\n$/, "");
   
+  // Attempt to highlight, fall back to plain code block on error
+  let html: string;
   try {
-    const highlighter = await getHighlighter();
-    const html = highlighter.codeToHtml(code, {
-      lang: lang,
-      theme: "github-dark",
-    });
-
-    return (
-      <div
-        className="syntax-highlighter mt-6 overflow-x-auto rounded-2xl [&_pre]:!bg-transparent [&_pre]:p-5 [&_pre]:text-sm"
-        dangerouslySetInnerHTML={{ __html: html }}
-      />
-    );
+    html = await highlightCode(code, lang);
   } catch (error) {
     console.error("Failed to highlight code:", error);
-    // Fallback to plain code block
+    // Return plain code block as fallback
     return (
       <pre className="mt-6 overflow-x-auto rounded-2xl bg-[#0f1116] p-5 text-sm text-slate-50">
         <code>{code}</code>
       </pre>
     );
   }
+
+  return (
+    <div
+      className="syntax-highlighter mt-6 overflow-x-auto rounded-2xl [&_pre]:!bg-transparent [&_pre]:p-5 [&_pre]:text-sm"
+      dangerouslySetInnerHTML={{ __html: html }}
+    />
+  );
 }

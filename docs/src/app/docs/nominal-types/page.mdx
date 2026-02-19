@@ -1,0 +1,132 @@
+# Nominal and Opaque Types
+
+Nyx's type system is primarily structural — two types with the same shape are considered compatible. However, there are situations where you want types to be distinguished by *name* rather than *shape*. Nominal and opaque types let you opt into this stricter identity when correctness demands it.
+
+## The Problem with Type Aliases
+
+Type aliases create convenient names for existing types, but they remain structurally equivalent to their underlying type:
+
+```nyx
+type UserId = int
+type ProductId = int
+
+def getUser: UserId -> User = { ... }
+
+def userId: UserId = 42
+def productId: ProductId = 42
+
+-- This compiles, but is almost certainly a mistake!
+def user = getUser(productId)
+```
+
+Because `UserId` and `ProductId` are both aliases for `int`, the compiler cannot tell them apart. This is a common source of subtle bugs when working with IDs or other domain primitives.
+
+## Nominal Types (Newtypes)
+
+A nominal type wraps an underlying type and is distinguished by its name, not its shape. You define a nominal type using the same name for both the type and its constructor:
+
+```nyx
+type UserId = UserId int
+type ProductId = ProductId int
+```
+
+Now `UserId` and `ProductId` are distinct types, even though they both wrap an `int`. You construct and unwrap them explicitly:
+
+```nyx
+def userId: UserId = UserId(42)
+def productId: ProductId = ProductId(42)
+
+-- This is now a type error — ProductId is not a UserId
+def user = getUser(productId)
+```
+
+### Unwrapping Nominal Types
+
+Use pattern matching to extract the inner value:
+
+```nyx
+def unwrapUserId: UserId -> int = { UserId(n) -> n }
+
+-- Or inline in a larger match expression
+def formatUserId: UserId -> string = { UserId(n) -> "user-{n}" }
+```
+
+### Nominal Types with Records
+
+Nominal types can wrap record types as well as primitives:
+
+```nyx
+type EmailAddress = EmailAddress string
+type UserName = UserName string
+
+type User = (
+  id: UserId
+  name: UserName
+  email: EmailAddress
+)
+
+def makeUser: (int, string, string) -> User = { id, name, email ->
+  (
+    id = UserId(id)
+    name = UserName(name)
+    email = EmailAddress(email)
+  )
+}
+```
+
+## Opaque Types
+
+Opaque types go one step further: the underlying representation is hidden from code outside the defining module. Consumers of the type can only use it through the functions you expose, which gives you full control over the invariants of the type.
+
+```nyx
+-- In module Validation
+
+opaque type ValidatedEmail = ValidatedEmail string
+
+def validate: string -> Option(ValidatedEmail) = { s ->
+  if s.contains("@") && s.contains(".")
+    then #some(ValidatedEmail(s))
+    else #none
+}
+
+def toString: ValidatedEmail -> string = { ValidatedEmail(s) -> s }
+```
+
+Outside the `Validation` module, the `ValidatedEmail` type is opaque — consumers cannot construct one directly, nor can they pattern match on it:
+
+```nyx
+-- In another module
+
+-- This is a type error: the constructor is not visible here
+def bad: ValidatedEmail = ValidatedEmail("not-an-email")
+
+-- You must use the provided API
+def good: Option(ValidatedEmail) = validate("user@example.com")
+```
+
+This pattern is useful for types that carry validated or normalized data, ensuring that invalid values can never be constructed outside the validation boundary.
+
+## When to Use Each
+
+| Technique | Use when |
+|---|---|
+| Type alias | You want a readable name but structural compatibility is fine |
+| Nominal type | You want to prevent accidental mixing of same-shaped types |
+| Opaque type | You want to enforce invariants and hide the implementation |
+
+## Making Illegal States Unrepresentable
+
+Nominal and opaque types are one of the key tools for making illegal states unrepresentable in Nyx. Instead of passing raw primitives such as `int` or `string` throughout your program, wrap them in named types that carry their meaning:
+
+```nyx
+-- Instead of:
+def transfer: (int, int, float) -> Result = { ... }
+
+-- Prefer:
+type AccountId = AccountId int
+type Amount = Amount float
+
+def transfer: (AccountId, AccountId, Amount) -> Result = { fromId, toId, amount -> ... }
+```
+
+The second signature is self-documenting and the compiler will catch any accidental argument transposition.

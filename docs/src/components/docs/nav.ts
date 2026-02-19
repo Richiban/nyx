@@ -21,6 +21,7 @@ export const docNav: DocNavGroup[] = [
     title: "Core concepts",
     items: [
       { title: "Types", href: "/docs/types" },
+      { title: "Nominal & Opaque Types", href: "/docs/nominal-types" },
       { title: "Functions & Lambdas", href: "/docs/functions" },
       { title: "Records & Tuples", href: "/docs/records" },
       { title: "Collections", href: "/docs/collections" },

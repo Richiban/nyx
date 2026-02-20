@@ -1,7 +1,7 @@
-import type { NextConfig } from "next";
 import createMDX from "@next/mdx";
 
-const nextConfig: NextConfig = {
+/** @type {import('next').NextConfig} */
+const nextConfig = {
   reactCompiler: true,
   pageExtensions: ["ts", "tsx", "mdx"],
 };

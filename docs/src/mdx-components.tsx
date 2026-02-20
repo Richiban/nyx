@@ -1,4 +1,6 @@
 import type { MDXComponents } from "mdx/types";
+import { CodeBlock } from "./components/CodeBlock";
+import type { ComponentPropsWithoutRef } from "react";
 
 export function useMDXComponents(components: MDXComponents): MDXComponents {
   return {
@@ -24,22 +26,8 @@ export function useMDXComponents(components: MDXComponents): MDXComponents {
       </ul>
     ),
     li: ({ children }) => <li className="text-base">{children}</li>,
-    pre: ({ children }) => (
-      <pre className="mt-6 overflow-x-auto rounded-2xl bg-[#0f1116] p-5 text-sm text-slate-50">
-        {children}
-      </pre>
-    ),
-    code: ({ children, className }) => {
-      const isBlock = className?.includes("language-");
-      if (isBlock) {
-        return <code className="text-slate-50">{children}</code>;
-      }
-      return (
-        <code className="rounded bg-black/5 px-2 py-1 text-sm text-[#2b2e36]">
-          {children}
-        </code>
-      );
-    },
+    pre: ({ children }) => <>{children}</>,
+    code: (props: ComponentPropsWithoutRef<"code">) => <CodeBlock {...props} />,
     ...components,
   };
 }

@@ -9,7 +9,7 @@ async function getHighlighter() {
   if (!highlighterPromise) {
     highlighterPromise = (async () => {
       const highlighter = await createHighlighter({
-        themes: ["github-dark"],
+        themes: ["github-light", "github-dark"],
         langs: ["javascript", "typescript", "bash"],
       });
       
@@ -31,7 +31,10 @@ async function highlightCode(code: string, lang: string): Promise<string> {
   const highlighter = await getHighlighter();
   return highlighter.codeToHtml(code, {
     lang: lang,
-    theme: "github-dark",
+    themes: {
+      light: "github-light",
+      dark: "github-dark",
+    },
   });
 }
 
@@ -48,7 +51,7 @@ export async function CodeBlock({
   if (!lang) {
     // Inline code
     return (
-      <code className="rounded bg-black/5 px-2 py-1 text-sm text-[#2b2e36]">
+      <code className="rounded bg-black/5 px-2 py-1 text-sm text-[#2b2e36] dark:bg-white/10 dark:text-slate-200">
         {children}
       </code>
     );
@@ -65,7 +68,7 @@ export async function CodeBlock({
     console.error("Failed to highlight code:", error);
     // Return plain code block as fallback
     return (
-      <pre className="mt-6 overflow-x-auto rounded-2xl bg-[#0f1116] p-5 text-sm text-slate-50">
+      <pre className="mt-6 overflow-x-auto rounded-2xl bg-[#f6f8fa] p-5 text-sm text-[#24292f] dark:bg-[#0f1116] dark:text-slate-50">
         <code>{code}</code>
       </pre>
     );

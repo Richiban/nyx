@@ -1,22 +1,9 @@
-import DocsSidebar from "@/components/docs/DocsSidebar";
-import DocsTopNav from "@/components/docs/DocsTopNav";
+import DocsLayoutClient from "@/components/docs/DocsLayoutClient";
 
 export default function DocsLayout({
   children,
 }: {
   children: React.ReactNode;
 }) {
-  return (
-    <div className="min-h-screen px-6 pb-16 pt-8">
-      <div className="mx-auto flex max-w-6xl flex-col gap-6">
-        <DocsTopNav />
-        <div className="grid gap-6 lg:grid-cols-[260px_1fr]">
-          <DocsSidebar />
-          <main className="nyx-surface rounded-3xl p-8 md:p-10">
-            {children}
-          </main>
-        </div>
-      </div>
-    </div>
-  );
+  return <DocsLayoutClient>{children}</DocsLayoutClient>;
 }

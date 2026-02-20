@@ -76,7 +76,7 @@ export async function CodeBlock({
 
   return (
     <div
-      className="syntax-highlighter mt-6 overflow-x-auto rounded-2xl [&_pre]:!bg-transparent [&_pre]:p-5 [&_pre]:text-sm"
+      className="syntax-highlighter mt-6 max-w-full overflow-x-auto rounded-2xl [&_pre]:!bg-transparent [&_pre]:p-5 [&_pre]:text-sm"
       dangerouslySetInnerHTML={{ __html: html }}
     />
   );

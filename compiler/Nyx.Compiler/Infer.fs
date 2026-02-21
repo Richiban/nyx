@@ -76,16 +76,22 @@ let rec private isAssignableType (expected: Ty) (actual: Ty) =
     | TyUnion options, _ -> options |> List.exists (fun optionTy -> isAssignableType optionTy actual)
     | _ -> true
 
-let private ensureAttachedTypeExists (state: InferState) (name: Identifier) : Result<unit, Diagnostic list> =
-    let dotIndex = name.IndexOf(".")
-    if dotIndex <= 0 then
+let private ensureAttachedTypeExists (state: InferState) (currentModuleOpt: string option) (name: Identifier) : Result<unit, Diagnostic list> =
+    let firstDot = name.IndexOf(".")
+    if firstDot <= 0 then
         Ok ()
     else
-        let typeName = name.Substring(0, dotIndex)
-        if state.TypeDefs.ContainsKey typeName then
+        let lastDot = name.LastIndexOf(".")
+        let candidateTypeName = name.Substring(0, lastDot)
+        if state.TypeDefs.ContainsKey candidateTypeName then
             Ok ()
         else
-            Error [ Diagnostics.error ($"Unknown attached type '{typeName}' for definition '{name}'") ]
+            if firstDot = lastDot then
+                match currentModuleOpt with
+                | Some currentModule when currentModule = candidateTypeName -> Ok ()
+                | _ -> Error [ Diagnostics.error ($"Unknown attached type '{candidateTypeName}' for definition '{name}'") ]
+            else
+                Ok ()
 
 let private matchesAttachedInput (inputTy: Ty) (lhsType: Ty) : bool =
     let rec containsNominal name ty =
@@ -128,6 +134,17 @@ let private tryResolveAttachedFunction (env: TypeEnv) (lhsType: Ty) (funcName: s
             match rangeOpt with
             | Some (line, col) -> Error [ Diagnostics.errorAt ($"Ambiguous attached function '{funcName}': {names}") (line, col) ]
             | None -> Error [ Diagnostics.error ($"Ambiguous attached function '{funcName}': {names}") ]
+
+let private tryInferAttachedLambdaInput (state: InferState) (name: Identifier) (expr: Expression) : Ty option =
+    match expr with
+    | Lambda(args, _) when name.Contains(".") && args.Length = 1 ->
+        let dotIndex = name.LastIndexOf(".")
+        let typeName = name.Substring(0, dotIndex)
+        match state.TypeDefs |> Map.tryFind typeName with
+        | Some info when typeName.StartsWith("@") -> Some (TyNominal(typeName, info.Underlying, info.IsPrivate))
+        | Some info -> Some info.Underlying
+        | None -> None
+    | _ -> None
 
 let private isContextDef (modifiers: TypeDefModifier list) =
     modifiers |> List.contains Context
@@ -1188,7 +1205,7 @@ and inferBlock (env: TypeEnv) (state: InferState) (statements: Statement list) :
             match statement with
             | DefStatement(isExport, name, typeOpt, expr) ->
                 if errors.IsEmpty then
-                    match ensureAttachedTypeExists current name with
+                    match ensureAttachedTypeExists current None name with
                     | Error err -> errors <- err
                     | Ok () ->
                         let contextOpt, declaredTypeExprOpt = extractContextFromTypeExpr typeOpt
@@ -1204,6 +1221,11 @@ and inferBlock (env: TypeEnv) (state: InferState) (statements: Statement list) :
                                 | TyFunc(inputTy, returnTy) -> Some inputTy, Some returnTy, Some ty, st
                                 | _ -> None, None, Some ty, st
                             | None -> None, None, None, nextState
+                        let effectiveExpectedInputOpt =
+                            match expectedInputOpt with
+                            | Some _ -> expectedInputOpt
+                            | None when expectedDeclaredOpt.IsNone -> tryInferAttachedLambdaInput nextState2 name expr
+                            | None -> None
                         let preboundTy, preboundState, envWithRec, preboundFresh =
                             match expectedDeclaredOpt with
                             | Some declaredTy -> declaredTy, nextState2, TypeEnv.extend name (TypeEnv.mono declaredTy) envWithCtx, false
@@ -1216,8 +1238,8 @@ and inferBlock (env: TypeEnv) (state: InferState) (statements: Statement list) :
                             | None -> preboundState
                         let inferResult =
                             match expr with
-                            | Lambda(args, body) when expectedDeclaredOpt.IsSome ->
-                                inferLambdaWithExpected envWithRec nextStateWithReq args body expectedInputOpt expectedReturnOpt
+                            | Lambda(args, body) when effectiveExpectedInputOpt.IsSome || expectedReturnOpt.IsSome ->
+                                inferLambdaWithExpected envWithRec nextStateWithReq args body effectiveExpectedInputOpt expectedReturnOpt
                             | _ -> inferExpr envWithRec nextStateWithReq expr
                         match inferResult with
                         | Ok (typedExpr, next) ->
@@ -1275,6 +1297,7 @@ and inferBlock (env: TypeEnv) (state: InferState) (statements: Statement list) :
 let inferModuleWithEnv (initialEnv: TypeEnv) (initialState: InferState) (module': Module) : Result<Map<string, Ty> * TypedTopLevelItem list * InferState, Diagnostic list> =
     let mutable env = initialEnv
     let mutable state = initialState
+    let mutable currentModule: string option = None
     let mutable types = Map.empty
     let mutable items: TypedTopLevelItem list = []
     let mutable errors: Diagnostic list = []
@@ -1282,7 +1305,7 @@ let inferModuleWithEnv (initialEnv: TypeEnv) (initialState: InferState) (module'
     for item in module' do
         match item with
         | Def (ValueDef(isExport, name, typeOpt, expr)) when errors.IsEmpty ->
-            match ensureAttachedTypeExists state name with
+            match ensureAttachedTypeExists state currentModule name with
             | Error err -> errors <- err
             | Ok () ->
                 let contextOpt, declaredTypeExprOpt = extractContextFromTypeExpr typeOpt
@@ -1298,6 +1321,11 @@ let inferModuleWithEnv (initialEnv: TypeEnv) (initialState: InferState) (module'
                         | TyFunc(inputTy, returnTy) -> Some inputTy, Some returnTy, Some ty, st
                         | _ -> None, None, Some ty, st
                     | None -> None, None, None, nextState
+                let effectiveExpectedInputOpt =
+                    match expectedInputOpt with
+                    | Some _ -> expectedInputOpt
+                    | None when expectedDeclaredOpt.IsNone -> tryInferAttachedLambdaInput nextState2 name expr
+                    | None -> None
                 let preboundTy, preboundState, envWithRec, preboundFresh =
                     match expectedDeclaredOpt with
                     | Some declaredTy -> declaredTy, nextState2, TypeEnv.extend name (TypeEnv.mono declaredTy) envWithCtx, false
@@ -1310,8 +1338,8 @@ let inferModuleWithEnv (initialEnv: TypeEnv) (initialState: InferState) (module'
                     | None -> preboundState
                 let inferResult =
                     match expr with
-                    | Lambda(args, body) when expectedDeclaredOpt.IsSome ->
-                        inferLambdaWithExpected envWithRec nextStateWithReq args body expectedInputOpt expectedReturnOpt
+                    | Lambda(args, body) when effectiveExpectedInputOpt.IsSome || expectedReturnOpt.IsSome ->
+                        inferLambdaWithExpected envWithRec nextStateWithReq args body effectiveExpectedInputOpt expectedReturnOpt
                     | _ -> inferExpr envWithRec nextStateWithReq expr
                 match inferResult with
                 | Ok (typedExpr, next) ->
@@ -1347,7 +1375,10 @@ let inferModuleWithEnv (initialEnv: TypeEnv) (initialState: InferState) (module'
             | Error err -> errors <- err
         | Expr _ -> ()
         | Import itemsList -> items <- items @ [ TypedImport itemsList ]
-        | ModuleDecl name -> items <- items @ [ TypedModuleDecl name ]
+        | ModuleDecl name ->
+            currentModule <- Some name
+            items <- items @ [ TypedModuleDecl name ]
+        | ModuleBlock _ -> ()
         | Def (TypeDef(name, modifiers, parameters, body)) ->
             state <- registerTypeDef state name modifiers parameters body
             items <- items @ [ TypedDef (TypedTypeDef(name, modifiers, parameters, body)) ]

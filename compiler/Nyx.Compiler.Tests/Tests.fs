@@ -218,6 +218,58 @@ let ``Typecheck dotted def name`` () =
     | other -> Assert.True(false, $"Unexpected dotted def type: %A{other}")
 
 [<Fact>]
+let ``Typecheck ws-sensitive module block`` () =
+    let source =
+        "module Root\n" +
+        "module Inner =\n" +
+        "  def x = 1\n" +
+        "  def y = x"
+    let result = Compiler.compile source
+    Assert.True(result.Diagnostics.IsEmpty, $"Unexpected diagnostics: %A{result.Diagnostics}")
+    let typed = result.Typed.Value
+    Assert.Equal(TyPrimitive "int", typed.Types.["Root.Inner.x"])
+    Assert.Equal(TyPrimitive "int", typed.Types.["Root.Inner.y"])
+
+[<Fact>]
+let ``Typecheck infers attached receiver type for unannotated lambda`` () =
+    let source =
+        "type Person = (firstName: string)\n" +
+        "def Person.toString = { p -> \"person\" }"
+    let result = Compiler.compile source
+    Assert.True(result.Diagnostics.IsEmpty, $"Unexpected diagnostics: %A{result.Diagnostics}")
+    let typed = result.Typed.Value
+    match typed.Types.["Person.toString"] with
+    | TyFunc(TyRecord fields, TyPrimitive "string") when fields.ContainsKey("firstName") ->
+        Assert.True(true)
+    | other -> Assert.True(false, $"Unexpected inferred attached def type: %A{other}")
+
+[<Fact>]
+let ``Typecheck infers nominal attached receiver type for unannotated lambda`` () =
+    let source =
+        "type @Email = string\n" +
+        "def @Email.toString = { e -> \"ok\" }"
+    let result = Compiler.compile source
+    Assert.True(result.Diagnostics.IsEmpty, $"Unexpected diagnostics: %A{result.Diagnostics}")
+    let typed = result.Typed.Value
+    match typed.Types.["@Email.toString"] with
+    | TyFunc(TyNominal(name, _, _), TyPrimitive "string") when name = "@Email" ->
+        Assert.True(true)
+    | other -> Assert.True(false, $"Unexpected inferred nominal attached def type: %A{other}")
+
+[<Fact>]
+let ``Typecheck infers nominal attached receiver as argument in body`` () =
+    let source =
+        "type @Email = string\n" +
+        "def @Email.toDisplay = { e -> e }"
+    let result = Compiler.compile source
+    Assert.True(result.Diagnostics.IsEmpty, $"Unexpected diagnostics: %A{result.Diagnostics}")
+    let typed = result.Typed.Value
+    match typed.Types.["@Email.toDisplay"] with
+    | TyFunc(TyNominal(nameIn, _, _), TyNominal(nameOut, _, _)) when nameIn = "@Email" && nameOut = "@Email" ->
+        Assert.True(true)
+    | other -> Assert.True(false, $"Unexpected inferred nominal identity attached def type: %A{other}")
+
+[<Fact>]
 let ``Typecheck rejects attached def with missing type`` () =
     let source = "def A.a = { s -> s }"
     let result = Compiler.compile source

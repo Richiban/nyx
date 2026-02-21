@@ -1,21 +1,44 @@
 
-context Print = (
-  println: string -> ()
+module Email =
+  export type @Email = private string
+
+  export def makeEmail: string -> #some(@Email) | #invalidInput
+    = { s -> if s == ("@") then #some(@Email(s)) else #invalidInput }
+
+type Person = (
+  firstName: string
+  surname: string
+  age: int
+  email: @Email
 )
 
-def printContext = (
-  println = { s -> dbg(s) }
+def e: @Email = @Email("")
+
+context ToString(α) = (
+  toString: α -> string
 )
 
-def f: [Print] string -> () = { s ->
-    println("Printy print:")
-    println(s)
-  }
+def Person.toString: Person -> string = { p -> 
+  "{p.firstName} {p.surname}, age {p.age}" 
+}
+
+def printThing: [ToString(α)] α -> () = { x -> 
+  dbg(toString(x))
+  ()
+}
 
 def main = {
-  use printContext
+  def alice = Person(firstName = "Alice", surname = "Smith", age = 30)
 
-  f("Hello world")
+  alice \toString \dbg
+
+  def tsp: ToString(Person) = (
+    toString = Person.toString
+  )
+
+  use tsp
+
+  printThing(alice)
 }
 
 main()

@@ -115,6 +115,7 @@ type Definition =
 
 type TopLevelItem =
     | ModuleDecl of ModuleName
+    | ModuleBlock of ModuleName * TopLevelItem list
     | Def of Definition
     | Import of ImportItem list
     | Expr of Expression
@@ -165,10 +166,10 @@ let newlineIndentedContinuation (refCol: int64) : Parser<unit, unit> =
 let defEqualsContinuation (refCol: int64) : Parser<unit, unit> =
     attempt (wsNoNl() >>. followedBy (pstring "=")) <|> newlineIndentedContinuation refCol
 
-let parseDefWith (identParser: Parser<Identifier * TypeExpr option, unit>) (exprParser: Parser<Expression, unit>) =
-    getPosition .>>. (pstring "def" >>. ws >>. identParser .>> wsNoNl())
-    >>= fun (startPos, (name, typeOpt)) ->
-        defEqualsContinuation startPos.Column >>. pstring "=" >>. wsNoNl() >>. exprParser
+let parseDefWith (lineStartCol: int64) (identParser: Parser<Identifier * TypeExpr option, unit>) (exprParser: Parser<Expression, unit>) =
+    (pstring "def" >>. ws >>. identParser .>> wsNoNl())
+    >>= fun (name, typeOpt) ->
+        defEqualsContinuation lineStartCol >>. pstring "=" >>. wsNoNl() >>. exprParser
         |>> fun expr -> (name, typeOpt, expr)
 
 // Parser for identifiers
@@ -735,13 +736,14 @@ let typeDefCore: Parser<Definition, unit> =
     <?> "type definition"
 
 let valueDefCore: Parser<Definition, unit> =
-    pipe2
-        (opt (attempt (pstring "export" >>. ws)))
-        (parseDefWith typedIdentifier (wsInline >>. (sepBy1 expression (pstring "," .>> ws) |>> fun exprs ->
-            match exprs with
-            | [single] -> single
-            | multiple -> TupleExpr multiple)))
-        (fun exportOpt (name, typeOpt, expr) -> ValueDef(exportOpt.IsSome, name, typeOpt, expr))
+    getPosition >>= fun lineStart ->
+        pipe2
+            (opt (attempt (pstring "export" >>. ws)))
+            (parseDefWith lineStart.Column typedIdentifier (wsInline >>. (sepBy1 expression (pstring "," .>> ws) |>> fun exprs ->
+                match exprs with
+                | [single] -> single
+                | multiple -> TupleExpr multiple)))
+            (fun exportOpt (name, typeOpt, expr) -> ValueDef(exportOpt.IsSome, name, typeOpt, expr))
     <?> "value definition"
 
 // Match expression parser
@@ -1139,10 +1141,11 @@ do
                 | [single] -> single
                 | multiple -> TupleExpr multiple)
 
-        pipe2
-            (opt (attempt (pstring "export" >>. ws)))
-            (parseDefWith typedQualifiedIdentifier exprParser)
-            (fun exportOpt (name, typeOpt, expr) -> DefStatement(exportOpt.IsSome, name, typeOpt, expr))
+        getPosition >>= fun lineStart ->
+            pipe2
+                (opt (attempt (pstring "export" >>. ws)))
+                (parseDefWith lineStart.Column typedQualifiedIdentifier exprParser)
+                (fun exportOpt (name, typeOpt, expr) -> DefStatement(exportOpt.IsSome, name, typeOpt, expr))
     
     let exprStatement =
         wsNoNl()
@@ -1165,10 +1168,11 @@ let valueDef: Parser<TopLevelItem, unit> =
             | [single] -> single
             | multiple -> TupleExpr multiple))
 
-    pipe2
-        (opt (attempt (pstring "export" >>. ws)))
-        (parseDefWith typedQualifiedIdentifier exprParser)
-        (fun exportOpt (name, typeOpt, expr) -> Def(ValueDef(exportOpt.IsSome, name, typeOpt, expr)))
+    getPosition >>= fun lineStart ->
+        pipe2
+            (opt (attempt (pstring "export" >>. ws)))
+            (parseDefWith lineStart.Column typedQualifiedIdentifier exprParser)
+            (fun exportOpt (name, typeOpt, expr) -> Def(ValueDef(exportOpt.IsSome, name, typeOpt, expr)))
     <?> "value definition"
 
 // Parser for type definition (top-level)
@@ -1180,9 +1184,52 @@ let topLevelExpr: Parser<TopLevelItem, unit> =
     exprWithoutCrossingNewlines |>> Expr
     <?> "top-level expression"
 
+let private moduleBlockItem: Parser<TopLevelItem, unit> =
+    choice [
+        (attempt (pstring "import" >>. wsNoNl() >>. importItems) |>> Import)
+        attempt typeDef
+        valueDef
+        topLevelExpr
+    ]
+
+let moduleBlockDecl: Parser<TopLevelItem, unit> =
+    let linePayload: Parser<TopLevelItem option, unit> =
+        choice [
+            attempt (skipMany (skipAnyOf " \t") >>. inlineCommentNoNl() >>% None)
+            attempt (skipMany (skipAnyOf " \t") >>. (followedBy newline <|> followedBy eof) >>% None)
+            moduleBlockItem |>> Some
+        ]
+
+    let lineAtIndent indent =
+        attempt (manyMinMaxSatisfy indent indent (fun c -> c = ' ' || c = '\t') >>. linePayload)
+
+    attempt (
+        (pstring "module" >>. ws >>. identifierNoWs .>> wsNoNl() .>> pstring "=") >>= fun name ->
+            skipMany (skipAnyOf " \t") >>. newline >>.
+            many (pchar ' ' <|> pchar '\t') >>= fun indentChars ->
+                let indent = indentChars.Length
+                if indent > 0 then
+                    pipe2
+                        linePayload
+                        (many (attempt (newline >>. lineAtIndent indent)))
+                        (fun first rest ->
+                            let items = first :: rest |> List.choose id
+                            match items with
+                            | [] -> ModuleBlock(name, [])
+                            | _ -> ModuleBlock(name, items))
+                    >>= fun block ->
+                        match block with
+                        | ModuleBlock(_, items) when items.IsEmpty -> pzero
+                        | _ -> preturn block
+                else
+                    pzero
+    )
+    <?> "module block declaration"
+
 // Parser for top-level items
 let topLevelItem: Parser<TopLevelItem, unit> =
     ws >>. choice [
+        attempt moduleBlockDecl
         moduleDecl
         (attempt (pstring "import" >>. wsNoNl() >>. importItems) |>> Import)
         attempt typeDef
@@ -1196,12 +1243,178 @@ let moduleParser: Parser<Module, unit> =
     ws >>. many topLevelItem .>> ws .>> eof
     <?> "module"
 
+let private qualifyModuleName (prefix: string) (name: string) =
+    if String.IsNullOrWhiteSpace prefix then name else $"{prefix}.{name}"
+
+let private rewriteTypeExprInModule (typeMap: Map<string, string>) (typeExpr: TypeExpr) : TypeExpr =
+    let rec rewrite t =
+        match t with
+        | TypeName name ->
+            match typeMap |> Map.tryFind name with
+            | Some qualified -> TypeName qualified
+            | None -> TypeName name
+        | TypeVar _
+        | TypeUnit -> t
+        | TypeTuple items -> TypeTuple (items |> List.map rewrite)
+        | TypeRecord fields ->
+            TypeRecord (
+                fields
+                |> List.map (function
+                    | TypeField(name, isMutable, isOptional, typeOpt, defaultOpt) -> TypeField(name, isMutable, isOptional, typeOpt |> Option.map rewrite, defaultOpt)
+                    | TypeMember(name, typeOpt) -> TypeMember(name, typeOpt |> Option.map rewrite)))
+        | TypeApply(name, args) ->
+            let mappedName = typeMap |> Map.tryFind name |> Option.defaultValue name
+            TypeApply(mappedName, args |> List.map rewrite)
+        | TypeFunc(inputTy, outputTy) -> TypeFunc(rewrite inputTy, rewrite outputTy)
+        | TypeTag(name, payload) -> TypeTag(name, payload |> Option.map rewrite)
+        | TypeUnion items -> TypeUnion (items |> List.map rewrite)
+        | TypeIntersection items -> TypeIntersection (items |> List.map rewrite)
+        | TypeOptional inner -> TypeOptional (rewrite inner)
+        | TypeContext items -> TypeContext (items |> List.map rewrite)
+        | TypeWithContext(items, inner) -> TypeWithContext(items |> List.map rewrite, rewrite inner)
+        | TypeConstraint(name, baseTy, predicate) -> TypeConstraint(name, rewrite baseTy, predicate)
+        | TypeWhere(baseTy, predicate) -> TypeWhere(rewrite baseTy, predicate)
+    rewrite typeExpr
+
+let private rewriteExpressionInModule (valueMap: Map<string, string>) (typeMap: Map<string, string>) (expr: Expression) : Expression =
+    let rewriteQualifiedHead (name: string) =
+        if name.Contains(".") then
+            let dot = name.IndexOf('.')
+            let head = name.Substring(0, dot)
+            let tail = name.Substring(dot + 1)
+            match typeMap |> Map.tryFind head with
+            | Some qualifiedHead -> $"{qualifiedHead}.{tail}"
+            | None -> name
+        else
+            name
+
+    let rewriteName (name: string) =
+        match valueMap |> Map.tryFind name with
+        | Some qualified -> qualified
+        | None ->
+            match typeMap |> Map.tryFind name with
+            | Some qualifiedType -> qualifiedType
+            | None -> rewriteQualifiedHead name
+
+    let rec rewrite e =
+        match e with
+        | IdentifierExpr(name, range) -> IdentifierExpr(rewriteName name, range)
+        | FunctionCall(name, range, args) -> FunctionCall(rewriteName name, range, args |> List.map rewrite)
+        | Lambda(args, body) -> Lambda(args, rewrite body)
+        | BinaryOp(op, left, right) -> BinaryOp(op, rewrite left, rewrite right)
+        | Pipe(value, funcName, range, args) -> Pipe(rewrite value, rewriteName funcName, range, args |> List.map rewrite)
+        | Block statements ->
+            Block (
+                statements
+                |> List.map (function
+                    | DefStatement(isExport, name, typeOpt, valueExpr) -> DefStatement(isExport, name, typeOpt |> Option.map (rewriteTypeExprInModule typeMap), rewrite valueExpr)
+                    | TypeDefStatement(name, modifiers, typeParams, typeExpr) ->
+                        let mappedParams = typeParams |> List.map (fun (paramName, paramTypeOpt) -> paramName, paramTypeOpt |> Option.map (rewriteTypeExprInModule typeMap))
+                        TypeDefStatement(name, modifiers, mappedParams, rewriteTypeExprInModule typeMap typeExpr)
+                    | ImportStatement items -> ImportStatement items
+                    | UseStatement binding -> UseStatement (match binding with | UseValue boundExpr -> UseValue (rewrite boundExpr))
+                    | ExprStatement bodyExpr -> ExprStatement (rewrite bodyExpr)))
+        | Match(values, arms) -> Match(values |> List.map rewrite, arms |> List.map (fun (patterns, body) -> patterns, rewrite body))
+        | TupleExpr items -> TupleExpr (items |> List.map rewrite)
+        | RecordExpr fields ->
+            RecordExpr (
+                fields
+                |> List.map (function
+                    | NamedField(name, value) -> NamedField(name, rewrite value)
+                    | PositionalField value -> PositionalField (rewrite value)))
+        | ListExpr items -> ListExpr (items |> List.map rewrite)
+        | TagExpr(name, payload) -> TagExpr(name, payload |> Option.map rewrite)
+        | IfExpr(cond, ifTrue, ifFalse) -> IfExpr(rewrite cond, rewrite ifTrue, rewrite ifFalse)
+        | MemberAccess(baseExpr, field, range) -> MemberAccess(rewrite baseExpr, field, range)
+        | UseIn(binding, body) ->
+            let mappedBinding =
+                match binding with
+                | UseValue value -> UseValue (rewrite value)
+            UseIn(mappedBinding, rewrite body)
+        | WorkflowBindExpr(name, value) -> WorkflowBindExpr(name, rewrite value)
+        | WorkflowReturnExpr value -> WorkflowReturnExpr (rewrite value)
+        | InterpolatedString parts -> InterpolatedString (parts |> List.map (function | StringText text -> StringText text | StringExpr value -> StringExpr (rewrite value)))
+        | UnitExpr
+        | LiteralExpr _ -> e
+    rewrite expr
+
+let rec private expandModuleBlock (prefix: string) (items: TopLevelItem list) : TopLevelItem list =
+    let localTypeNames =
+        items
+        |> List.choose (function
+            | Def (TypeDef(name, _, _, _)) when not (name.Contains(".")) -> Some name
+            | _ -> None)
+        |> Set.ofList
+
+    let typeMap =
+        localTypeNames
+        |> Seq.map (fun name -> name, qualifyModuleName prefix name)
+        |> Map.ofSeq
+
+    let localValueNames =
+        items
+        |> List.choose (function
+            | Def (ValueDef(_, name, _, _)) when not (name.Contains(".")) -> Some name
+            | _ -> None)
+        |> Set.ofList
+
+    let valueMap =
+        localValueNames
+        |> Seq.map (fun name -> name, qualifyModuleName prefix name)
+        |> Map.ofSeq
+
+    let qualifyDefName (name: string) =
+        if name.Contains(".") then
+            let dot = name.IndexOf('.')
+            let head = name.Substring(0, dot)
+            let tail = name.Substring(dot + 1)
+            match typeMap |> Map.tryFind head with
+            | Some qualifiedHead -> $"{qualifiedHead}.{tail}"
+            | None -> qualifyModuleName prefix name
+        else
+            qualifyModuleName prefix name
+
+    let qualifyTypeName (name: string) =
+        if name.Contains(".") then qualifyModuleName prefix name else typeMap |> Map.tryFind name |> Option.defaultValue (qualifyModuleName prefix name)
+
+    items
+    |> List.collect (fun item ->
+        match item with
+        | ModuleDecl _ -> []
+        | ModuleBlock(name, nested) ->
+            let nestedPrefix = qualifyModuleName prefix name
+            ModuleDecl nestedPrefix :: expandModuleBlock nestedPrefix nested
+        | Import imports -> [ Import imports ]
+        | Expr expr -> [ Expr (rewriteExpressionInModule valueMap typeMap expr) ]
+        | Def (ValueDef(isExport, name, typeOpt, expr)) ->
+            [ Def (ValueDef(isExport, qualifyDefName name, typeOpt |> Option.map (rewriteTypeExprInModule typeMap), rewriteExpressionInModule valueMap typeMap expr)) ]
+        | Def (TypeDef(name, modifiers, typeParams, body)) ->
+            let mappedTypeParams = typeParams |> List.map (fun (paramName, paramTypeOpt) -> paramName, paramTypeOpt |> Option.map (rewriteTypeExprInModule typeMap))
+            [ Def (TypeDef(qualifyTypeName name, modifiers, mappedTypeParams, rewriteTypeExprInModule typeMap body)) ])
+
+let private expandMidFileModules (items: TopLevelItem list) : TopLevelItem list =
+    let rec loop (currentModule: string option) (remaining: TopLevelItem list) (acc: TopLevelItem list) =
+        match remaining with
+        | [] -> List.rev acc
+        | item :: rest ->
+            match item with
+            | ModuleDecl name -> loop (Some name) rest (item :: acc)
+            | ModuleBlock(name, innerItems) ->
+                let prefix =
+                    match currentModule with
+                    | Some root when not (String.IsNullOrWhiteSpace root) -> qualifyModuleName root name
+                    | _ -> name
+                let expanded = ModuleDecl prefix :: expandModuleBlock prefix innerItems
+                loop currentModule rest ((List.rev expanded) @ acc)
+            | _ -> loop currentModule rest (item :: acc)
+    loop None items []
+
 // Public API for parsing
 let parseModule (input: string) : Result<Module, string> =
     let normalized =
         input.Replace("\r\n", "\n").Replace("\r", "\n").TrimEnd()
     match run moduleParser normalized with
-    | ParserResult.Success(result, _, _) -> Result.Ok result
+    | ParserResult.Success(result, _, _) -> Result.Ok (expandMidFileModules result)
     | ParserResult.Failure(errorMsg, _, _) -> Result.Error errorMsg
 
 // Main entry point for standalone testing

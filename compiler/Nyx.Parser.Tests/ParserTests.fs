@@ -114,6 +114,37 @@ let ``Parse module with definition`` () =
     | Result.Error err -> failwith $"Parse should succeed, got: {err}"
 
 [<Fact>]
+let ``Parse ws-sensitive mid-file module block`` () =
+    let input =
+        "module Root\n" +
+        "module Inner =\n" +
+        "  type Person = (firstName: string)\n" +
+        "  def Person.toString = { p -> \"person\" }\n" +
+        "  def value = 1"
+    let result = parseModule input
+
+    result |> isOk |> should equal true
+    match result with
+    | Result.Ok module' ->
+        module' |> should haveLength 5
+        match module'.[0] with
+        | ModuleDecl "Root" -> ()
+        | _ -> failwith "Expected ModuleDecl Root"
+        match module'.[1] with
+        | ModuleDecl "Root.Inner" -> ()
+        | _ -> failwith "Expected ModuleDecl Root.Inner"
+        match module'.[2] with
+        | Def (TypeDef(name, _, _, _)) -> name |> should equal "Root.Inner.Person"
+        | _ -> failwith "Expected qualified type def"
+        match module'.[3] with
+        | Def (ValueDef(_, name, _, _)) -> name |> should equal "Root.Inner.Person.toString"
+        | _ -> failwith "Expected qualified attached def"
+        match module'.[4] with
+        | Def (ValueDef(_, name, _, _)) -> name |> should equal "Root.Inner.value"
+        | _ -> failwith "Expected qualified value def"
+    | Result.Error err -> failwith $"Parse should succeed, got: {err}"
+
+[<Fact>]
 let ``Parse multiple definitions`` () =
     let input = "def x = 1\ndef y = 2\ndef z = 3"
     let result = parseModule input

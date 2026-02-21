@@ -651,6 +651,7 @@ and transpileStatement (env: TranspileEnv) (stmt: Statement) : string list * Tra
 let private transpileTopLevelItem (env: TranspileEnv) (item: TopLevelItem) : string list * TranspileEnv =
     match item with
     | ModuleDecl name -> [ sprintf "// Module: %s" name ], env
+    | ModuleBlock _ -> [ "" ], env
     | Def(ValueDef(_, name, typeOpt, expr)) ->
         transpileStatement env (DefStatement(false, name, typeOpt, expr))
     | Def(TypeDef(name, _, _, body)) ->

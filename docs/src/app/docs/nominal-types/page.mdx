@@ -33,8 +33,8 @@ type @ProductId = int
 Now `@UserId` and `@ProductId` are distinct types, even though they both wrap an `int`. You construct and unwrap them explicitly:
 
 ```nyx
-def userId: UserId = UserId(42)
-def productId: ProductId = ProductId(42)
+def userId: @UserId = @UserId(42)
+def productId: @ProductId = @ProductId(42)
 
 -- This is now a type error — ProductId is not a UserId
 def user = getUser(productId)
@@ -61,16 +61,16 @@ type @EmailAddress = string
 type @UserName = string
 
 type @User = (
-  id: UserId
-  name: UserName
-  email: EmailAddress
+  id: @UserId
+  name: @UserName
+  email: @EmailAddress
 )
 
 def makeUser: (int, string, string) -> @User = { id, name, email ->
   (
-    id = UserId(id)
-    name = UserName(name)
-    email = EmailAddress(email)
+    id = @UserId(id)
+    name = @UserName(name)
+    email = @EmailAddress(email)
   )
 }
 ```
@@ -111,7 +111,7 @@ This pattern is useful for types that carry validated or normalized data, ensuri
 ## When to Use Each
 
 | Technique | Use when |
-|---|---|
+|-----------|----------|
 | Type alias | You want a readable name but structural compatibility is fine |
 | Nominal type | You want to prevent accidental mixing of same-shaped types |
 | Opaque type | You want to enforce invariants and hide the implementation |

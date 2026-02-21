@@ -51,10 +51,10 @@ def adults = users \filter { .age >= 18 }
 Reduce a list to a single value:
 
 ```nyx
-def sum = [1, 2, 3, 4] \fold(0, { acc, x -> acc + x })
+def sum = [1, 2, 3, 4] \fold(0) { + }
 -- Result: 10
 
-def product = [1, 2, 3, 4] \fold(1, { acc, x -> acc * x })
+def product = [1, 2, 3, 4] \fold(1) { * }
 -- Result: 24
 ```
 
@@ -70,12 +70,11 @@ rec sumList: list(int) -> int = {
 }
 
 -- Multiple elements
-def process = { data ->
-  match data
-    | [] -> "empty"
-    | [x] -> "one element"
-    | [x, y] -> "two elements"
-    | [x, y, ...rest] -> "many elements"
+def process = {
+  | [] -> "empty"
+  | [x] -> "one element"
+  | [x, y] -> "two elements"
+  | [x, y, ...rest] -> "many elements"
 }
 ```
 
@@ -91,10 +90,9 @@ def newList = [1, 2, ...oldList]
 def extended = [...list1, ...list2]
 
 -- In pattern matching
-rec map: (list(a), (a -> b)) -> list(b) = { xs, f ->
-  match xs
-    | [] -> []
-    | [head, ...tail] -> [f(head), ...map(tail, f)]
+rec map: (list(a), (a -> b)) -> list(b) = {
+  | [], _ -> []
+  | [head, ...tail], f -> [f(head), ...map(tail, f)]
 }
 ```
 
@@ -113,33 +111,27 @@ rec length: list(a) -> int = {
 
 ```nyx
 def reverse: list(a) -> list(a) = { xs ->
-  xs \fold([], { acc, x -> [x, ...acc] })
+  xs \fold([]) { acc, x -> [x, ...acc] }
 }
 ```
 
 ### Take
 
 ```nyx
-rec take: (list(a), int) -> list(a) = { xs, n ->
-  if n <= 0 
-    -> []
-  else
-    match xs
-      | [] -> []
-      | [head, ...tail] -> [head, ...take(tail, n - 1)]
+rec take: (list(a), int) -> list(a) = {
+  | [], _
+  | _, { <= 0 } -> []
+  | [head, ...tail], n -> [head, ...take(tail, n - 1)]
 }
 ```
 
 ### Drop
 
 ```nyx
-rec drop: (list(a), int) -> list(a) = { xs, n ->
-  if n <= 0
-    -> xs
-  else
-    match xs
-      | [] -> []
-      | [_, ...tail] -> drop(tail, n - 1)
+rec drop: (list(a), int) -> list(a) = {
+  | [], _
+  | xs, { <= 0 } -> xs
+  | [_, ...tail], n -> drop(tail, n - 1)
 }
 ```
 
@@ -151,7 +143,7 @@ Create numeric sequences:
 def oneToTen = [1..10]
 -- Result: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
 
-def evens = [2, 4..20]
+def evens = [2, ...4..20]
 -- Result: [2, 4, 6, 8, 10, 12, 14, 16, 18, 20]
 ```
 
@@ -161,13 +153,14 @@ Build lists declaratively:
 
 ```nyx
 -- Simple comprehension
-def squares = [x * x | x <- [1..10]]
+def squares = [for 1..10 | x -> x * x ]
 
 -- With filter
-def evenSquares = [x * x | x <- [1..10], x % 2 == 0]
+def evenSquares = [for 1..10 | x if x % 2 == 0 -> yield! x * x 
+                             | _ -> ()]
 
--- Multiple generators
-def pairs = [(x, y) | x <- [1..3], y <- [1..3]]
+-- Zipped generators
+def pairs = [for (1..3), (1..3) | x, y -> (x, y)]
 ```
 
 ## Other Collection Types
@@ -205,7 +198,7 @@ For large or infinite collections, use sequences:
 
 ```nyx
 -- Infinite sequence
-def naturals = Seq.iterate(0, { + 1 })
+def naturals = Seq.unfold(0) { + 1 }
 
 -- Take first 10
 def firstTen = naturals \take(10) \toList
@@ -216,16 +209,13 @@ def firstTen = naturals \take(10) \toList
 ### Finding Elements
 
 ```nyx
-rec find: (list(a), (a -> bool)) -> Option(a) = { xs, predicate ->
-  match xs
-    | [] -> #none
-    | [head, ...tail] ->
-        if predicate(head)
-          -> #some(head)
-          else -> find(tail, predicate)
+rec find: (list(a), (a -> bool)) -> Option(a) = {
+  | [] -> #none
+  | [head, ...] if predicate(head) ->
+  | [_, ...tail] -> find(tail, predicate)
 }
 
-def firstEven = find([1, 3, 4, 5], { n -> n % 2 == 0 })
+def firstEven = [1, 3, 4, 5] \find { % 2 == 0 }
 -- Result: #some(4)
 ```
 
@@ -233,11 +223,11 @@ def firstEven = find([1, 3, 4, 5], { n -> n % 2 == 0 })
 
 ```nyx
 def groupBy: (list(a), (a -> b)) -> Map(b, list(a)) = { xs, keyFn ->
-  xs \fold(dict {}, { acc, x ->
+  xs \fold(dict {}) { acc, x ->
     def key = keyFn(x)
     def existing = acc[key] \getOrElse([])
     acc \insert(key, [x, ...existing])
-  })
+  }
 }
 
 def byAge = users \groupBy { .age }
@@ -246,12 +236,11 @@ def byAge = users \groupBy { .age }
 ### Sorting
 
 ```nyx
-def sort: list(a) -> list(a) = { xs ->
-  match xs
-    | [] -> []
-    | [pivot, ...rest] ->
-        def smaller = rest \filter { <= pivot }
-        def larger = rest \filter { > pivot }
-        [...sort(smaller), pivot, ...sort(larger)]
+def sort: list(a) -> list(a) = {
+  | [] -> []
+  | [pivot, ...rest] ->
+      def smaller = rest \filter { <= pivot }
+      def larger = rest \filter { > pivot }
+      [...sort(smaller), pivot, ...sort(larger)]
 }
 ```

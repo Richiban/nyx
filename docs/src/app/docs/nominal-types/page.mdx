@@ -26,11 +26,11 @@ Because `UserId` and `ProductId` are both aliases for `int`, the compiler cannot
 A nominal type wraps an underlying type and is distinguished by its name, not its shape. You define a nominal type using the same name for both the type and its constructor:
 
 ```nyx
-type UserId = UserId int
-type ProductId = ProductId int
+type @UserId = int
+type @ProductId = int
 ```
 
-Now `UserId` and `ProductId` are distinct types, even though they both wrap an `int`. You construct and unwrap them explicitly:
+Now `@UserId` and `@ProductId` are distinct types, even though they both wrap an `int`. You construct and unwrap them explicitly:
 
 ```nyx
 def userId: UserId = UserId(42)
@@ -40,32 +40,33 @@ def productId: ProductId = ProductId(42)
 def user = getUser(productId)
 ```
 
-### Unwrapping Nominal Types
+A nominal type is still assignable to its underlying structure, but the reverse is not true.
 
-Use pattern matching to extract the inner value:
+### Constructing Nominal Types
+
+Inside a nominal type's home module a nominal type can be constructed using its constructor function:
 
 ```nyx
-def unwrapUserId: UserId -> int = { UserId(n) -> n }
-
--- Or inline in a larger match expression
-def formatUserId: UserId -> string = { UserId(n) -> "user-{n}" }
+def myUserId = @UserId(5)
 ```
+
+Outside the type's home module this constructor is not accessible, which is what protects the type.
 
 ### Nominal Types with Records
 
-Nominal types can wrap record types as well as primitives:
+Nominal types can wrap any value, including record types:
 
 ```nyx
-type EmailAddress = EmailAddress string
-type UserName = UserName string
+type @EmailAddress = string
+type @UserName = string
 
-type User = (
+type @User = (
   id: UserId
   name: UserName
   email: EmailAddress
 )
 
-def makeUser: (int, string, string) -> User = { id, name, email ->
+def makeUser: (int, string, string) -> @User = { id, name, email ->
   (
     id = UserId(id)
     name = UserName(name)
@@ -81,15 +82,16 @@ Opaque types go one step further: the underlying representation is hidden from c
 ```nyx
 -- In module Validation
 
-opaque type ValidatedEmail = ValidatedEmail string
+type @ValidatedEmail = private string
 
-def validate: string -> Option(ValidatedEmail) = { s ->
+def validate: string -> #some(@ValidatedEmail) | #invalidEmail = { s ->
   if s.contains("@") && s.contains(".")
-    then #some(ValidatedEmail(s))
-    else #none
+    then #some(@ValidatedEmail(s))
+    else #invalidEmail
 }
 
-def toString: ValidatedEmail -> string = { ValidatedEmail(s) -> s }
+-- Inside the home module the type can be deconstructed, so we write this helper function:
+def @ValidatedEmail.toString = { @ValidatedEmail(e) -> e }
 ```
 
 Outside the `Validation` module, the `ValidatedEmail` type is opaque — consumers cannot construct one directly, nor can they pattern match on it:
@@ -98,10 +100,10 @@ Outside the `Validation` module, the `ValidatedEmail` type is opaque — consume
 -- In another module
 
 -- This is a type error: the constructor is not visible here
-def bad: ValidatedEmail = ValidatedEmail("not-an-email")
+def bad: @ValidatedEmail = @ValidatedEmail("not-an-email")
 
 -- You must use the provided API
-def good: Option(ValidatedEmail) = validate("user@example.com")
+def good: #some(@ValidatedEmail) | _ = validate("user@example.com")
 ```
 
 This pattern is useful for types that carry validated or normalized data, ensuring that invalid values can never be constructed outside the validation boundary.
@@ -123,8 +125,8 @@ Nominal and opaque types are one of the key tools for making illegal states unre
 def transfer: (int, int, float) -> Result = { ... }
 
 -- Prefer:
-type AccountId = AccountId int
-type Amount = Amount float
+type @AccountId = int
+type @Amount = float
 
 def transfer: (AccountId, AccountId, Amount) -> Result = { fromId, toId, amount -> ... }
 ```

@@ -110,9 +110,11 @@ dotnet run --project compiler/Nyx.Compiler.Cli/NyxCompiler.Cli.fsproj -- sample.
 Current WASM backend support is intentionally minimal and focused on bootstrapping:
 
 - top-level `def` values exported as wasm functions
+- lambda-backed defs compiled as wasm functions with `i32` params/result
 - integer literals
 - integer binary operators (`+`, `-`, `*`, `/`, `%`, comparisons)
-- zero-argument lambdas and simple expression blocks
+- function calls to known module defs
+- simple expression blocks with local `def` assignments (`local.set`/`local.get`)
 
 Other language constructs will currently fail fast with an explicit "Unsupported ... for WASM MVP backend" message.
 

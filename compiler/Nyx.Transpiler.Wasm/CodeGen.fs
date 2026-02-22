@@ -37,12 +37,53 @@ let private flattenCallArgs (args: Expression list) =
     | [TupleExpr items] -> items
     | _ -> args
 
-let private collectBlockLocalNames (statements: Statement list) =
+let rec private collectExprLocalNames (expr: Expression) : string list =
+    match expr with
+    | Block statements -> collectStatementLocalNames statements
+    | BinaryOp(_, left, right) -> (collectExprLocalNames left) @ (collectExprLocalNames right)
+    | IfExpr(cond, thenExpr, elseExpr) ->
+        (collectExprLocalNames cond) @ (collectExprLocalNames thenExpr) @ (collectExprLocalNames elseExpr)
+    | FunctionCall(_, _, args) -> args |> List.collect collectExprLocalNames
+    | Lambda(_, body) -> collectExprLocalNames body
+    | Pipe(value, _, _, args) -> (collectExprLocalNames value) @ (args |> List.collect collectExprLocalNames)
+    | TupleExpr items
+    | ListExpr items -> items |> List.collect collectExprLocalNames
+    | RecordExpr fields ->
+        fields
+        |> List.collect (function
+            | NamedField(_, value) -> collectExprLocalNames value
+            | PositionalField value -> collectExprLocalNames value)
+    | Match(values, arms) ->
+        let valueLocals = values |> List.collect collectExprLocalNames
+        let armLocals =
+            arms
+            |> List.collect (fun (_, armExpr) -> collectExprLocalNames armExpr)
+        valueLocals @ armLocals
+    | UseIn(_, body) -> collectExprLocalNames body
+    | MemberAccess(inner, _, _) -> collectExprLocalNames inner
+    | TagExpr(_, payload) -> payload |> Option.map collectExprLocalNames |> Option.defaultValue []
+    | InterpolatedString parts ->
+        parts
+        |> List.collect (function
+            | StringText _ -> []
+            | StringExpr inner -> collectExprLocalNames inner)
+    | WorkflowBindExpr(_, value)
+    | WorkflowReturnExpr value -> collectExprLocalNames value
+    | UnitExpr
+    | LiteralExpr _
+    | IdentifierExpr _ -> []
+
+and private collectStatementLocalNames (statements: Statement list) : string list =
     statements
-    |> List.choose (function
-        | DefStatement(_, name, _, _) -> Some name
-        | _ -> None)
-    |> List.distinct
+    |> List.collect (function
+        | DefStatement(_, name, _, rhs) -> name :: collectExprLocalNames rhs
+        | ExprStatement expr -> collectExprLocalNames expr
+        | ImportStatement _
+        | TypeDefStatement _
+        | UseStatement _ -> [])
+
+let private collectBlockLocalNames (statements: Statement list) =
+    collectStatementLocalNames statements |> List.distinct
 
 let private createNameMap (names: string list) =
     names

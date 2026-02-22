@@ -1,0 +1,11 @@
+module M
+
+def nested = { x ->
+  def y = x + 1
+  {
+    def z = y + 2
+    z + 3
+  }
+}
+
+def main = nested(5)

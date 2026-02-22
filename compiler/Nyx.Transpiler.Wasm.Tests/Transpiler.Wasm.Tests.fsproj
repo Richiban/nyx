@@ -9,6 +9,7 @@
   <ItemGroup>
     <Compile Include="TestHelpers.fs" />
     <Compile Include="Features\Core\FunctionAndLocalsTests.fs" />
+    <Compile Include="Features\ControlFlow\ControlFlowFixtureTests.fs" />
   </ItemGroup>
 
   <ItemGroup>

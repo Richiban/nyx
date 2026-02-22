@@ -1,4 +1,4 @@
---  In Nyx a polymorphic function is simply one whose return type depends on 
+--  In Nanyx a polymorphic function is simply one whose return type depends on 
 --  the types of its argument(s)
 
 --  The simplest polymorphic function is probably the identity function, i.e.

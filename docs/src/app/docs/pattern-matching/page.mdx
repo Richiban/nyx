@@ -1,10 +1,10 @@
 ## Pattern Matching
 
-Pattern matching is the core of Nyx control flow. It's a powerful feature that lets you destructure data, test conditions, and handle different cases in a type-safe, exhaustive manner.
+Pattern matching is the core of Nanyx control flow. It's a powerful feature that lets you destructure data, test conditions, and handle different cases in a type-safe, exhaustive manner.
 
 ### Match Expressions
 
-The most common way to pattern match in Nyx is with a `match` expression:
+The most common way to pattern match in Nanyx is with a `match` expression:
 
 ```nyx
 def oddOrEven = { n ->
@@ -187,14 +187,14 @@ match getCustomer()
   | #nil -> println("No customer found")
 ```
 
-But this feels a bit laborious. Nyx has the concept of custom patterns, which we can use to
+But this feels a bit laborious. Nanyx has the concept of custom patterns, which we can use to
 introduce a `some` pattern that matches anything _except_ `#nil`:
 
 ```nyx
 pattern Some = not #nil
 ```
 
-This feels much better, and the standard library of Nyx includes such a pattern
+This feels much better, and the standard library of Nanyx includes such a pattern
 
 Note that the above is a simple pattern alias; it could have been written as 
 
@@ -370,7 +370,7 @@ match someInt()
 | { x -> x > 10 } -> "big"
 ```
 
-It's possible in Nyx to pattern match on a partial tag union. This is what allows many of
+It's possible in Nanyx to pattern match on a partial tag union. This is what allows many of
 the standard library functions to act on both an optional value and a result. There's a 
 convention that any tag union that includes a #some(t) variant is considered an 
 "optional T" value and there are many functions that operate on these:

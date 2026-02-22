@@ -1,12 +1,12 @@
-# Nyx VS Code Extension
+# Nanyx VS Code Extension
 
-This extension provides editor support for the Nyx language, including syntax highlighting and compiler-driven diagnostics via a language server.
+This extension provides editor support for the Nanyx language, including syntax highlighting and compiler-driven diagnostics via a language server.
 
 ## Features
 
 - Syntax highlighting for `.nyx` files.
-- Typechecking diagnostics via the Nyx language server (powered by `NyxCompiler.Cli`).
-- Command palette action: **Nyx: Typecheck Current File**.
+- Typechecking diagnostics via the Nanyx language server (powered by `NyxCompiler.Cli`).
+- Command palette action: **Nanyx: Typecheck Current File**.
 
 ## Settings
 
@@ -20,5 +20,5 @@ The language server executes `dotnet run --project <NyxCompiler.Cli.fsproj> -- <
 
 ## Troubleshooting
 
-- If you see **"Nyx compiler project not found"**, update `nyx.compilerProject` to match your workspace layout.
+- If you see **"Nanyx compiler project not found"**, update `nyx.compilerProject` to match your workspace layout.
 - If `dotnet` is not on your PATH, set `nyx.compilerDotnetPath` to the full path.

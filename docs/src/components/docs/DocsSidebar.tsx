@@ -13,7 +13,7 @@ export default function DocsSidebar() {
         <p className="text-xs uppercase tracking-[0.2em] text-[color:var(--nyx-muted)]">
           Navigate
         </p>
-        <h2 className="text-lg font-semibold">Nyx docs</h2>
+        <h2 className="text-lg font-semibold">Nanyx docs</h2>
       </div>
       <nav className="space-y-6">
         {docNav.map((group) => (

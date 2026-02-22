@@ -18,8 +18,8 @@ const jetBrainsMono = JetBrains_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Nyx Docs",
-  description: "Nyx language documentation and guides",
+  title: "Nanyx Docs",
+  description: "Nanyx language documentation and guides",
 };
 
 export default function RootLayout({

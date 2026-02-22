@@ -2,7 +2,7 @@
 Workflows
 =========
 
-Workflows are one of Nyx's more unique, and most powerful, features.
+Workflows are one of Nanyx's more unique, and most powerful, features.
 
 They allow the language to be extended with library functions in a way that feels like a language feature.
 They are similar to computation expressions in F# and similar to (but like more powerful than) Builders from Kotlin
@@ -219,16 +219,16 @@ def html = (
 
 def result = html {                                        
   head {                                               
-      title { "HTML encoding with Nyx" }
+      title { "HTML encoding with Nanyx" }
   }
   body {                                               
-      h1 { "HTML encoding with Nyx" }
+      h1 { "HTML encoding with Nanyx" }
       p {
           "this format can be used as an alternative markup to HTML"                
       }
 
       --  an element with attributes and text content
-      a(href = "http://nyxlang.org") { "Nyx" }
+      a(href = "http://nyxlang.org") { "Nanyx" }
 
       --  mixed content
       p {
@@ -236,7 +236,7 @@ def result = html {
           b { "mixed" }
           "text. For more see the"
           a(href = "http://nyxlang.org") {
-              "Nyx"
+              "Nanyx"
           }
           "project"
       }

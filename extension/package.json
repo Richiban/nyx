@@ -1,7 +1,7 @@
 {
   "name": "nyx",
-  "displayName": "Nyx",
-  "description": "Nyx language support: syntax highlighting and diagnostics",
+  "displayName": "Nanyx",
+  "description": "Nanyx language support: syntax highlighting and diagnostics",
   "publisher": "Richibansoft",
   "repository": {
     "type": "git",
@@ -25,7 +25,7 @@
       {
         "id": "nyx",
         "aliases": [
-          "Nyx",
+          "Nanyx",
           "nyx"
         ],
         "extensions": [
@@ -44,16 +44,16 @@
     "commands": [
       {
         "command": "nyx.typecheckFile",
-        "title": "Nyx: Typecheck Current File"
+        "title": "Nanyx: Typecheck Current File"
       }
     ],
     "configuration": {
-      "title": "Nyx",
+      "title": "Nanyx",
       "properties": {
         "nyx.typecheckOnSave": {
           "type": "boolean",
           "default": true,
-          "description": "Run Nyx compiler on save to surface diagnostics."
+          "description": "Run Nanyx compiler on save to surface diagnostics."
         },
         "nyx.compilerProject": {
           "type": "string",

@@ -25,7 +25,7 @@ export async function activate(context: vscode.ExtensionContext) {
     }
   };
 
-  client = new LanguageClient("nyx", "Nyx Language Server", serverOptions, clientOptions);
+  client = new LanguageClient("nyx", "Nanyx Language Server", serverOptions, clientOptions);
   context.subscriptions.push(client);
   await client.start();
 

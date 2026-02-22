@@ -1,6 +1,6 @@
-# Nyx Programming Language
+# Nanyx Programming Language
 
-Nyx is a statically-typed, functional-first programming language designed for expressive workflows, clean syntax, and strong type safety. It combines the best ideas from functional programming with practical features for real-world development, featuring Hindley-Milner type inference, context-based effects, powerful pattern matching, and a unique pipeline operator for composable transformations.
+Nanyx is a statically-typed, functional-first programming language designed for expressive workflows, clean syntax, and strong type safety. It combines the best ideas from functional programming with practical features for real-world development, featuring Hindley-Milner type inference, context-based effects, powerful pattern matching, and a unique pipeline operator for composable transformations.
 
 ## Table of Contents
 
@@ -29,7 +29,7 @@ Nyx is a statically-typed, functional-first programming language designed for ex
 
 ## Overview
 
-Nyx is built on the principle that code should be clear, composable, and correct. It takes inspiration from languages like F#, Haskell, OCaml, and Elm while maintaining its own unique identity through features like context-based effects and pipeline-centric programming.
+Nanyx is built on the principle that code should be clear, composable, and correct. It takes inspiration from languages like F#, Haskell, OCaml, and Elm while maintaining its own unique identity through features like context-based effects and pipeline-centric programming.
 
 **Current Implementation Status:**
 - ✅ Full parser with comprehensive AST
@@ -45,7 +45,7 @@ The repository includes the full language specification, compiler implementation
 ## Key Features
 
 ### 🎯 **Expression-Oriented Design**
-Everything in Nyx is an expression that returns a value. No statements, just composable expressions that make code flow naturally.
+Everything in Nanyx is an expression that returns a value. No statements, just composable expressions that make code flow naturally.
 
 ### 🔀 **Pipeline Operator**
 The `\` operator lets you chain transformations in a readable, left-to-right manner:
@@ -116,14 +116,14 @@ Run tests to verify the installation:
 dotnet test Nyx.Compiler.sln
 ```
 
-### Your First Nyx Program
+### Your First Nanyx Program
 
 Create a file `hello.nyx`:
 
 ```nyx
 module Hello
 
-def message = "Hello, Nyx!"
+def message = "Hello, Nanyx!"
 
 def main = {
   message \dbg
@@ -141,7 +141,7 @@ dotnet run --project compiler/Nyx.Compiler.Cli/NyxCompiler.Cli.fsproj hello.nyx
 
 ### Basic Syntax
 
-Nyx uses clean, minimal syntax with significant indentation:
+Nanyx uses clean, minimal syntax with significant indentation:
 
 ```nyx
 module MyModule
@@ -167,7 +167,7 @@ def add: (int, int) -> int = { x, y ->
 
 ### Functions and Lambdas
 
-Functions are first-class values in Nyx:
+Functions are first-class values in Nanyx:
 
 ```nyx
 -- Named function
@@ -219,7 +219,7 @@ def processUser = { user ->
 
 ### Types and Type Inference
 
-Nyx features Hindley-Milner type inference with optional type annotations:
+Nanyx features Hindley-Milner type inference with optional type annotations:
 
 ```nyx
 -- Type inference (no annotation needed)
@@ -333,7 +333,7 @@ def area: Shape -> float = { shape ->
     | #triangle(b, h) -> 0.5 * b * h
 }
 
--- Option type (no null in Nyx!)
+-- Option type (no null in Nanyx!)
 type Option(a) = 
   | #some(a)
   | #none
@@ -409,7 +409,7 @@ def handleDivision = {
 
 ### Generics and Type Parameters
 
-Nyx supports parametric polymorphism with automatic generalization:
+Nanyx supports parametric polymorphism with automatic generalization:
 
 ```nyx
 -- Generic function (type parameter α is inferred)
@@ -443,7 +443,7 @@ def fold: [Monoid(a, `+`, `0`)] (list(a)) -> a = { xs ->
 
 ### Constraints and Refinement Types
 
-Nyx supports refinement types for more precise specifications:
+Nanyx supports refinement types for more precise specifications:
 
 ```nyx
 -- Constrained type definition
@@ -462,7 +462,7 @@ type Age = n :: int where n >= 0 && n <= 150
 
 ## Project Structure
 
-The Nyx repository is organized as follows:
+The Nanyx repository is organized as follows:
 
 ```
 nyx/
@@ -474,7 +474,7 @@ nyx/
 │   ├── Nyx.Parser.Tests/  # Parser unit and integration tests
 │   ├── Nyx.Compiler.Tests/# Compiler and type checker tests
 │   └── Nyx.Transpiler.JS.Tests/ # Transpiler tests
-├── examples/              # Example Nyx programs
+├── examples/              # Example Nanyx programs
 │   ├── fizzbuzzbaz.nyx   # FizzBuzz variant with configurable rules
 │   ├── todo-web-app.nyx  # Todo application example
 │   ├── stringTransformation.nyx # String casing transformations
@@ -492,7 +492,7 @@ nyx/
 - **Nyx.Parser**: Parses `.nyx` source files into an Abstract Syntax Tree (AST)
 - **Nyx.Compiler**: Performs type inference and type checking using Hindley-Milner algorithm
 - **Nyx.Transpiler.JS**: Transpiles type-checked AST to JavaScript
-- **Nyx.Compiler.Cli**: Command-line tool for compiling Nyx programs
+- **Nyx.Compiler.Cli**: Command-line tool for compiling Nanyx programs
 
 ## Building from Source
 
@@ -530,7 +530,7 @@ nyx/
 
 ### Command-Line Interface
 
-The Nyx compiler CLI can parse, type-check, and report on `.nyx` files:
+The Nanyx compiler CLI can parse, type-check, and report on `.nyx` files:
 
 ```bash
 # Basic usage
@@ -570,7 +570,7 @@ result: int
 
 ## Examples
 
-The `examples/` directory contains numerous Nyx programs demonstrating various features:
+The `examples/` directory contains numerous Nanyx programs demonstrating various features:
 
 ### FizzBuzzBaz - Configurable FizzBuzz
 
@@ -654,13 +654,13 @@ def runSumdown = {
 
 ## Design Principles
 
-Nyx is built on a foundation of carefully considered design principles:
+Nanyx is built on a foundation of carefully considered design principles:
 
 ### 🎯 **Correctness Above All**
 The language prioritizes correctness over convenience. Static type checking, exhaustive pattern matching, and no null values ensure fewer runtime errors.
 
 ### 🧘 **Simple ≠ Easy**
-Nyx favors conceptual simplicity over ease of initial use. The language may take longer to learn, but its consistency and orthogonality pay dividends over time.
+Nanyx favors conceptual simplicity over ease of initial use. The language may take longer to learn, but its consistency and orthogonality pay dividends over time.
 
 ### 📣 **Inform, Don't Block**
 Warnings are treated as errors in release builds, but debug builds can still execute. This maintains a tight feedback loop while ensuring production code is warning-free.
@@ -690,7 +690,7 @@ For the complete list of design principles, see [`docs-md/50.principles.md`](doc
 
 ## Development Status
 
-Nyx is under active development. Current status:
+Nanyx is under active development. Current status:
 
 ✅ **Completed:**
 - Core parser with full language syntax
@@ -722,13 +722,13 @@ Nyx is under active development. Current status:
 
 ## Contributing
 
-Contributions to Nyx are welcome! Here's how you can help:
+Contributions to Nanyx are welcome! Here's how you can help:
 
 1. **Report bugs**: Open an issue describing the problem and steps to reproduce
 2. **Suggest features**: Propose new features or improvements via issues
 3. **Write code**: Fork the repository, make changes, and submit a pull request
 4. **Improve docs**: Documentation improvements are always appreciated
-5. **Create examples**: Add example programs showcasing Nyx features
+5. **Create examples**: Add example programs showcasing Nanyx features
 
 ### Development Workflow
 
@@ -751,7 +751,7 @@ Contributions to Nyx are welcome! Here's how you can help:
 
 - **Documentation**: [`docs/`](docs/) - Next.js-based documentation site
 - **Language Spec**: [`llm/README.md`](llm/README.md) - Full language specification
-- **Examples**: [`examples/`](examples/) - Sample Nyx programs
+- **Examples**: [`examples/`](examples/) - Sample Nanyx programs
 - **Compiler README**: [`compiler/README.md`](compiler/README.md) - Detailed compiler documentation
 - **Design Principles**: [`docs-md/50.principles.md`](docs-md/50.principles.md) - Language design philosophy
 
@@ -761,6 +761,6 @@ This project is open source. See the LICENSE file for details.
 
 ---
 
-**Nyx** - A language for clear, composable workflows.
+**Nanyx** - A language for clear, composable workflows.
 
 Built with ❤️ in F#

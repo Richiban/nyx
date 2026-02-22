@@ -2,9 +2,9 @@
 Functions
 =========
 
-An important difference between Nyx and many other languages is that all functions take exactly one argument
+An important difference between Nanyx and many other languages is that all functions take exactly one argument
 and return exactly one result.
-This means that there is only one function signature in Nyx: `a -> b`, where `a` is the type of the input and `b`
+This means that there is only one function signature in Nanyx: `a -> b`, where `a` is the type of the input and `b`
 is the type of the output.
 
 This doesn't sound terribly useful until you consider that records allow you to pass multiple values as one
@@ -20,7 +20,7 @@ def add = { x, y -> x + y }
 --  What about functions that take no inputs, or return no output?
 --  The type `()` is the type of the value `()`, which is the only value of the type `()`. This is called the 
 --  "Unit type", and is essentially a record with no elements.
---  In Nyx, if your function returns unit, you don't need to explicitly return it. This makes it feel like a `void`
+--  In Nanyx, if your function returns unit, you don't need to explicitly return it. This makes it feel like a `void`
 --  function from other languages:
 
 def printHello = {
@@ -29,7 +29,7 @@ def printHello = {
     -- the function body
 }
 
---  Since Nyx contains many concepts from functional programming, it is useful to be able to easily
+--  Since Nanyx contains many concepts from functional programming, it is useful to be able to easily
 --  write a function literal. This is done with braces:
 def print1 = { print("1") }
 
@@ -67,7 +67,7 @@ rec sumList
   }
 
 
---	Since a function that consists of a single match expression is so common in Nyx,
+--	Since a function that consists of a single match expression is so common in Nanyx,
 --  you can merge the function definition and | statements together, dropping the need to name an argument
 rec sumList = {
   | []              -> 0
@@ -83,7 +83,7 @@ rec sumList
     | [head, ...tail] -> head + sumList(tail) 
   }
 
---  Also note that, since functions in Nyx are defined in record form, it's possible to pattern match immediately
+--  Also note that, since functions in Nanyx are defined in record form, it's possible to pattern match immediately
 --  on multiple arguments:
 def divide
   : int, int -> Result(int, #divideByZero)
@@ -177,12 +177,12 @@ def lastThree = reverse >> firstThree >> reverse
 
 --  Functions have the signature `a -> b`, where `a` and `b` are the types
 --  of the function's input and output, respectively.
---  All functions in Nyx take *one* value as input and product one value as output.
+--  All functions in Nanyx take *one* value as input and product one value as output.
 --  This doesn't sound very useful until you consider that records allow you to
 --  pass multiple values as one and unit allows you to return no values.
 
 --  Functions are not the only objects that have this signature `a -> b`, however.
---  The type `a -> b` is called a `mapping`, and there are a number of mappings in Nyx, not
+--  The type `a -> b` is called a `mapping`, and there are a number of mappings in Nanyx, not
 --  just functions. Dictionaries are an example, as are strings. Any object of type
 --  `map` is considered 'applicable', and can be 'called' just like a function
 
@@ -198,7 +198,7 @@ def greeting = "Hello, "
 
 greeting("John")		-- "Hello, John"
 
---  Note: there is no overloading in Nyx. With optional/named parameters and tag unions 
+--  Note: there is no overloading in Nanyx. With optional/named parameters and tag unions
 --  there is so little need for overloading that it's not worth the considerable 
 --  complication to the compiler and type system
 
@@ -212,7 +212,7 @@ greeting("John")		-- "Hello, John"
 
 def replace: (string, string, string) -> string = { source, origin, replacement -> ??? }
 
-replace("Hello world", "world", "Nyx")
+replace("Hello world", "world", "Nanyx")
 
 
 -- If we switch to named parameters in our signature then callers now must use named 
@@ -220,5 +220,5 @@ replace("Hello world", "world", "Nyx")
 
 def replace: (string, replace: string, with: string) -> string = { s, o, r -> ??? }
 
-replace("Hello world", replace = "world", with = "Nyx")
+replace("Hello world", replace = "world", with = "Nanyx")
 

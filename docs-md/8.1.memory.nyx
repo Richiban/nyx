@@ -1,5 +1,5 @@
 ---
-   In Nyx, mutation is available but is bounded. You must open a memory context in order to create 
+   In Nanyx, mutation is available but is bounded. You must open a memory context in order to create 
    mutable variables or use mutable collections.
 
    This makes it possible to implement pure functions that internally use mutable state and 
@@ -70,9 +70,9 @@ def main = {
 }
 
 ---
-   Global mutable state is something that's discouraged in almost every language, and in Nyx
+   Global mutable state is something that's discouraged in almost every language, and in Nanyx
    it's actually impossible. We don't have a dedicated rule that says that you cannot have mutable
-   global state but, due to Nyx's context system and the in-built memory context, it becomes 
+   global state but, due to Nanyx's context system and the in-built memory context, it becomes 
    impossible to create the context necessary to declare a mutable value.
 
    Trying to create a mutable reference at the top level results in this:

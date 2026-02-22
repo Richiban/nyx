@@ -206,7 +206,7 @@ let private isRecordConstructor (env: TranspileEnv) (name: string) (args: Expres
     | [RecordExpr _] -> env.RecordTypes |> Set.contains name
     | _ -> false
 
-// JavaScript code generation for Nyx AST
+// JavaScript code generation for Nanyx AST
 
 let rec transpileLiteral (lit: Literal) : string =
     match lit with

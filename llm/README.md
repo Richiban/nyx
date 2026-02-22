@@ -1,6 +1,6 @@
-# Nyx Programming Language
+# Nanyx Programming Language
 
-Nyx is a statically typed, functional-first language with context capture, explicit workflows, Hindley-Milner type inference, and clean, modern syntax.
+Nanyx is a statically typed, functional-first language with context capture, explicit workflows, Hindley-Milner type inference, and clean, modern syntax.
 
 This repository contains:
 - Full language specification
@@ -9,4 +9,4 @@ This repository contains:
 - Design notes
 - Historical decisions
 
-Let's build Nyx!
+Let's build Nanyx!

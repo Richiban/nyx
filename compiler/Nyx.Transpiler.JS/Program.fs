@@ -1,4 +1,4 @@
-﻿open System
+open System
 open System.IO
 open Parser.Program
 open Transpiler.CodeGen
@@ -17,7 +17,7 @@ let private printDiagnostics (diagnostics: Diagnostic list) =
 let main argv =
     if argv.Length = 0 then
         printfn "Usage: Transpiler <input.nyx> [output.js] [--no-typecheck]"
-        printfn "  Transpiles a Nyx source file to JavaScript"
+        printfn "  Transpiles a Nanyx source file to JavaScript"
         1
     else
         let args = argv |> Array.toList

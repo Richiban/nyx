@@ -1,10 +1,10 @@
 # Functions and Lambdas
 
-Functions are first-class values in Nyx, meaning they can be passed as arguments, returned from other functions, and stored in data structures.
+Functions are first-class values in Nanyx, meaning they can be passed as arguments, returned from other functions, and stored in data structures.
 
 ## Function Basics
 
-All functions in Nyx take exactly one argument and return exactly one result. The function type signature is `a -> b`, where `a` is the input type and `b` is the output type.
+All functions in Nanyx take exactly one argument and return exactly one result. The function type signature is `a -> b`, where `a` is the input type and `b` is the output type.
 
 ```nyx
 -- Simple function
@@ -60,7 +60,7 @@ def names = data \map { item -> item.name }
 
 ## Shorthand Lambdas
 
-Nyx provides convenient shorthand syntax for common lambda patterns:
+Nanyx provides convenient shorthand syntax for common lambda patterns:
 
 ```nyx
 -- Property access
@@ -157,7 +157,7 @@ def result = addOneThenDouble(5)  -- 12
 
 ## Currying
 
-While Nyx functions naturally take one argument, you can create curried-style functions:
+While Nanyx functions naturally take one argument, you can create curried-style functions:
 
 ```nyx
 def add: int -> (int -> int) = { x ->

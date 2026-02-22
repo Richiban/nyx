@@ -2,7 +2,7 @@
 Contexts
 ========
 
-Another crucial feature of Nyx that isn't found in many languages is that of a 'context'
+Another crucial feature of Nanyx that isn't found in many languages is that of a 'context'
 
 A context is, in a way, an implicit parameter to a function; 
 when a function specifies a context that it runs in, all the members of that context are available to it.
@@ -34,7 +34,7 @@ def g: [@Console] () -> () = {
   println("Hello, world!") --  OK
 }
 
---  This means Nyx programs follow the "functional core, imperative shell" paradigm
+--  This means Nanyx programs follow the "functional core, imperative shell" paradigm
 
 
 context Console = (
@@ -161,7 +161,7 @@ def addPoundsAndDollars
     convert(p, #dollars) + d -- `convert` is a function on the `CurrencyConversionTable` context
   }
   
---  This is how effect control is done in Nyx
+--  This is how effect control is done in Nanyx
 
 --  All console programs implicitly run with Console in the context, giving access to things like `print` and `readline`
 def main = {

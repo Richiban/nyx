@@ -1,6 +1,6 @@
-# Nyx Docs
+# Nanyx Docs
 
-This is the documentation site for Nyx, built with Next.js, Tailwind CSS, and MDX.
+This is the documentation site for Nanyx, built with Next.js, Tailwind CSS, and MDX.
 
 ## Develop
 

@@ -2,7 +2,7 @@
 Sequences and series
 ====================
 
-In terms of "enumerable" abstractions, Nyx has both the concept of a sequence and a series. 
+In terms of "enumerable" abstractions, Nanyx has both the concept of a sequence and a series. 
 
 The main difference between the two is that a series is known not to be infinite, and so can safely be iterated.
 

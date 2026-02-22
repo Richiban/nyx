@@ -4,7 +4,7 @@ Lambdas and higher-order functions
 
 > A higher-order function is a function where at least one of its parameters or return values is a function.
 
-As a functional language, higher-order functions are a key feature of Nyx, and have strong compiler support.
+As a functional language, higher-order functions are a key feature of Nanyx, and have strong compiler support.
 
 It's possible to define a regular function using the `def` keyword and then pass it to another function as
 an argument:
@@ -84,7 +84,7 @@ def p = Point {
     set y = 5
 }
 
---  The advantage of this over the standard constructor is that normal Nyx code can be written in
+--  The advantage of this over the standard constructor is that normal Nanyx code can be written in
 --  the lamda, such as to conditionally set properties in a way that is much nicer than a regular 
 --  constructor call, especially where optional properties are present
 

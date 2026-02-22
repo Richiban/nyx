@@ -1,4 +1,4 @@
---  Nyx doesn't support the classic object-oriented notion of a class, but due
+--  Nanyx doesn't support the classic object-oriented notion of a class, but due
 --  to a concise object syntax and closure support, it's easy to simulate (as long
 --  as you don't want inheritance).
 
@@ -18,7 +18,7 @@
 --  println(point1.x)  // prints 2
 --  println(point1)    // prints (2, 3)
 
---  Can be represented in Nyx with:
+--  Can be represented in Nanyx with:
 
 type Point = { x: int, y: int ->
   ( x
@@ -64,7 +64,7 @@ def f [Show(Point)] { p: Point ->
   
 --  -- OO-style programming and classes --
 
---  Nyx doesn't have classes or inheritance, but there are easy ways to encapsulate state 
+--  Nanyx doesn't have classes or inheritance, but there are easy ways to encapsulate state 
 --  and functions together.
 
 --  If a class is required because it has mutable state or private functions, you can
@@ -72,7 +72,7 @@ def f [Show(Point)] { p: Point ->
 --  state or functions captured in the returned object
 
 --  Normally definitions are written with a lowercase starting character, and uppercase
---  characters are for types.  However, Nyx also has the feature where you can write a
+--  characters are for types.  However, Nanyx also has the feature where you can write a
 --  definition with an uppercase starting character, and a type will be generated for you,
 --  with the same name, for the return type of the definition.  
 
@@ -134,7 +134,7 @@ type NumberGame: seq(Rule) = { rules: seq(Rule) ->
 
 --  -- Classes (constructors) --
 
---  Nyx doesn't have classes, but you can simulate a lot of what classes do with simple functions 
+--  Nanyx doesn't have classes, but you can simulate a lot of what classes do with simple functions 
 
 --  For example, a class with a constructor and a method:
 
@@ -161,7 +161,7 @@ def Option.force(this) ->
       | (#some, val) -> val
       | #nil -> throw (#force_none)
   
---  This is a type def, Nyx's equivalent of a nominal type
+--  This is a type def, Nanyx's equivalent of a nominal type
     It is both a function and a type definition
 
     A type def can be thought of as a type depending on a validation function

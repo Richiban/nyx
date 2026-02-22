@@ -13,7 +13,7 @@ async function getHighlighter() {
         langs: ["javascript", "typescript", "bash"],
       });
       
-      // Load the Nyx language grammar
+      // Load the Nanyx language grammar
       // Note: Type assertion needed because the TextMate grammar format isn't fully typed in Shiki
       await highlighter.loadLanguage({
         ...nyxGrammar,

@@ -4,7 +4,7 @@ Ranges
 
 ---
 
---  Ranges in Nyx use the x..y syntax, which we have already seen in the section on for-loops:
+--  Ranges in Nanyx use the x..y syntax, which we have already seen in the section on for-loops:
 
 for 1..5 | i -> println("Hello times {i}")
 

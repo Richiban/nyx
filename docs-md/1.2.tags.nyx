@@ -2,7 +2,7 @@
 Tags
 ====
 
-Tags are a foundational, and rather unusual, feature of Nyx. Tags are a special type of 
+Tags are a foundational, and rather unusual, feature of Nanyx. Tags are a special type of 
 literal; a tag's name is also its value, which is also its type.
 
 Tags are similar to symbols in Ruby or atoms in Erlang. They also have some similarities

@@ -11,7 +11,7 @@ export default function Home() {
             </div>
             <div>
               <p className="text-sm uppercase tracking-[0.2em] text-[color:var(--nyx-muted)]">
-                Nyx Language
+                Nanyx Language
               </p>
               <p className="text-xl font-semibold">Documentation</p>
             </div>
@@ -37,7 +37,7 @@ export default function Home() {
             a language for expressive workflows
           </div>
           <h1 className="text-4xl font-semibold leading-tight md:text-6xl">
-            Nyx is a language for composable tools, strong types, and readable
+            Nanyx is a language for composable tools, strong types, and readable
             pipelines.
           </h1>
           <p className="max-w-xl text-lg text-[color:var(--nyx-muted)]">
@@ -82,7 +82,7 @@ export default function Home() {
             </div>
           </div>
           <div className="nyx-surface nyx-float w-full p-6 md:max-w-sm">
-            <h3 className="text-base font-semibold">Nyx style guide</h3>
+            <h3 className="text-base font-semibold">Nanyx style guide</h3>
             <p className="mt-2 text-sm text-[color:var(--nyx-muted)]">
               Build consistent docs with curated components, MDX blocks, and a
               clean layout.

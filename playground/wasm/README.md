@@ -1,6 +1,6 @@
 # WASM Playground Runner
 
-Run generated Nyx `.wat` files locally with a tiny host runtime.
+Run generated Nanyx `.wat` files locally with a tiny host runtime.
 
 ## Setup
 
@@ -15,7 +15,7 @@ npm install
 npm run run -- ./twelve.wat main
 ```
 
-## Compile + Run Nyx in One Command
+## Compile + Run Nanyx in One Command
 
 ```powershell
 npm run run:nyx -- ./twelve.nyx main

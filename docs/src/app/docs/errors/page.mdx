@@ -1,10 +1,10 @@
 # Error Handling
 
-Nyx takes a different approach to error handling than many languages. There's no null, no exceptions, and no try-catch. Instead, Nyx uses explicit results with tag unions to model failures.
+Nanyx takes a different approach to error handling than many languages. There's no null, no exceptions, and no try-catch. Instead, Nanyx uses explicit results with tag unions to model failures.
 
 ## No Null Values
 
-Nyx has no concept of `null`. If you want to represent a value that may be missing, use a tag union:
+Nanyx has no concept of `null`. If you want to represent a value that may be missing, use a tag union:
 
 ```nyx
 type Option(a) = #some(a) | #none
@@ -159,11 +159,11 @@ def doubled = result \map { * 2 }
 
 ## Philosophy
 
-Nyx's approach to error handling:
+Nanyx's approach to error handling:
 
 1. **Explicit over implicit**: Errors are part of the type signature
 2. **No surprises**: Functions that can fail make it obvious in their return type
 3. **Exhaustive handling**: Pattern matching ensures you handle all cases
 4. **Composable**: Results can be chained and transformed
 
-Unlike exceptions which can be thrown anywhere and caught anywhere, Nyx's error handling is local and explicit. You always know which functions might fail by looking at their types.
+Unlike exceptions which can be thrown anywhere and caught anywhere, Nanyx's error handling is local and explicit. You always know which functions might fail by looking at their types.

@@ -1,5 +1,5 @@
 ---
-Nyx is an eagerly-evaluated language, but it does have some support for Laziness
+Nanyx is an eagerly-evaluated language, but it does have some support for Laziness
 
 By using a `where` block, you can define values that are lazily evaluated.  
 The value will be evaluated the first time it is used, and the result will be cached for future calls.

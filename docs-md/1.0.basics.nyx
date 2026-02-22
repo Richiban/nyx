@@ -5,7 +5,7 @@ Basics
 
 
 ---
-# Trying Nyx
+# Trying Nanyx
 ---
 
 println("Hello World")
@@ -34,7 +34,7 @@ set counter++
 ---
 # Blocks
 
-Blocks in Nyx use indentation. Default to two spaces
+Blocks in Nanyx use indentation. Default to two spaces
 
 ---
 
@@ -45,7 +45,7 @@ def message =
   "{preamble} {audience}"
 
 ---
-In Nyx, any line that is more indented than the previous line is considered to be part of the same line
+In Nanyx, any line that is more indented than the previous line is considered to be part of the same line
 
 If the less-indented line ends with a `->` then the more-indented lines are considered a block.
 
@@ -146,7 +146,7 @@ set myRef.value = 2
 ---
 # Literals
 
-There are a few types of literal in Nyx. Some you will be used to, such as ints, strings and
+There are a few types of literal in Nanyx. Some you will be used to, such as ints, strings and
 bits.
 
 ---
@@ -220,7 +220,7 @@ if | cond1 ->
 ---
 # Strings
 
-Strings are one of the fundamental building blocks of a program. In Nyx there are two
+Strings are one of the fundamental building blocks of a program. In Nanyx there are two
 main types you will be using: `nyx/String` and `nyx/StringBuffer`.
 
 Note: `nyx/String`, like `nyx/Int32` is so common that it has a keyword for it built 
@@ -232,9 +232,9 @@ explicitly import `nyx`.
 
 --  -- Operators --
 
-Operator overloading: while Nyx doesn't allow you to create your own operators, it has a list of operators that
+Operator overloading: while Nanyx doesn't allow you to create your own operators, it has a list of operators that
 are considered valid that you can choose from. Some of them are considered "spare", in that they have no pre-defined
-meaning in Nyx, leaving you free to give them your own.
+meaning in Nanyx, leaving you free to give them your own.
 
 Primary example: `=>`
 
@@ -262,14 +262,14 @@ def myFunction = { () -> ... }
 ---
 # Record unwrapping
 
-Since there's no overloading in Nyx, records and record types get automatically unwrapped for you.
+Since there's no overloading in Nanyx, records and record types get automatically unwrapped for you.
 For example, `list((string, int))` can just be written as `list(string, int)`. In other languages
-this would be ambiguous but in Nyx it's not.
+this would be ambiguous but in Nanyx it's not.
 
 ---
 
 # Compiler errors & warnings
 
-Nyx is a bit different from other languages in that type errors and name errors are compiler warnings,
+Nanyx is a bit different from other languages in that type errors and name errors are compiler warnings,
 not errors. This means that even if you call a function that does not exist the compiler can still 
 produce an executable result. This is part of the "Inform but don't block" principle

@@ -9,7 +9,7 @@ export default function DocsTopNav() {
         </div>
         <div>
           <p className="text-xs uppercase tracking-[0.2em] text-[color:var(--nyx-muted)]">
-            Nyx
+            Nanyx
           </p>
           <p className="text-base font-semibold">Documentation</p>
         </div>

@@ -1,9 +1,9 @@
 # NyxCompiler
 
-Skeleton for the Nyx compiler pipeline.
+Skeleton for the Nanyx compiler pipeline.
 
 ## Goals
-- Parse Nyx source into an AST
+- Parse Nanyx source into an AST
 - Desugar into a canonical AST
 - Typecheck with HM inference + structural equality
 - Lower to IR for codegen

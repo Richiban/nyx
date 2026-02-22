@@ -1,6 +1,6 @@
 # Nominal and Opaque Types
 
-Nyx's type system is primarily structural — two types with the same shape are considered compatible. However, there are situations where you want types to be distinguished by *name* rather than *shape*. Nominal and opaque types let you opt into this stricter identity when correctness demands it.
+Nanyx's type system is primarily structural — two types with the same shape are considered compatible. However, there are situations where you want types to be distinguished by *name* rather than *shape*. Nominal and opaque types let you opt into this stricter identity when correctness demands it.
 
 ## The Problem with Type Aliases
 
@@ -118,7 +118,7 @@ This pattern is useful for types that carry validated or normalized data, ensuri
 
 ## Making Illegal States Unrepresentable
 
-Nominal and opaque types are one of the key tools for making illegal states unrepresentable in Nyx. Instead of passing raw primitives such as `int` or `string` throughout your program, wrap them in named types that carry their meaning:
+Nominal and opaque types are one of the key tools for making illegal states unrepresentable in Nanyx. Instead of passing raw primitives such as `int` or `string` throughout your program, wrap them in named types that carry their meaning:
 
 ```nyx
 -- Instead of:

@@ -1,10 +1,10 @@
 # Types
 
-Nyx features a strong static type system with Hindley-Milner type inference. Types are descriptive and readable, and you can use record types for structure and tag unions for variants.
+Nanyx features a strong static type system with Hindley-Milner type inference. Types are descriptive and readable, and you can use record types for structure and tag unions for variants.
 
 ## Type Inference
 
-Nyx can infer most types automatically:
+Nanyx can infer most types automatically:
 
 ```nyx
 -- Type is inferred as: (number, number) -> number
@@ -28,7 +28,7 @@ def multiply: (int, int) -> int = { x, y -> x * y }
 
 ## Basic Types
 
-Nyx has several built-in primitive types:
+Nanyx has several built-in primitive types:
 
 ```nyx
 def count: int = 42
@@ -94,7 +94,7 @@ def area: Shape -> float = { shape ->
 
 ## Option Types
 
-Nyx has no null values. Use Option types instead:
+Nanyx has no null values. Use Option types instead:
 
 ```nyx
 type Option(a) = #some(a) | #none
@@ -163,7 +163,7 @@ type Mapper(a, b) = ((a -> b), list(a)) -> list(b)
 
 ## Refinement Types
 
-Nyx supports refinement types for more precise specifications (planned feature):
+Nanyx supports refinement types for more precise specifications (planned feature):
 
 ```nyx
 -- Constrained type definition

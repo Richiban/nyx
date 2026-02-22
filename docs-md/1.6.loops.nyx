@@ -2,9 +2,9 @@
 Loops
 =====
 
-Loops are an important concept in Nyx, as they are in most programming languages.
+Loops are an important concept in Nanyx, as they are in most programming languages.
 
-Like many other languages, Nyx uses the `for` keyword to denote a loop. The syntax
+Like many other languages, Nanyx uses the `for` keyword to denote a loop. The syntax
 is slightly different in that the collection / iterable to loop over comes first; this
 brings a number of advantages:
 * more natural readability
@@ -38,7 +38,7 @@ This means that the following are possible:
 ---
 
 -- A common ask in many languages is to be able to enumerator the items in a 
--- collection whilst also keeping track of a counter. This is possible in Nyx
+-- collection whilst also keeping track of a counter. This is possible in Nanyx
 -- with a very short syntax, making use of the fact that a record of two (or
 -- more) iterables can be enumerated together, in way that's effectively the 
 -- same as zipping:
@@ -73,6 +73,6 @@ If you want to ignore one of the variables available to you in the loop you can
 for dict | _, value -> 
     print "I only care about {value} in this dictionary"
 
---	Note that, | with almost any statement in Nyx, a for loop is also an expression.
+--	Note that, | with almost any statement in Nanyx, a for loop is also an expression.
 --  This means that is can be used on the RHS of an assignment by 'selecting' a value.
 --  This brings us on to:

@@ -1,6 +1,6 @@
 # NyxCompiler.Cli
 
-Tiny CLI runner for the Nyx compiler pipeline.
+Tiny CLI runner for the Nanyx compiler pipeline.
 
 ## Usage
 

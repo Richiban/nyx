@@ -18,7 +18,7 @@ let private printDiagnostics (diagnostics: Diagnostic list) =
 let main argv =
     if argv.Length = 0 then
         printfn "Usage: Nyx.Transpiler.Wasm <input.nyx> [output.wat]"
-        printfn "  Transpiles a Nyx source file to WebAssembly text format (.wat)"
+        printfn "  Transpiles a Nanyx source file to WebAssembly text format (.wat)"
         1
     else
         let inputFile = argv.[0]

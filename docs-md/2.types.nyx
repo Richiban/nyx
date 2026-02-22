@@ -19,7 +19,7 @@
   be declared literally like so: (). All functions must return something so sometimes Unit is a
   useful return type.
   
-  AnyRef represents reference types. All non-value types in Nyx are reference types, so every
+  AnyRef represents reference types. All non-value types in Nanyx are reference types, so every
   user-defined record, class, or context inherits from AnyRef.
   
   Here is an example that demonstrates that strings, integers, characters, boolean values, and
@@ -76,9 +76,9 @@ def mutatePerson = { p: Mut(Person) ->
 
   Some basic types:
 
-  Anything (alias: any. The top type for Nyx, or the set of all possible values. All types can be assigned to 'any')
-  Null (alias -> (). The Unit type for Nyx. Has only one value: '()')
-  Undefined (alias: {}. The bottom type for Nyx, or the set of no values. 'Undefined' can be assigned to all types.)
+  Anything (alias: any. The top type for Nanyx, or the set of all possible values. All types can be assigned to 'any')
+  Null (alias -> (). The Unit type for Nanyx. Has only one value: '()')
+  Undefined (alias: {}. The bottom type for Nanyx, or the set of no values. 'Undefined' can be assigned to all types.)
 
   A function can take an argument of type 'any'. This allows any object to be passed in.
 
@@ -94,11 +94,11 @@ def f: () -> undefined = { panic "not implemented" }
 
 --  Set Operations
 --
---  The type system in Nyx is based on set theory. Defining a value such as `x: string` reads
+--  The type system in Nanyx is based on set theory. Defining a value such as `x: string` reads
 --  as “x is a member of the set of all strings”. This perspective lets us compose new types
 --  and constraints using the following operations:
 
-def x: #stringValue | #intValue = ...  -- (|) is a tag union. Nyx can only union tags, so to unite
+def x: #stringValue | #intValue = ...  -- (|) is a tag union. Nanyx can only union tags, so to unite
                                         --  different shapes you must wrap the payload in tags.
 
 def x: (string, int) = ...  -- (,) gives the cartesian product of two (or more) sets, i.e. a record.
@@ -125,7 +125,7 @@ A | (B & C) == (A | B) & (A | C)
 (A, B) | (A, C) == (A, B | C)
 
 ---
-  Nyx does not support arbitrary unions of unrelated types. Only tags (with optional payloads)
+  Nanyx does not support arbitrary unions of unrelated types. Only tags (with optional payloads)
   may participate in a union expression, so wrap other values in tags when you need alternatives.
 
   The Unit type is so-called because it has exactly one member and can be thought of as '1'
@@ -167,7 +167,7 @@ type MyRecord = (
 )
 
   
---  In Nyx, record types can be thought of as abstract types, or interfaces. When thinking of
+--  In Nanyx, record types can be thought of as abstract types, or interfaces. When thinking of
 --  interfaces think of structural interfaces, meaning that they don't need to be explicitly
 --  implemented. Example below:
 
@@ -263,7 +263,7 @@ def obj: A & B = ( a = "a", b = "b" )
   Nominal types
 
   Sometimes the name of a type is what's significant about a type, rather than its shape.
-  Nyx provides nominal and nominal-private (aka opaque types) types.
+  Nanyx provides nominal and nominal-private (aka opaque types) types.
 
   A nominal type cannot be constructed (or cloned) outside of its home module. To make it
   useful you need to write and export a constructor function.

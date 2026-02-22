@@ -1,6 +1,6 @@
-# Nyx Parser
+# Nanyx Parser
 
-A parser for the Nyx programming language built with FParsec.
+A parser for the Nanyx programming language built with FParsec.
 
 ## Features
 

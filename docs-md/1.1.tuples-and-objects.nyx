@@ -2,7 +2,7 @@
   Objects
   =======
 
-  Nyx has strong support for objects: tuples and records
+  Nanyx has strong support for objects: tuples and records
 
 ---
 
@@ -13,7 +13,7 @@ def point = (x = 1, y = 2)
 ---
 
   Note that the concepts of "tuples" and "records" are 
-  unified in Nyx, meaning that the tuple ("a", "b") is actually equivalent to the 
+  unified in Nanyx, meaning that the tuple ("a", "b") is actually equivalent to the 
   record (`0` = "a", `1` = "b")
 
 ---
@@ -35,7 +35,7 @@ def point = (
 
   In a language where immutability is the default, it is almost required that there is a way to
   make a copy of a value with some of its properties changed. This is called "copy-and-update"
-  or "non-destructive mutation". Nyx has two special syntactical forms for this:
+  or "non-destructive mutation". Nanyx has two special syntactical forms for this:
     1. The `with` keyword
     2. The spread operator `...` 
   

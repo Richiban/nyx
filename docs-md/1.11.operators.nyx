@@ -2,35 +2,35 @@
   Operators
   =========
 
-  Operators in Nyx are ordinary functions with special syntax. Because operators are values, you 
+  Operators in Nanyx are ordinary functions with special syntax. Because operators are values, you 
   can call them infix, postfix, prefix, or pass them around just like any other function. 
-  Unlike many other languages, operators in Nyx *must* be double-spaced at the point of use.
+  Unlike many other languages, operators in Nanyx *must* be double-spaced at the point of use.
 
 ---
   # Defining operators
 
   Some languages have a mapping of operators <-> function names, where `a || b` 'desugars' to 
-  `Bool.or(a, b)`. That's not how Nyx works; we feel that this table can be difficult for users
+  `Bool.or(a, b)`. That's not how Nanyx works; we feel that this table can be difficult for users
   to keep in their heads over a long period of time ("Wait, was '%' called 'mod()' or 'modulo()'? 
   Or maybe it was 'percent()'? Actually, I think this is technically remainder instead of modulo 
   so maybe it was 'rem()'?").
 
-  Instead, Nyx relies on the fact that we can write definitions with names that would normally be
+  Instead, Nanyx relies on the fact that we can write definitions with names that would normally be
   illegal using `` syntax. For example, we can put spaces in a definition name: 
 
 def `my value` = ??? 
 
 ---
-  We use this to write an operator in Nyx:
+  We use this to write an operator in Nanyx:
 
 def `+++`: string, string -> string = { a, b -> ??? }
 
-If a definition is a valid operator name then Nyx will allow you to use it as an operator:
+If a definition is a valid operator name then Nanyx will allow you to use it as an operator:
 
 def r = "one" +++ "two"
 
 ---
-  Nyx is a bit unusual in that an operator can have any number of arguments (well, except 
+  Nanyx is a bit unusual in that an operator can have any number of arguments (well, except 
   none at all!). An operator with one argument is a unary operator and everything else is a binary
   operator. If an operator function has three or more arguments then the same rule as piping
   is followed, i.e. that all remaining arguments are supplied in a record.
@@ -80,7 +80,7 @@ def isValid = { .length > 0 } and { .trim() != "" }
 ---
   # Pipe and Composition
 
-  Nyx provides `\` for left-to-right piping, essential for building fluent pipelines without 
+  Nanyx provides `\` for left-to-right piping, essential for building fluent pipelines without 
   deeply nested calls.
 
 def result = data
@@ -120,5 +120,5 @@ values \reduce(`++`)
   # Overload Resolution
 
   Operator behavior is driven by the contexts available at the callsite. If multiple contexts provide the same operator,
-  Nyx selects the most specific in scope. When no implementation is available the compiler warns but allows execution,
+  Nanyx selects the most specific in scope. When no implementation is available the compiler warns but allows execution,
   falling back to runtime resolution.

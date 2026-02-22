@@ -1,8 +1,8 @@
-# Pattern Matching
+## Pattern Matching
 
 Pattern matching is the core of Nyx control flow. It's a powerful feature that lets you destructure data, test conditions, and handle different cases in a type-safe, exhaustive manner.
 
-## Match Expressions
+### Match Expressions
 
 The most common way to pattern match in Nyx is with a `match` expression:
 
@@ -16,7 +16,7 @@ def oddOrEven = { n ->
 
 The `_` pattern matches anything, acting as a catch-all.
 
-## Matching on Tag Unions
+### Matching on Tag Unions
 
 Pattern matching is especially powerful with tag unions:
 
@@ -36,7 +36,7 @@ def area: Shape -> float = { shape ->
 }
 ```
 
-## Matching on Records
+### Matching on Records
 
 You can destructure records in pattern matches:
 
@@ -49,7 +49,7 @@ def greet: Person -> string = { person ->
 }
 ```
 
-## Matching on Literals
+### Matching on Literals
 
 Match specific values:
 
@@ -64,7 +64,7 @@ def classify: int -> string = { x ->
 }
 ```
 
-## Comparison Patterns
+### Comparison Patterns
 
 Use comparison operators directly in patterns:
 
@@ -77,7 +77,7 @@ def sign: int -> string = { x ->
 }
 ```
 
-## List Destructuring
+### List Destructuring
 
 Pattern match on lists with head/tail patterns:
 
@@ -88,7 +88,7 @@ rec sumList: list(int) -> int = {
 }
 ```
 
-## Guards
+### Guards
 
 Add conditions to patterns with `if`:
 
@@ -101,7 +101,7 @@ def classifyNumber: int -> string = {
 }
 ```
 
-## Pattern Matching in Function Definitions
+### Pattern Matching in Function Definitions
 
 Functions can pattern match directly on their arguments:
 
@@ -122,7 +122,7 @@ def divide
   }
 ```
 
-## Exhaustiveness
+### Exhaustiveness
 
 The compiler checks that your patterns are exhaustive - they must cover all possible cases:
 
@@ -135,7 +135,7 @@ def bad: Option(int) -> int = { opt ->
 }
 ```
 
-## Nested Patterns
+### Nested Patterns
 
 Patterns can be arbitrarily nested:
 
@@ -148,7 +148,7 @@ def process: list(Option(int)) -> int = { data ->
 }
 ```
 
-## Labeled Patterns
+### Labeled Patterns
 
 Use labels when destructuring to keep the original value:
 
@@ -159,7 +159,7 @@ xs     -- => [2,3]
 list1  -- => [1,2,3]
 ```
 
-## Total vs Partial Patterns
+### Total vs Partial Patterns
 
 Some patterns always match (total), others might fail (partial):
 
@@ -174,3 +174,237 @@ def (x, y) = (4, 5)
 if record is (4, y) ->
   println(y)
 ```
+
+## Negated patterns
+
+But having to repeat the type name `Customer` is a bit anti-DRY.
+
+We can instead match against anything _except_ `#nil` using the `not` modifier to the pattern:
+
+```nyx
+match getCustomer()
+  | (not #nil) customer -> println("Hello, {customer.name}")
+  | #nil -> println("No customer found")
+```
+
+But this feels a bit laborious. Nyx has the concept of custom patterns, which we can use to
+introduce a `some` pattern that matches anything _except_ `#nil`:
+
+```nyx
+pattern Some = not #nil
+```
+
+This feels much better, and the standard library of Nyx includes such a pattern
+
+Note that the above is a simple pattern alias; it could have been written as 
+
+```nyx
+pattern Some = {
+  | (not #nil) s -> (true, s)
+  | _ -> false
+}
+```
+
+It can then be used like this:
+
+```nyx
+match someFunction()
+  | #some data -> data
+  | #nil -> "no data"
+```
+
+### Custom patterns with outputs
+
+Some patterns can have both inputs and outputs; e.g. this regex pattern:
+
+```nyx
+pattern Regex = { r, s ->
+  if Regex(r).match(s) ->
+    s
+  else ->
+    #nil
+}
+```
+
+```nyx
+def fizzbuzz { range ->
+  range \map { i ->
+    match i % 3, i % 5
+    | 0, 0 -> "fizzbuzz"
+    | 0, _ -> "fizz"
+    | _, 0 -> "buzz"
+    | else   -> string(i)
+  }
+}
+```
+
+Using a custom pattern, we can reduce the Fizzbuzz example above to:
+
+```nyx
+pattern DivisibleBy | _ = { divisor, x ->
+  if x \mod divisor == 0 -> true
+  else -> false
+}
+```
+
+```nyx
+def fizzbuzz { range ->
+  range \map {
+    | DivisibleBy(3) & DivisibleBy(5) -> "fizzbuzz"
+    | DivisibleBy(3) -> "fizz"
+    | DivisibleBy(5) -> "buzz"
+    | else -> "{i}"
+  }
+}
+```
+
+There is also an `except` keyword, which works like `match` except that it does
+not necessarily need to match all cases; any unmatched values are simply returned
+
+```nyx
+type AD = #a | #b | #c | #d
+
+def f: AD -> string = { x ->
+  x except 
+    | #a -> "a"
+    | #b -> "b" -- Since we've only matched #a and #b, #c and #d will be returned as-is
+                -- The whole function now has a return value of `string | #c | #d`
+}
+```
+
+When using `except`, if the result has been narrowed down to a single tag from a tag union
+then it is automatically unwrapped:
+
+```nyx
+def f: (#a(string) | #b) -> string = { x ->
+  def s =
+    x except 
+      | #b -> "No string" 
+
+  -- s is of type string
+  -- Notice how the #a has disappeared because it was the only tag remaining
+}
+```
+
+The `except` keyword is especially useful for handling errors. For example, given the function
+
+```nyx
+def getCustomer
+  : (id: string) -> #some(Customer) | #notFound 
+  = { id -> 
+    if ... -> #notFound
+    else -> #some(Customer(...))
+  }
+```
+
+we can use `except` to handle the error case in a more functional way:
+
+```nyx
+def f = {
+  def customer = getCustomer("some_id") except
+    | #notFound -> return #customerDoesNotExist
+
+  ... -- Do something with `customer`
+}
+```
+
+Pattern matching is a powerful tool for working with data. It allows you to both test an expression to see if it contains
+certain data and, at the same, to extract other pieces of data from the expression.
+
+The syntax for pattern matching is to pipe an expression to a series of `case` arms, like so:
+
+```nyx
+def f = {
+  | 1 -> "one"
+  | 2 -> "two"
+  | 3 -> "three"
+  | _ -> "lots" 
+}
+```
+
+Active patterns are functions that can be used in a | arm. They are written as a normal function, but with the
+name encased in brackets
+
+The simplest active pattern is a function that returns a boolean. If the function returns true, the match arm is executed.
+Patterns can be partial or total
+
+```nyx
+pattern Even | _ = { x -> x % 2 == 0 }
+
+pattern Even | Odd = { x -> 
+  if x % 2 == 0 -> Even 
+  else -> Odd
+}
+
+def f: int -> string = { x -> match x
+  | Even -> "even"
+  | Odd  -> "odd" -- This pattern is known to be complete, so we don't need a catch-all arm
+}
+```
+
+Active patterns can also return a value. This value is then bound to the name of the active pattern in the match arm.
+This pattern is also `partial` (indicated by the `?`), meaning that it might not match
+
+```nyx
+pattern Regex | _ = { r, x ->
+  if Text.regexMatch(r, x) is [y, ...] ->
+    Regex(y)
+}
+```
+
+```nyx
+def f = { 
+  | Regex("^[0-9]+$", d) -> "a number -> {d}"
+  | Regex("^[a-z]+$", s) -> "a string -> {s}"
+  | _                    -> "something else" 
+}
+```
+
+It's also possible to match using an arbitrary function:
+
+```nyx
+match someInt()
+| 0               -> "zero"
+| { < 5 }         -> "small"
+| { in 5..10 }    -> "medium"
+| { x -> x > 10 } -> "big"
+```
+
+It's possible in Nyx to pattern match on a partial tag union. This is what allows many of
+the standard library functions to act on both an optional value and a result. There's a 
+convention that any tag union that includes a #some(t) variant is considered an 
+"optional T" value and there are many functions that operate on these:
+
+```nyx
+def maybeString: (#some(string) | _) -> string = {
+  | #some(s) -> s
+  | _ -> "Nothing was found"
+}
+```
+
+In the above function the "rest" parameter that represents the rest of the union is unused
+so we can use the discard syntax `_`.
+
+We can give it a proper type parameter if we'd like to use it elsewhere in the function 
+signature. For example, in this optional map function:
+
+```nyx
+def mapOptional: (#some(a) | r), (a -> b) -> (#some(b) | r) = {
+  | #some(v), f -> #some(f(v))
+  | other -> other
+}
+
+def x: #some(string) | #nil = ???
+def x' = x \mapOptional { s -> s.length } -- x': #some(int) | #nil
+
+def y: #some(int) | #noValue | #infinity = ???
+def y' = y \mapOptional { \float } -- y': #some(float) | #noValue | #infinity
+
+def z: #some(Customer) | #err(string) = ???
+def z' = z \mapOptional { .id } -- z': #some(CustomerId) | #err(string)
+
+```
+
+Notice how we have specified that the union of the first argument should include #some(a)
+but we have placed no limits on what the other tags in the union can be. That allows us
+to map one of the tags whilst leaving all others as-is.

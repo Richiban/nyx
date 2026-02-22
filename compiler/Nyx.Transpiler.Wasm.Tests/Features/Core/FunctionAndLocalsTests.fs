@@ -56,3 +56,27 @@ let ``Transpile top-level constant def`` () =
     Assert.Contains("(func $one (result i32)", wat)
     Assert.Contains("i32.const 1", wat)
     Assert.Contains("(export \"one\" (func $one))", wat)
+
+[<Fact>]
+let ``Transpile magic dbg for int`` () =
+    let source =
+        "module M\n\n" +
+        "def main = dbg(42)"
+
+    let wat = transpileWat source
+
+    Assert.Contains("(import \"env\" \"dbg\" (func $dbg (param i32)))", wat)
+    Assert.Contains("i32.const 42", wat)
+    Assert.Contains("call $dbg", wat)
+
+[<Fact>]
+let ``Transpile magic dbg for string literal`` () =
+    let source =
+        "module M\n\n" +
+        "def main = dbg(\"hello\")"
+
+    let wat = transpileWat source
+
+    Assert.Contains("(import \"env\" \"dbg\" (func $dbg (param i32)))", wat)
+    Assert.Contains("i32.const 0", wat)
+    Assert.Contains("call $dbg", wat)

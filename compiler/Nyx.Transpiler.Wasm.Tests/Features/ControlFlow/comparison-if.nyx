@@ -1,0 +1,5 @@
+module M
+
+def threshold = { x -> if x >= 10 then 1 else 0 }
+
+def main = threshold(15)

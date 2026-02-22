@@ -115,6 +115,7 @@ Current WASM backend support is intentionally minimal and focused on bootstrappi
 - integer binary operators (`+`, `-`, `*`, `/`, `%`, comparisons)
 - function calls to known module defs
 - simple expression blocks with local `def` assignments (`local.set`/`local.get`)
+- magic `dbg(...)` support via wasm host import: `(import "env" "dbg" (func $dbg (param i32)))`
 
 Other language constructs will currently fail fast with an explicit "Unsupported ... for WASM MVP backend" message.
 

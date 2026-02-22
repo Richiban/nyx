@@ -1,0 +1,7 @@
+def main = {
+  dbg("Hello, wasm!")
+  dbg(#test)
+  dbg(1)
+}
+
+main()

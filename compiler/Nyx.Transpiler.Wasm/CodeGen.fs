@@ -5,7 +5,8 @@ open Parser.Program
 
 type private TranspileEnv =
     { KnownFunctions: Set<string>;
-            Locals: Map<string, string> }
+    Locals: Map<string, string>;
+    DbgTempLocal: string option }
 
 let private sanitizeIdentifier (name: string) =
     let sanitized =
@@ -98,6 +99,49 @@ let private createNameMap (names: string list) =
         (acc |> Map.add name chosen, used |> Set.add chosen)) (Map.empty, Set.empty)
     |> fst
 
+let rec private containsDbgCallExpr (expr: Expression) : bool =
+    match expr with
+    | FunctionCall(name, _, _) when name = "dbg" -> true
+    | FunctionCall(_, _, args) -> args |> List.exists containsDbgCallExpr
+    | BinaryOp(_, left, right) -> containsDbgCallExpr left || containsDbgCallExpr right
+    | IfExpr(cond, thenExpr, elseExpr) ->
+        containsDbgCallExpr cond || containsDbgCallExpr thenExpr || containsDbgCallExpr elseExpr
+    | Block statements -> containsDbgCallStatements statements
+    | Lambda(_, body) -> containsDbgCallExpr body
+    | Pipe(value, _, _, args) -> containsDbgCallExpr value || (args |> List.exists containsDbgCallExpr)
+    | TupleExpr items
+    | ListExpr items -> items |> List.exists containsDbgCallExpr
+    | RecordExpr fields ->
+        fields
+        |> List.exists (function
+            | NamedField(_, value) -> containsDbgCallExpr value
+            | PositionalField value -> containsDbgCallExpr value)
+    | Match(values, arms) ->
+        (values |> List.exists containsDbgCallExpr)
+        || (arms |> List.exists (fun (_, armExpr) -> containsDbgCallExpr armExpr))
+    | UseIn(_, body) -> containsDbgCallExpr body
+    | MemberAccess(inner, _, _) -> containsDbgCallExpr inner
+    | TagExpr(_, payload) -> payload |> Option.exists containsDbgCallExpr
+    | InterpolatedString parts ->
+        parts
+        |> List.exists (function
+            | StringText _ -> false
+            | StringExpr inner -> containsDbgCallExpr inner)
+    | WorkflowBindExpr(_, value)
+    | WorkflowReturnExpr value -> containsDbgCallExpr value
+    | UnitExpr
+    | LiteralExpr _
+    | IdentifierExpr _ -> false
+
+and private containsDbgCallStatements (statements: Statement list) : bool =
+    statements
+    |> List.exists (function
+        | DefStatement(_, _, _, rhs) -> containsDbgCallExpr rhs
+        | ExprStatement expr -> containsDbgCallExpr expr
+        | ImportStatement _
+        | TypeDefStatement _
+        | UseStatement _ -> false)
+
 let rec private transpileExpression (env: TranspileEnv) (expr: Expression) : string =
     match expr with
     | LiteralExpr(IntLit value) ->
@@ -120,6 +164,21 @@ let rec private transpileExpression (env: TranspileEnv) (expr: Expression) : str
         let thenCode = transpileExpression env thenExpr
         let elseCode = transpileExpression env elseExpr
         $"{condCode}\n    (if (result i32)\n      (then\n        {thenCode}\n      )\n      (else\n        {elseCode}\n      )\n    )"
+    | FunctionCall(name, _, args) when name = "dbg" ->
+        let dbgLocal =
+            match env.DbgTempLocal with
+            | Some localName -> localName
+            | None -> failwith "Internal error: dbg local is not configured for WASM backend"
+        let argExpr =
+            match flattenCallArgs args with
+            | [single] -> single
+            | _ -> failwith "dbg expects a single argument"
+        let argCode =
+            match argExpr with
+            | LiteralExpr(StringLit _) -> "i32.const 0"
+            | LiteralExpr(BoolLit value) -> if value then "i32.const 1" else "i32.const 0"
+            | _ -> transpileExpression env argExpr
+        $"{argCode}\n    local.tee ${dbgLocal}\n    call $dbg\n    local.get ${dbgLocal}"
     | FunctionCall(name, _, args) ->
         if not (env.KnownFunctions.Contains name) then
             failwith $"Unsupported function call for WASM MVP backend: {name}"
@@ -172,6 +231,7 @@ let transpileModuleToWat (module': Module) : string =
             | _ -> None)
 
     let knownFunctions = defs |> List.map fst |> Set.ofList
+    let moduleUsesDbg = defs |> List.exists (fun (_, expr) -> containsDbgCallExpr expr)
 
     let renderedFunctions =
         defs
@@ -197,16 +257,31 @@ let transpileModuleToWat (module': Module) : string =
                             candidate <- $"{baseName}_{index}"
                             index <- index + 1
                         acc |> Map.add name candidate) Map.empty
+            let usesDbg = containsDbgCallExpr bodyExpr
+            let dbgLocalName =
+                if usesDbg then
+                    let baseName = "__dbg_tmp"
+                    let mutable candidate = baseName
+                    let mutable index = 1
+                    while (parameterMap |> Map.exists (fun _ v -> v = candidate)) || (localMap |> Map.exists (fun _ v -> v = candidate)) do
+                        candidate <- $"{baseName}_{index}"
+                        index <- index + 1
+                    Some candidate
+                else
+                    None
             let locals = parameterMap |> Map.fold (fun acc k v -> acc |> Map.add k v) localMap
-            let env = { KnownFunctions = knownFunctions; Locals = locals }
+            let env = { KnownFunctions = knownFunctions; Locals = locals; DbgTempLocal = dbgLocalName }
             let fn = sanitizeIdentifier name
             let parameterSig =
                 parameters
                 |> List.map (fun (paramName, _) -> $"(param ${parameterMap.[paramName]} i32)")
                 |> String.concat " "
             let localsSig =
-                localNames
-                |> List.map (fun localName -> $"(local ${localMap.[localName]} i32)")
+                [ yield! (localNames |> List.map (fun localName -> localMap.[localName]))
+                  match dbgLocalName with
+                  | Some name -> yield name
+                  | None -> () ]
+                |> List.map (fun localName -> $"(local ${localName} i32)")
                 |> String.concat " "
             let functionHeader =
                 [ if not (String.IsNullOrWhiteSpace parameterSig) then parameterSig
@@ -217,7 +292,17 @@ let transpileModuleToWat (module': Module) : string =
             $"  (func ${fn} {functionHeader}\n    {bodyCode}\n  )\n  (export \"{name}\" (func ${fn}))")
         |> String.concat "\n\n"
 
-    if String.IsNullOrWhiteSpace renderedFunctions then
+    let dbgImport =
+        if moduleUsesDbg then
+            "  (import \"env\" \"dbg\" (func $dbg (param i32)))"
+        else
+            ""
+
+    if String.IsNullOrWhiteSpace renderedFunctions && String.IsNullOrWhiteSpace dbgImport then
         "(module)"
     else
-        $"(module\n{renderedFunctions}\n)"
+        let parts =
+            [ if not (String.IsNullOrWhiteSpace dbgImport) then dbgImport
+              if not (String.IsNullOrWhiteSpace renderedFunctions) then renderedFunctions ]
+        let body = String.concat "\n\n" parts
+        $"(module\n{body}\n)"

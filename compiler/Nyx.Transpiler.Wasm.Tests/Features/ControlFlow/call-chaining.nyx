@@ -1,0 +1,7 @@
+module M
+
+def inc = { x -> x + 1 }
+
+def double = { x -> x * 2 }
+
+def main = double(inc(5))

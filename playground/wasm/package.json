@@ -1,0 +1,12 @@
+{
+  "name": "nyx-wasm-playground",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "run": "node run-wat.mjs",
+    "run:nyx": "powershell -ExecutionPolicy Bypass -File ./run-nyx.ps1"
+  },
+  "dependencies": {
+    "wabt": "^1.0.37"
+  }
+}

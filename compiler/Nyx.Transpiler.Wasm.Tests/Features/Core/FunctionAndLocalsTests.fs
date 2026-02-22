@@ -90,7 +90,7 @@ let ``Transpile bare tag literal`` () =
     let wat = transpileWat source
 
     Assert.Contains("(func $main (result i32)", wat)
-    Assert.Contains("i32.const 1", wat)
+    Assert.Contains("i32.const 65536", wat)
 
 [<Fact>]
 let ``Transpile magic dbg for bare tag literal`` () =
@@ -103,3 +103,26 @@ let ``Transpile magic dbg for bare tag literal`` () =
     Assert.Contains("(import \"env\" \"dbg_tag_test\" (func $dbg_tag_test))", wat)
     Assert.Contains("call $dbg_tag_test", wat)
     Assert.DoesNotContain("(import \"env\" \"dbg\" (func $dbg (param i32)))", wat)
+
+[<Fact>]
+let ``Transpile payload tag literal`` () =
+    let source =
+        "module M\n\n" +
+        "def main = #some(42)"
+
+    let wat = transpileWat source
+
+    Assert.Contains("i32.const 42", wat)
+    Assert.Contains("i32.const 65535", wat)
+    Assert.Contains("i32.or", wat)
+
+[<Fact>]
+let ``Transpile magic dbg for payload tag literal`` () =
+    let source =
+        "module M\n\n" +
+        "def main = dbg(#some(42))"
+
+    let wat = transpileWat source
+
+    Assert.Contains("(import \"env\" \"dbg_tag_payload_some\" (func $dbg_tag_payload_some (param i32)))", wat)
+    Assert.Contains("call $dbg_tag_payload_some", wat)

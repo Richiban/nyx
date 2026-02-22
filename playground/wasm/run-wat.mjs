@@ -35,6 +35,13 @@ const imports = {
           return target[prop];
         }
 
+        if (prop.startsWith('dbg_tag_payload_')) {
+          const suffix = prop.slice('dbg_tag_payload_'.length);
+          return (value) => {
+            console.log(`[dbg] #${suffix}(${value})`);
+          };
+        }
+
         if (prop.startsWith('dbg_tag_')) {
           const suffix = prop.slice('dbg_tag_'.length);
           return () => {

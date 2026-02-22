@@ -22,3 +22,7 @@ let ``Fixture call chaining`` () =
 [<Fact>]
 let ``Fixture tag comparison if-expression`` () =
     assertFixture "ControlFlow" "tag-comparison"
+
+[<Fact>]
+let ``Fixture payload tag comparison if-expression`` () =
+    assertFixture "ControlFlow" "payload-tag-comparison"

@@ -102,6 +102,10 @@ let private createNameMap (names: string list) =
 
 let private sanitizeImportSuffix (name: string) = sanitizeIdentifier name
 
+let private tagPayloadMask = 65535
+
+let private tagDiscriminantBase (id: int) = id <<< 16
+
 let rec private containsDbgCallExpr (expr: Expression) : bool =
     match expr with
     | FunctionCall(name, _, _) when name = "dbg" -> true
@@ -193,6 +197,58 @@ and private collectDbgTagNamesStatements (statements: Statement list) : string l
     |> List.collect (function
         | DefStatement(_, _, _, value) -> collectDbgTagNamesExpr value
         | ExprStatement value -> collectDbgTagNamesExpr value
+        | ImportStatement _
+        | TypeDefStatement _
+        | UseStatement _ -> [])
+
+let rec private collectDbgTagPayloadNamesExpr (expr: Expression) : string list =
+    let flattenDbgArgs args =
+        match args with
+        | [TupleExpr items] -> items
+        | _ -> args
+
+    match expr with
+    | FunctionCall(name, _, args) when name = "dbg" ->
+        match flattenDbgArgs args with
+        | [TagExpr(tagName, Some _)] -> [ tagName ]
+        | _ -> []
+    | FunctionCall(_, _, args) -> args |> List.collect collectDbgTagPayloadNamesExpr
+    | BinaryOp(_, left, right) -> collectDbgTagPayloadNamesExpr left @ collectDbgTagPayloadNamesExpr right
+    | IfExpr(cond, thenExpr, elseExpr) ->
+        collectDbgTagPayloadNamesExpr cond @ collectDbgTagPayloadNamesExpr thenExpr @ collectDbgTagPayloadNamesExpr elseExpr
+    | Lambda(_, body) -> collectDbgTagPayloadNamesExpr body
+    | Pipe(value, _, _, args) -> collectDbgTagPayloadNamesExpr value @ (args |> List.collect collectDbgTagPayloadNamesExpr)
+    | Block statements -> collectDbgTagPayloadNamesStatements statements
+    | TupleExpr values
+    | ListExpr values -> values |> List.collect collectDbgTagPayloadNamesExpr
+    | RecordExpr fields ->
+        fields
+        |> List.collect (function
+            | NamedField(_, value) -> collectDbgTagPayloadNamesExpr value
+            | PositionalField value -> collectDbgTagPayloadNamesExpr value)
+    | Match(values, arms) ->
+        let valueTags = values |> List.collect collectDbgTagPayloadNamesExpr
+        let armTags = arms |> List.collect (fun (_, armExpr) -> collectDbgTagPayloadNamesExpr armExpr)
+        valueTags @ armTags
+    | UseIn(_, body) -> collectDbgTagPayloadNamesExpr body
+    | MemberAccess(value, _, _) -> collectDbgTagPayloadNamesExpr value
+    | TagExpr(_, payload) -> payload |> Option.map collectDbgTagPayloadNamesExpr |> Option.defaultValue []
+    | InterpolatedString parts ->
+        parts
+        |> List.collect (function
+            | StringText _ -> []
+            | StringExpr value -> collectDbgTagPayloadNamesExpr value)
+    | WorkflowBindExpr(_, value)
+    | WorkflowReturnExpr value -> collectDbgTagPayloadNamesExpr value
+    | UnitExpr
+    | LiteralExpr _
+    | IdentifierExpr _ -> []
+
+and private collectDbgTagPayloadNamesStatements (statements: Statement list) : string list =
+    statements
+    |> List.collect (function
+        | DefStatement(_, _, _, value) -> collectDbgTagPayloadNamesExpr value
+        | ExprStatement value -> collectDbgTagPayloadNamesExpr value
         | ImportStatement _
         | TypeDefStatement _
         | UseStatement _ -> [])
@@ -305,10 +361,15 @@ let rec private transpileExpression (env: TranspileEnv) (expr: Expression) : str
         | None -> failwith $"Unsupported identifier for WASM MVP backend: {name}"
     | TagExpr(name, None) ->
         match env.TagIds |> Map.tryFind name with
-        | Some id -> $"i32.const {id}"
+        | Some id -> $"i32.const {tagDiscriminantBase id}"
         | None -> failwith $"Internal error: missing tag discriminant for #{name}"
-    | TagExpr(name, Some _) ->
-        failwith $"Unsupported tagged payload for WASM MVP backend: #{name}(...)"
+    | TagExpr(name, Some payloadExpr) ->
+        let tagBase =
+            match env.TagIds |> Map.tryFind name with
+            | Some id -> tagDiscriminantBase id
+            | None -> failwith $"Internal error: missing tag discriminant for #{name}"
+        let payloadCode = transpileExpression env payloadExpr
+        $"{payloadCode}\n    i32.const {tagPayloadMask}\n    i32.and\n    i32.const {tagBase}\n    i32.or"
     | BinaryOp(op, left, right) ->
         match wasmBinaryInstruction op with
         | Some instr ->
@@ -339,12 +400,22 @@ let rec private transpileExpression (env: TranspileEnv) (expr: Expression) : str
                     | Some id -> id
                     | None -> failwith $"Internal error: missing tag discriminant for #{tagName}"
                 let importFn = $"dbg_tag_{sanitizeImportSuffix tagName}"
-                $"i32.const {tagId}\n    local.set ${dbgLocal}\n    call ${importFn}\n    local.get ${dbgLocal}"
+                let tagBase = tagDiscriminantBase tagId
+                $"i32.const {tagBase}\n    local.set ${dbgLocal}\n    call ${importFn}\n    local.get ${dbgLocal}"
+            | TagExpr(tagName, Some payloadExpr) ->
+                let tagId =
+                    match env.TagIds |> Map.tryFind tagName with
+                    | Some id -> id
+                    | None -> failwith $"Internal error: missing tag discriminant for #{tagName}"
+                let importFn = $"dbg_tag_payload_{sanitizeImportSuffix tagName}"
+                let tagBase = tagDiscriminantBase tagId
+                let payloadCode = transpileExpression env payloadExpr
+                $"{payloadCode}\n    local.tee ${dbgLocal}\n    call ${importFn}\n    local.get ${dbgLocal}\n    i32.const {tagPayloadMask}\n    i32.and\n    i32.const {tagBase}\n    i32.or"
             | LiteralExpr(StringLit _) -> "i32.const 0"
             | LiteralExpr(BoolLit value) -> if value then "i32.const 1" else "i32.const 0"
             | _ -> transpileExpression env argExpr
         match argExpr with
-        | TagExpr(_, None) -> argCode
+        | TagExpr _ -> argCode
         | _ -> $"{argCode}\n    local.tee ${dbgLocal}\n    call $dbg\n    local.get ${dbgLocal}"
     | FunctionCall(name, _, args) ->
         if not (env.KnownFunctions.Contains name) then
@@ -403,6 +474,11 @@ let transpileModuleToWat (module': Module) : string =
     let dbgTagNames =
         defs
         |> List.collect (fun (_, expr) -> collectDbgTagNamesExpr expr)
+        |> List.distinct
+        |> List.sort
+    let dbgTagPayloadNames =
+        defs
+        |> List.collect (fun (_, expr) -> collectDbgTagPayloadNamesExpr expr)
         |> List.distinct
         |> List.sort
     let tagIdMap =
@@ -488,9 +564,16 @@ let transpileModuleToWat (module': Module) : string =
             let importName = $"dbg_tag_{sanitizeImportSuffix tagName}"
             $"  (import \"env\" \"{importName}\" (func ${importName}))")
 
+    let dbgTagPayloadImports =
+        dbgTagPayloadNames
+        |> List.map (fun tagName ->
+            let importName = $"dbg_tag_payload_{sanitizeImportSuffix tagName}"
+            $"  (import \"env\" \"{importName}\" (func ${importName} (param i32)))")
+
     let allImports =
         [ if not (String.IsNullOrWhiteSpace dbgImport) then dbgImport
-          yield! dbgTagImports ]
+          yield! dbgTagImports
+          yield! dbgTagPayloadImports ]
         |> List.filter (fun line -> not (String.IsNullOrWhiteSpace line))
         |> String.concat "\n\n"
 

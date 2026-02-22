@@ -1,0 +1,5 @@
+module M
+
+def classify = { value -> if value == #some(3) then 1 else 0 }
+
+def main = classify(#some(3))

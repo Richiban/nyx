@@ -1,5 +1,6 @@
 def main = {
   dbg(#test)
+  dbg(#some(42))
   dbg(1)
 }
 

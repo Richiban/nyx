@@ -46,3 +46,5 @@ export const docNav: DocNavGroup[] = [
     ],
   },
 ];
+
+export const flatDocNav: DocNavItem[] = docNav.flatMap((group) => group.items);

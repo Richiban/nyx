@@ -1,4 +1,5 @@
 import DocsSidebar from "@/components/docs/DocsSidebar";
+import DocsPageNav from "@/components/docs/DocsPageNav";
 import DocsTopNav from "@/components/docs/DocsTopNav";
 
 export default function DocsLayout({
@@ -14,6 +15,7 @@ export default function DocsLayout({
           <DocsSidebar />
           <main className="nyx-surface p-8 md:p-10">
             {children}
+            <DocsPageNav />
           </main>
         </div>
       </div>

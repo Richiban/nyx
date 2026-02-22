@@ -1,189 +1,174 @@
-# Design Principles
+Principles of Nyx
+=====================
 
-Nyx is built on a foundation of carefully considered design principles that guide its development and define its character.
-
-## Simple ≠ Easy
+# Simple /= easy
 
 We believe in the creed "Simple and easy are not the same". We prefer a language that gets things right to one that makes things easy. Such a language might take longer to learn in the short run, but its simplicity pays off in the long run.
 
-Nyx favors conceptual simplicity over ease of initial use. The language is consistent and orthogonal, which makes it easier to master over time.
+# Inform; don't block
 
-## Correctness Above All
+The Nyx compiler has both warning and error diagnostics but, unlike many other languages, a warning in Nyx is considered a build failure (with no option to ignore it). We believe that warnings are often ignored or turned off (and lead to arguments within teams as to whether a warning is harmless or not), and that this ultimately leads to code that will cause problems later on. For Nyx, we believe that any code that appears troublesome or incorrect to the compiler should outright be rejected.
 
-Nyx aims to ensure program correctness and considers it more important than raw performance.
+However, Nyx is quite unique in that, while a warning will "fail" the build, when building in 'debug' mode the compiler can still produce an executable. This allows the developer to run or test the program despite the fact that the build has nominally failed. The programmer can then iteratively fix the warnings until the program is warning-free. 
 
-- **Static type checking**: Catch errors at compile time
-- **Exhaustive pattern matching**: Never miss a case
-- **No null values**: Use Option types instead
-- **Explicit error handling**: No hidden exceptions
+This is important in allowing the developer to maintain a tight feedback loop, as even type errors or name errors are warnings rather than errors. Only when building in 'release' mode will such issues block the build.
 
-Languages such as C and C++ often rely on undefined behaviour to achieve stellar performance, whereas Nyx eschews undefined behaviour in favor of runtime checks for things that are hard to statically ensure.
+Note that compiler errors (such as syntax errors) will always cause the compiler to abort compilation.
 
-## Inform, Don't Block
+# Everything is an expression
 
-The Nyx compiler has both warning and error diagnostics. A warning in Nyx is considered a build failure with no option to ignore it. We believe that warnings are often ignored or turned off, leading to code that will cause problems later.
+Nyx is a functional language and embraces the idea that everything should be an expression. Nyx has no local variable declarations or if-then-else statements, instead it has let-bindings and if-then-else expressions. However, Nyx does not take this idea as far as the Scheme languages. Nyx still has declarations, namespaces, and so forth that are not expressions.
 
-However, Nyx is unique in that, while a warning will "fail" the build, when building in debug mode the compiler can still produce an executable. This allows the developer to run or test the program despite warnings, maintaining a tight feedback loop.
+# Separate pure and impure code
 
-This is important for allowing iterative development - even type errors or name errors are warnings rather than errors. Only when building in release mode will such issues block the build.
+Nyx supports functional, imperative, and logic programming. The context system of Nyx cleanly and safely separates pure code from impure code. That is, if a function is pure then the programmer can trust that the function behaves like a mathematical function: it returns the same value when given the same arguments and it has no side-effects.
 
-**Compiler errors** (such as syntax errors) will always cause the compiler to abort compilation.
+# Correctness above all
 
-## Everything is an Expression
+Nyx aims to ensure program correctness and considers it more important than raw performance. Languages such as C and C++ often rely on undefined behaviour to achieve stellar performance, whereas most other languages, including Nyx, try to eschew undefined behaviour in favor of runtime checks for things that are hard to statically ensure. For example, most languages will dynamically check that array accesses are not out of bounds. The cost is a small performance hit, but in our view the benefit towards correctness is immense. Inspired by Ada, Nyx aims to offer strong guarantees, ideally ensured statically, but when necessary with dynamic checks.
 
-Nyx is a functional language and embraces the idea that everything should be an expression.
+We believe that a language should make it easy to make illegal states unrepresentable. For example, algebraic data types can be used to precisely define the possible values of a type. In Nyx, in the future, we want to take this a step further, and allow refinement of some types. For example, to express that some value must not only be an integer, but also that it must fall within a range, e.g. [0-99].
 
-```nyx
--- If expression
-def result = if x > 0 -> "positive" else -> "non-positive"
+Nyx aims to support developer productivity; the ability to do a lot with little ceremony or boilerplate. A hand-crafted C program might run faster than a Nyx program, but it won't be as short, concise, or expressive as the Nyx program. Nyx aims to be a language with powerful constructs and high-level abstractions. 
 
--- Match expression
-def value = match opt
-  | #some(x) -> x
-  | #none -> 0
+This does not mean that Nyx is slow.
 
--- Block expression
-def total = {
-  def subtotal = calculateSubtotal()
-  def tax = calculateTax(subtotal)
-  subtotal + tax
-}
-```
+# One language
 
-Nyx has no local variable declarations or if-then-else statements - instead it has let-bindings and if-then-else expressions. However, Nyx does not take this idea as far as Scheme languages. Nyx still has declarations, namespaces, and so forth that are not expressions.
+Nyx is one programming language. The Nyx compiler does not have feature flags or compiler plugins that change or extend the semantics of the language. We want to avoid fragmentation in the ecosystem where programs end up being written in different "dialects" of the language. There is one language, now and forever. Of course, we can still expect the language to evolve over time.
 
-## Separate Pure and Impure Code
+# Principle of least surprise and the pit of success
 
-Nyx supports functional, imperative, and logic programming. The context system cleanly and safely separates pure code from impure code.
+We should strive to adhere to the principle of least surprise. That is, we should favor sane defaults, and when there is no immediately obvious default, we should not have a default at all, but force the programmer to be explicit about their intention.
 
-If a function is pure, the programmer can trust that the function behaves like a mathematical function: it returns the same value when given the same arguments and it has no side effects.
+Wherever the easiest thing should also be the safest thing; for example, immutable data structures should be the default, and it is _mutable_ data structures that should require explicit annotation.
 
-```nyx
--- Pure function
-def double: int -> int = { x -> x * 2 }
+# Local type inference
 
--- Effectful function with explicit context
-def greet: <Console> string -> () = { name ->
-  println("Hello, {name}!")
-}
-```
+The Nyx type system is based on Hindley-Milner which supports full type inference. As a design choice, we require (with a warning) all exported members to be annotated with their argument and return types. Type signatures serve as useful documentation and aid program understanding and we believe that requiring type signatures has three distinct advantages that outweigh the disadvantages.
 
-## Principle of Least Surprise
+* Type signatures improve program readability and accurately assign blame for type errors
+* Type signatures enable parallel type checking
+* "Pinning" type signatures of exported members helps avoid the accidental changing of APIs
 
-We strive to adhere to the principle of least surprise. We favor sane defaults, and when there is no immediately obvious default, we force the programmer to be explicit about their intention.
+# Syntax vs. Semantics
 
-Wherever possible, the easiest thing should also be the safest thing:
-- Immutable data structures are the default
-- Mutable data structures require explicit annotation
-- Side effects require context annotations
-- Partial functions require explicit handling
+Syntax is important. Semantics are important. But we should not confuse the two. A syntactic issue should not be resolved by a enrichment of the semantics. For example, extension methods and implicit classes seem to be semantic solutions to (mostly) syntactic issues. Nyx aims to avoid such pitfalls.
 
-## Local Type Inference
+# Consistent syntax
 
-The Nyx type system is based on Hindley-Milner which supports full type inference. As a design choice, we require (with a warning) all exported members to be annotated with their argument and return types.
+Nyx aims to have consistent and predictable syntax. As an example, we try to have the syntax of types mirror that of expressions:
+* A function application is written as `f(a, b, c)`, as is a type application `F(A, B, C)`.
+* A function expression is written as `{x -> x + 1}` whereas a function type is written as `Int -> Int`.
+* A tuple is written as `(true, 12345)` whereas a tuple type is written as `(bool, int)`.
 
-Type signatures serve as useful documentation and aid program understanding. Requiring type signatures has three distinct advantages:
+As much as possible each symbol (or pair of symbols) should have a single meaning. For example, braces `{}` are always used for function bodies, `=` is always used for definitions, and so forth.
 
-1. **Type signatures improve program readability** and accurately assign blame for type errors
-2. **Type signatures enable parallel type checking**
-3. **"Pinning" type signatures** of exported members helps avoid the accidental changing of APIs
+# Human-readable errors and compiler messages
 
-```nyx
--- Recommended: exported function with type signature
-def process: Data -> Result(Output, Error) = { data ->
-  -- implementation
-}
+In the spirit of languages like Elm and Rust, Nyx aims to have human readable and understandable compiler messages, as they should be thought of as the user interface of the compiler.
 
--- OK: local helper without annotation (type inferred)
-private def helper = { x -> x * 2 }
-```
+Messages in Nyx should be crisp, concise, and clear, getting straight to the point: the error message `Duplicate definition: 'foo'` is better than the error message `The definition 'foo' is defined twice` because the programmer will likely understand the problem as soon as they have scanned the first word. The "80 / 20" rule means that 80% of the time a developer will need only minimal information to understand why a compiler message is being shown; most likely the developer will already have seen the specific error message hundreds of times before. But 20% of the time, the developer will have never or rarely seen the message before and will need more information.
 
-## Syntax Mirrors Semantics
+With this in mind, a Nyx compiler message consists of three components:
+* Title: A one sentence summary. The message shown on hover in the code editor.
+* Context: A multi-line text that contains all relevant details, including the relevant symbol(s) and  program fragment(s).
+* Explanation: A description of why the problem occurs and preferably hints as to what can be done to fix it. When relevant, explain how Nyx differs from other languages.
 
-Nyx aims to have consistent and predictable syntax. We try to have the syntax of types mirror that of expressions:
+Regarding style and tone: the language should be friendly or neutral, and written in the passive voice (i.e. not "you did this" or "I couldn't do that"). An error message should not blame the programmer; for example, we should prefer `Unexpected foo` over `Illegal foo`, since the latter implies that the programmer did something wrong.
 
-- Function application: `f(a, b, c)` mirrors type application `F(A, B, C)`
-- Function expression: `{x -> x + 1}` mirrors function type `int -> int`
-- Tuple: `(true, 12345)` mirrors tuple type `(bool, int)`
+# Closed world assumption
 
-As much as possible, each symbol (or pair of symbols) should have a single meaning. For example:
-- Braces `{}` are always used for function bodies
-- `=` is always used for definitions
-- `\` is always used for pipelines
+Nyx requires all code to be available at compile-time. This enables a range of compilation techniques, such as:
+Monomorphization to avoid unnecessary boxing of primitives.
+Aggressive dead code elimination ("tree shaking") to remove unused functions.
+Inlining across namespaces.
+Whole-program analysis.
 
-## No Global State
+# Nothing is executed before main
 
-Nyx has no global variables or shared mutable state. All state must be explicitly threaded through the program or managed via contexts.
+In Nyx, main is the entry point of a program. No (user-defined) code is ever executed before main. No static initializers, no static fields. No class loaders. Main is always first. This makes it easy to reason about startup behavior.
 
-This makes programs easier to reason about, test, and parallelize.
+# Small but comprehensive standard library
 
-## Closed World Assumption
+Nyx has a small standard library with a few common data types, e.g. Option, List, Set, and Map, but for these it offers a comprehensive collection of functionality. For example, the standard library has more than 65 functions for working with lists. We want the standard library to offer a common set of abstractions which are usable by most programs, but not much else.
 
-Nyx requires all code to be available at compile-time. This enables a range of compilation techniques:
+# Declare before use
 
-- **Monomorphization**: Avoid unnecessary boxing of primitives
-- **Dead code elimination**: Remove unused functions ("tree shaking")
-- **Inlining**: Across namespaces
-- **Whole-program analysis**: Comprehensive optimization
+In Nyx things must be defined before they can be used. Algebraic data types, functions, local variables, and other programming elements must be declared before they can be used by other program parts. Declarations make it easy to assign blame; we assume declarations to be correct and check every use against its declaration. For example, an algebraic data type declares a set of cases, and the compiler checks that every use refers to one of these cases, and that every case is covered.
 
-## Nothing is Executed Before Main
+# No unnecessary declarations
 
-In Nyx, `main` is the entry point of a program. No user-defined code is ever executed before main.
+We believe that a programming language should reduce the volume of declarations it requires. Declarations may be useful and are sometimes necessary, but Nyx aims to minimize its internal dependence on them. To give an example, Nyx supports extensible records which permits the usage of flexible and type-safe records without a strict requirement that record types must be declared upfront.
 
-- No static initializers
-- No static fields
-- No class loaders
+# No global state
 
-Main is always first. This makes it easy to reason about startup behavior.
+In Nyx there is no global shared state. This avoids a plethora of issues, including difficulties with initialization order and race conditions in the presence of concurrency. A Nyx programmer is free to construct some state in the main function and pass it around, but there is no built-in mechanism to declare global variables. In a real system, the programmer still has to deal with the state of the world, e.g. the state of the file system, the network, and other resources.
 
-## Human-Readable Errors
+# Share memory by communicating
 
-In the spirit of languages like Elm and Rust, Nyx aims to have human-readable and understandable compiler messages.
+Nyx follows the Go mantra: Do not communicate by sharing memory; instead, share memory by communicating. In other words: mutable memory should never be shared between processes. Processes should only share immutable messages (and data structures). We believe this significantly reduces the risk of race conditions.
 
-Messages should be:
-- **Crisp and concise**: Get straight to the point
-- **Clear**: Easy to understand at a glance
-- **Helpful**: Provide context and suggestions
+# Bugs are not recoverable errors
 
-A Nyx compiler message consists of three components:
+We believe in the Midori Error Model; that is, there are two kinds of errors: recoverable errors and program bugs. Recoverable errors are things like illegal user input, network errors, etc. Errors that can be anticipated and where there is a chance of recovery. Program bugs, on the other hand, are unanticipated and we cannot expect to recover from them. We should treat these two types of errors differently: For recoverable errors, we should enforce that they are checked and handled. For program bugs, we should terminate execution as quickly as possible to prevent data corruption and security issues.
 
-1. **Title**: A one-sentence summary shown on hover
-2. **Context**: Multi-line text with relevant details
-3. **Explanation**: Why the problem occurs and how to fix it
+# Fail fast, fail hard
 
-The language should be friendly or neutral, written in passive voice (not "you did this" or "I couldn't do that").
+To aid debugging and prevent potential harmful behaviour, Nyx aborts execution when an unrecoverable error is encountered. In the presence of concurrency, if a process fails, Nyx aborts the entire program. This ensures that the outside environment is duly notified and can take corrective action, e.g. to restart the program.
 
-## Declare Before Use
+# No pre-processor
 
-In Nyx, things must be defined before they can be used. This makes it easy to assign blame - we assume declarations to be correct and check every use against its declaration.
+Nyx does not have and will not have a pre-processor. Programs that use pre-processing for textual code generation are notoriously difficult to understand and debug. We want to avoid that for Nyx. Instead, Nyx may some day have a macro system, but so far there has been little need.
 
-For example, algebraic data types declare a set of cases, and the compiler checks that every use refers to one of these cases, and that every case is covered.
+# No null value
 
-## One Language
+Nyx does not have the null value. The null value is now widely considered a mistake and languages such as C#, Dart, Kotlin and Scala are scrambling to adopt mechanisms to ensure non-nullness. In Nyx, we adopt the standard solution from functional languages which is to represent the absence of a value using the Option type. This solution is simple to understand, works well, and guarantees the absence of dreaded NullPointerExceptions.
 
-Nyx is one programming language. The Nyx compiler does not have feature flags or compiler plugins that change or extend the semantics of the language.
+# No implicit coercions
 
-We want to avoid fragmentation in the ecosystem where programs end up being written in different "dialects" of the language. There is one language, now and forever.
+In Nyx, a value of one type is never implicitly coerced or converted into a value of another type. For example,
+No value is ever coerced to a boolean.
+No value is ever coerced to a string.
+Integers and floating-point are never truncated or promoted.
 
-Of course, we can still expect the language to evolve over time.
+# No reflection
+Nyx does not support reflection, i.e. the ability to inspect the structure of the program at run-time. Reflection tends to break the kind of program reasoning that both compilers and humans rely on. At some point in the future, Nyx might support some notion of compile-time meta programming.
 
-## Small but Comprehensive Standard Library
+# No unused declarations
+Inspired by Rust, the Nyx compiler will reject programs that contain unused declarations. We believe that rejecting such programs will help programmers avoid mistakes where some algebraic data type or function is unintentionally left unused.
 
-Nyx has a small standard library with a few common data types (Option, List, Set, Map), but for these it offers a comprehensive collection of functionality.
+# No unused variables
 
-We want the standard library to offer a common set of abstractions usable by most programs, but not much else. The focus is on quality over quantity.
+Nyx disallows unused local variables, whether they are introduced by let, introduced by pattern matching, or part of the formal parameters of a function. Research [1] [2] has repeatedly shown that minor mistakes are a common source of bugs, e.g. using the wrong local variable. Disallowing unused local variables help avoid such mistakes.
 
-## Summary
+# No overloading
 
-These principles guide every decision in Nyx's design:
+Nyx does not support function overloading (using the same name for different functions). Instead, Nyx encourages the use of meaningful names, e.g. Map.filter and Map.filterWithKey, for functions that share similar functionality.
 
-- ✅ Favor correctness over convenience
-- ✅ Keep the language simple and consistent
-- ✅ Make effects and state explicit
-- ✅ Provide great error messages
-- ✅ Separate pure and impure code
-- ✅ Use types to prevent errors
-- ✅ Avoid global state and hidden behavior
-- ✅ Keep one unified language
+# No variadic (varargs) functions
 
-The result is a language that may take time to learn but rewards that investment with reliability, maintainability, and clarity.
+Nyx does not support variadic (varargs) functions. It is not clear to us how a language design can support both currying and variadic functions cleanly. Moreover, it seems that the supposed benefits of variadic functions is not that great in a language which already has concise syntax for list and array literals.
+
+# No binary or octal literals
+
+Nyx does not support binary or octal literals. It is our understanding that these features are rarely used in practice.
+
+# Exhaustive pattern matches
+
+The Nyx compiler enforces that pattern matches handle all cases of an algebraic data type. If a match expression is found to be non-exhaustive, the program is rejected. We believe this encourages more robust code and enables safer refactoring of algebraic data types.
+
+# Timeless design
+
+A few years ago HTML was all the rage. Hence it was only natural that Java adopted HTML-style comments. A bit later, XML was all the rage, hence it was only natural that Scala added support for native XML literals. Today, JSON and Markdown are all the rage, but if history is any guide, we should not add any special support for these to Nyx.
+
+# Built-in documentation
+
+Nyx supports comments as part of the language. We believe such integration avoids fragmentation of the ecosystem and ultimately leads to better tool support.
+
+# Built-in unit tests
+Nyx supports unit tests as part of the language. We believe such integration avoids fragmentation of the ecosystem and ultimately leads to better tool support.
+
+# Unification of tuples and records
+
+Nyx unifies tuples and records. A tuple is simply a record where the fields are numbered 0, 1, 2, ... It even allows these forms to be mixed in the same type. This unification simplifies the language and makes it easier to learn and understand. It also means that the programmer is not forced to make wide changes to a codebase simply because they want to add a field name to a tuple.

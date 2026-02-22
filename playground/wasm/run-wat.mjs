@@ -19,11 +19,33 @@ const parsedModule = wabt.parseWat(watPath, watSource);
 const { buffer } = parsedModule.toBinary({ log: false, write_debug_names: true });
 
 const imports = {
-  env: {
-    dbg(value) {
-      console.log(`[dbg] ${value}`);
+  env: new Proxy(
+    {
+      dbg(value) {
+        console.log(`[dbg] ${value}`);
+      }
+    },
+    {
+      get(target, prop) {
+        if (typeof prop !== 'string') {
+          return target[prop];
+        }
+
+        if (prop in target) {
+          return target[prop];
+        }
+
+        if (prop.startsWith('dbg_tag_')) {
+          const suffix = prop.slice('dbg_tag_'.length);
+          return () => {
+            console.log(`[dbg] #${suffix}`);
+          };
+        }
+
+        return undefined;
+      }
     }
-  }
+  )
 };
 
 const { instance } = await WebAssembly.instantiate(buffer, imports);

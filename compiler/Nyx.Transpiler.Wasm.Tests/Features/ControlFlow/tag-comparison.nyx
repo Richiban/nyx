@@ -1,0 +1,5 @@
+module M
+
+def classify = { value -> if value == #ok then 1 else 0 }
+
+def main = classify(#ok)

@@ -21,7 +21,7 @@ def user = getUser(productId)
 
 Because `UserId` and `ProductId` are both aliases for `int`, the compiler cannot tell them apart. This is a common source of subtle bugs when working with IDs or other domain primitives.
 
-## Nominal Types (Newtypes)
+## Nominal Types
 
 A nominal type wraps an underlying type and is distinguished by its name, not its shape. You define a nominal type using the same name for both the type and its constructor:
 

@@ -113,6 +113,7 @@ Current WASM backend support is intentionally minimal and focused on bootstrappi
 - lambda-backed defs compiled as wasm functions with `i32` params/result
 - integer literals
 - integer binary operators (`+`, `-`, `*`, `/`, `%`, comparisons)
+- bare tag literals (`#ok`, `#error`, etc.) lowered to deterministic `i32` discriminants
 - function calls to known module defs
 - simple expression blocks with local `def` assignments (`local.set`/`local.get`)
 - magic `dbg(...)` support via wasm host import: `(import "env" "dbg" (func $dbg (param i32)))`

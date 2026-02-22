@@ -6,7 +6,8 @@ open Parser.Program
 type private TranspileEnv =
     { KnownFunctions: Set<string>;
     Locals: Map<string, string>;
-    DbgTempLocal: string option }
+    DbgTempLocal: string option;
+    TagIds: Map<string, int> }
 
 let private sanitizeIdentifier (name: string) =
     let sanitized =
@@ -99,6 +100,8 @@ let private createNameMap (names: string list) =
         (acc |> Map.add name chosen, used |> Set.add chosen)) (Map.empty, Set.empty)
     |> fst
 
+let private sanitizeImportSuffix (name: string) = sanitizeIdentifier name
+
 let rec private containsDbgCallExpr (expr: Expression) : bool =
     match expr with
     | FunctionCall(name, _, _) when name = "dbg" -> true
@@ -142,6 +145,155 @@ and private containsDbgCallStatements (statements: Statement list) : bool =
         | TypeDefStatement _
         | UseStatement _ -> false)
 
+let rec private collectDbgTagNamesExpr (expr: Expression) : string list =
+    let flattenDbgArgs args =
+        match args with
+        | [TupleExpr items] -> items
+        | _ -> args
+
+    match expr with
+    | FunctionCall(name, _, args) when name = "dbg" ->
+        match flattenDbgArgs args with
+        | [TagExpr(tagName, None)] -> [ tagName ]
+        | _ -> []
+    | FunctionCall(_, _, args) -> args |> List.collect collectDbgTagNamesExpr
+    | BinaryOp(_, left, right) -> collectDbgTagNamesExpr left @ collectDbgTagNamesExpr right
+    | IfExpr(cond, thenExpr, elseExpr) ->
+        collectDbgTagNamesExpr cond @ collectDbgTagNamesExpr thenExpr @ collectDbgTagNamesExpr elseExpr
+    | Lambda(_, body) -> collectDbgTagNamesExpr body
+    | Pipe(value, _, _, args) -> collectDbgTagNamesExpr value @ (args |> List.collect collectDbgTagNamesExpr)
+    | Block statements -> collectDbgTagNamesStatements statements
+    | TupleExpr values
+    | ListExpr values -> values |> List.collect collectDbgTagNamesExpr
+    | RecordExpr fields ->
+        fields
+        |> List.collect (function
+            | NamedField(_, value) -> collectDbgTagNamesExpr value
+            | PositionalField value -> collectDbgTagNamesExpr value)
+    | Match(values, arms) ->
+        let valueTags = values |> List.collect collectDbgTagNamesExpr
+        let armTags = arms |> List.collect (fun (_, armExpr) -> collectDbgTagNamesExpr armExpr)
+        valueTags @ armTags
+    | UseIn(_, body) -> collectDbgTagNamesExpr body
+    | MemberAccess(value, _, _) -> collectDbgTagNamesExpr value
+    | TagExpr(_, payload) -> payload |> Option.map collectDbgTagNamesExpr |> Option.defaultValue []
+    | InterpolatedString parts ->
+        parts
+        |> List.collect (function
+            | StringText _ -> []
+            | StringExpr value -> collectDbgTagNamesExpr value)
+    | WorkflowBindExpr(_, value)
+    | WorkflowReturnExpr value -> collectDbgTagNamesExpr value
+    | UnitExpr
+    | LiteralExpr _
+    | IdentifierExpr _ -> []
+
+and private collectDbgTagNamesStatements (statements: Statement list) : string list =
+    statements
+    |> List.collect (function
+        | DefStatement(_, _, _, value) -> collectDbgTagNamesExpr value
+        | ExprStatement value -> collectDbgTagNamesExpr value
+        | ImportStatement _
+        | TypeDefStatement _
+        | UseStatement _ -> [])
+
+let rec private containsRegularDbgExpr (expr: Expression) : bool =
+    let flattenDbgArgs args =
+        match args with
+        | [TupleExpr items] -> items
+        | _ -> args
+
+    match expr with
+    | FunctionCall(name, _, args) when name = "dbg" ->
+        match flattenDbgArgs args with
+        | [TagExpr(_, None)] -> false
+        | _ -> true
+    | FunctionCall(_, _, args) -> args |> List.exists containsRegularDbgExpr
+    | BinaryOp(_, left, right) -> containsRegularDbgExpr left || containsRegularDbgExpr right
+    | IfExpr(cond, thenExpr, elseExpr) ->
+        containsRegularDbgExpr cond || containsRegularDbgExpr thenExpr || containsRegularDbgExpr elseExpr
+    | Lambda(_, body) -> containsRegularDbgExpr body
+    | Pipe(value, _, _, args) -> containsRegularDbgExpr value || (args |> List.exists containsRegularDbgExpr)
+    | Block statements -> containsRegularDbgStatements statements
+    | TupleExpr values
+    | ListExpr values -> values |> List.exists containsRegularDbgExpr
+    | RecordExpr fields ->
+        fields
+        |> List.exists (function
+            | NamedField(_, value) -> containsRegularDbgExpr value
+            | PositionalField value -> containsRegularDbgExpr value)
+    | Match(values, arms) ->
+        (values |> List.exists containsRegularDbgExpr)
+        || (arms |> List.exists (fun (_, armExpr) -> containsRegularDbgExpr armExpr))
+    | UseIn(_, body) -> containsRegularDbgExpr body
+    | MemberAccess(value, _, _) -> containsRegularDbgExpr value
+    | TagExpr(_, payload) -> payload |> Option.exists containsRegularDbgExpr
+    | InterpolatedString parts ->
+        parts
+        |> List.exists (function
+            | StringText _ -> false
+            | StringExpr value -> containsRegularDbgExpr value)
+    | WorkflowBindExpr(_, value)
+    | WorkflowReturnExpr value -> containsRegularDbgExpr value
+    | UnitExpr
+    | LiteralExpr _
+    | IdentifierExpr _ -> false
+
+and private containsRegularDbgStatements (statements: Statement list) : bool =
+    statements
+    |> List.exists (function
+        | DefStatement(_, _, _, value) -> containsRegularDbgExpr value
+        | ExprStatement value -> containsRegularDbgExpr value
+        | ImportStatement _
+        | TypeDefStatement _
+        | UseStatement _ -> false)
+
+let rec private collectTagNamesExpr (expr: Expression) : string list =
+    match expr with
+    | TagExpr(name, payload) ->
+        match payload with
+        | Some value -> name :: collectTagNamesExpr value
+        | None -> [ name ]
+    | BinaryOp(_, left, right) -> collectTagNamesExpr left @ collectTagNamesExpr right
+    | IfExpr(cond, thenExpr, elseExpr) ->
+        collectTagNamesExpr cond @ collectTagNamesExpr thenExpr @ collectTagNamesExpr elseExpr
+    | FunctionCall(_, _, args) -> args |> List.collect collectTagNamesExpr
+    | Lambda(_, body) -> collectTagNamesExpr body
+    | Pipe(value, _, _, args) -> collectTagNamesExpr value @ (args |> List.collect collectTagNamesExpr)
+    | Block statements -> collectTagNamesStatements statements
+    | TupleExpr values
+    | ListExpr values -> values |> List.collect collectTagNamesExpr
+    | RecordExpr fields ->
+        fields
+        |> List.collect (function
+            | NamedField(_, value) -> collectTagNamesExpr value
+            | PositionalField value -> collectTagNamesExpr value)
+    | Match(values, arms) ->
+        let valueTags = values |> List.collect collectTagNamesExpr
+        let armTags = arms |> List.collect (fun (_, armExpr) -> collectTagNamesExpr armExpr)
+        valueTags @ armTags
+    | UseIn(_, body) -> collectTagNamesExpr body
+    | MemberAccess(value, _, _) -> collectTagNamesExpr value
+    | InterpolatedString parts ->
+        parts
+        |> List.collect (function
+            | StringText _ -> []
+            | StringExpr value -> collectTagNamesExpr value)
+    | WorkflowBindExpr(_, value)
+    | WorkflowReturnExpr value -> collectTagNamesExpr value
+    | UnitExpr
+    | LiteralExpr _
+    | IdentifierExpr _ -> []
+
+and private collectTagNamesStatements (statements: Statement list) : string list =
+    statements
+    |> List.collect (function
+        | DefStatement(_, _, _, value) -> collectTagNamesExpr value
+        | ExprStatement value -> collectTagNamesExpr value
+        | ImportStatement _
+        | TypeDefStatement _
+        | UseStatement _ -> [])
+
 let rec private transpileExpression (env: TranspileEnv) (expr: Expression) : string =
     match expr with
     | LiteralExpr(IntLit value) ->
@@ -151,6 +303,12 @@ let rec private transpileExpression (env: TranspileEnv) (expr: Expression) : str
         | Some localName -> $"local.get ${localName}"
         | None when env.KnownFunctions.Contains name -> $"call ${sanitizeIdentifier name}"
         | None -> failwith $"Unsupported identifier for WASM MVP backend: {name}"
+    | TagExpr(name, None) ->
+        match env.TagIds |> Map.tryFind name with
+        | Some id -> $"i32.const {id}"
+        | None -> failwith $"Internal error: missing tag discriminant for #{name}"
+    | TagExpr(name, Some _) ->
+        failwith $"Unsupported tagged payload for WASM MVP backend: #{name}(...)"
     | BinaryOp(op, left, right) ->
         match wasmBinaryInstruction op with
         | Some instr ->
@@ -175,10 +333,19 @@ let rec private transpileExpression (env: TranspileEnv) (expr: Expression) : str
             | _ -> failwith "dbg expects a single argument"
         let argCode =
             match argExpr with
+            | TagExpr(tagName, None) ->
+                let tagId =
+                    match env.TagIds |> Map.tryFind tagName with
+                    | Some id -> id
+                    | None -> failwith $"Internal error: missing tag discriminant for #{tagName}"
+                let importFn = $"dbg_tag_{sanitizeImportSuffix tagName}"
+                $"i32.const {tagId}\n    local.set ${dbgLocal}\n    call ${importFn}\n    local.get ${dbgLocal}"
             | LiteralExpr(StringLit _) -> "i32.const 0"
             | LiteralExpr(BoolLit value) -> if value then "i32.const 1" else "i32.const 0"
             | _ -> transpileExpression env argExpr
-        $"{argCode}\n    local.tee ${dbgLocal}\n    call $dbg\n    local.get ${dbgLocal}"
+        match argExpr with
+        | TagExpr(_, None) -> argCode
+        | _ -> $"{argCode}\n    local.tee ${dbgLocal}\n    call $dbg\n    local.get ${dbgLocal}"
     | FunctionCall(name, _, args) ->
         if not (env.KnownFunctions.Contains name) then
             failwith $"Unsupported function call for WASM MVP backend: {name}"
@@ -232,6 +399,19 @@ let transpileModuleToWat (module': Module) : string =
 
     let knownFunctions = defs |> List.map fst |> Set.ofList
     let moduleUsesDbg = defs |> List.exists (fun (_, expr) -> containsDbgCallExpr expr)
+    let moduleUsesRegularDbg = defs |> List.exists (fun (_, expr) -> containsRegularDbgExpr expr)
+    let dbgTagNames =
+        defs
+        |> List.collect (fun (_, expr) -> collectDbgTagNamesExpr expr)
+        |> List.distinct
+        |> List.sort
+    let tagIdMap =
+        defs
+        |> List.collect (fun (_, expr) -> collectTagNamesExpr expr)
+        |> List.distinct
+        |> List.sort
+        |> List.mapi (fun index name -> name, index + 1)
+        |> Map.ofList
 
     let renderedFunctions =
         defs
@@ -270,7 +450,11 @@ let transpileModuleToWat (module': Module) : string =
                 else
                     None
             let locals = parameterMap |> Map.fold (fun acc k v -> acc |> Map.add k v) localMap
-            let env = { KnownFunctions = knownFunctions; Locals = locals; DbgTempLocal = dbgLocalName }
+            let env =
+                { KnownFunctions = knownFunctions
+                  Locals = locals
+                  DbgTempLocal = dbgLocalName
+                  TagIds = tagIdMap }
             let fn = sanitizeIdentifier name
             let parameterSig =
                 parameters
@@ -293,16 +477,28 @@ let transpileModuleToWat (module': Module) : string =
         |> String.concat "\n\n"
 
     let dbgImport =
-        if moduleUsesDbg then
+        if moduleUsesRegularDbg then
             "  (import \"env\" \"dbg\" (func $dbg (param i32)))"
         else
             ""
 
-    if String.IsNullOrWhiteSpace renderedFunctions && String.IsNullOrWhiteSpace dbgImport then
+    let dbgTagImports =
+        dbgTagNames
+        |> List.map (fun tagName ->
+            let importName = $"dbg_tag_{sanitizeImportSuffix tagName}"
+            $"  (import \"env\" \"{importName}\" (func ${importName}))")
+
+    let allImports =
+        [ if not (String.IsNullOrWhiteSpace dbgImport) then dbgImport
+          yield! dbgTagImports ]
+        |> List.filter (fun line -> not (String.IsNullOrWhiteSpace line))
+        |> String.concat "\n\n"
+
+    if String.IsNullOrWhiteSpace renderedFunctions && String.IsNullOrWhiteSpace allImports then
         "(module)"
     else
         let parts =
-            [ if not (String.IsNullOrWhiteSpace dbgImport) then dbgImport
+            [ if not (String.IsNullOrWhiteSpace allImports) then allImports
               if not (String.IsNullOrWhiteSpace renderedFunctions) then renderedFunctions ]
         let body = String.concat "\n\n" parts
         $"(module\n{body}\n)"

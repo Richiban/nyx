@@ -8,12 +8,12 @@ export default function DocsLayout({
   children: React.ReactNode;
 }) {
   return (
-    <div className="min-h-screen px-6 pb-16 pt-8">
-      <div className="mx-auto flex flex-col gap-6">
+    <div className="min-h-screen px-6 pb-12 pt-6">
+      <div className="mx-auto flex flex-col gap-4">
         <DocsTopNav />
-        <div className="grid gap-6 lg:grid-cols-[260px_1fr]">
+        <div className="grid gap-4 lg:grid-cols-[260px_1fr]">
           <DocsSidebar />
-          <main className="nyx-surface p-8 md:p-10">
+          <main className="nyx-surface p-6 md:p-8">
             {children}
             <DocsPageNav />
           </main>

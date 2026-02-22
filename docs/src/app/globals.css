@@ -10,6 +10,7 @@
   --nyx-border: #1f232b1f;
   --nyx-shadow: 0 18px 40px rgba(17, 18, 23, 0.18);
   --nyx-glow: 0 0 0 1px rgba(228, 87, 46, 0.16), 0 20px 50px rgba(228, 87, 46, 0.18);
+  --spacing: .125rem;
 }
 
 @theme inline {

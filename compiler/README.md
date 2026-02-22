@@ -93,6 +93,29 @@ dotnet test --filter "Parse literals.nyx"
 dotnet run --project compiler/Nyx.Parser/NyxParser.fsproj sample.nyx
 ```
 
+## WebAssembly (MVP)
+
+You can now emit WebAssembly text format (`.wat`) directly from the compiler CLI:
+
+```powershell
+dotnet run --project compiler/Nyx.Compiler.Cli/NyxCompiler.Cli.fsproj -- sample.nyx --target wasm
+```
+
+Optional output path:
+
+```powershell
+dotnet run --project compiler/Nyx.Compiler.Cli/NyxCompiler.Cli.fsproj -- sample.nyx --target wasm --out sample.wat
+```
+
+Current WASM backend support is intentionally minimal and focused on bootstrapping:
+
+- top-level `def` values exported as wasm functions
+- integer literals
+- integer binary operators (`+`, `-`, `*`, `/`, `%`, comparisons)
+- zero-argument lambdas and simple expression blocks
+
+Other language constructs will currently fail fast with an explicit "Unsupported ... for WASM MVP backend" message.
+
 ## AST Structure
 
 ```fsharp

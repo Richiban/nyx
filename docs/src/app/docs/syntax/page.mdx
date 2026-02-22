@@ -122,11 +122,11 @@ Everything in Nyx is an expression that returns a value:
 
 ```nyx
 -- Block expression (returns last value)
-def result = {
+def result = 
   def x = 10
   def y = 20
   x + y  -- returns 30
-}
+
 
 -- If expression
 def sign = if x > 0 -> "positive" else -> "non-positive"
@@ -148,8 +148,9 @@ def process = { data ->
   
   match validated
     | #ok(result) ->
-        result \transform \save
+      result \transform \save
     | #error(msg) ->
-        msg \logError
+      dbg(msg)
+      msg \logError
 }
 ```

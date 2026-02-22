@@ -243,3 +243,33 @@ rec fold: (list(a), b, (b, a) -> b) -> b = { xs, acc, f ->
     | [head, ...tail] -> fold(tail, f(acc, head), f)
 }
 ```
+
+## Polymorphic functions
+
+In Nanyx a polymorphic function is simply one whose return type depends on 
+the types of its argument(s)
+
+The simplest polymorphic function is probably the identity function, i.e.
+a function that does nothing other than return its input
+
+```nyx
+def id = { x -> x }
+```
+
+Thanks to type inference we don't have to write type annotations for this
+function or give it a specification, but if we wanted to it would look like
+this:
+
+```nyx
+def id: α -> α = { x -> x }
+```
+
+The lowercase `a`, when used in a type position, is a type variable (equivalent
+to the concept of 'generics' in other languages). 
+
+```nyx
+def head : list(α) -> #some(α) | #emptyList  = { 
+  | []      -> #emptyList
+  | [x, ..] -> #some(x) 
+}
+```

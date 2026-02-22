@@ -1,6 +1,8 @@
 # Records and Tuples
 
-Records and tuples are fundamental data structures in Nanyx. They allow you to group related values together with or without names.
+Records and tuples are fundamental data structures in many languages; in Nanyx
+they are a single feature. They allow you to group related values together with or 
+without names.
 
 ## Records
 
@@ -45,19 +47,36 @@ def userName = user.name  -- "Bob"
 def userAge = user.age    -- 25
 ```
 
-## Record Updates
+## Record Updates (Non-destructive mutation / copy-and-update)
 
-Records are immutable. Updates create new records:
+In a language where immutability is the default, it is almost required that there is a way to make a copy of a value with some of its properties changed. This is called "copy-and-update" or "non-destructive mutation". Nanyx has two special syntactical forms for this:
+
+1. The `with` keyword
+2. The spread operator `...` 
+
+The important difference between these two forms is that the `with` keyword works on exactly one input object, and the result of the `with` expression will always be the same type as the input object. The spread operator, meanwhile, can be used on any number of input objects and the resulting object may well be a different type from any of the input objects.
 
 ```nyx
-def user = (name = "Alice", age = 30)
-
--- Create new record with updated field
-def olderUser = user with age = 31
-
--- user is unchanged
--- olderUser = (name = "Alice", age = 31)
+def x = (a = 1, b = 2)
+def y = x with (a = 3)
+def z = x with (d = 4) --  Error: the `with` keyword cannot be used to add new properties
 ```
+
+```nyx
+def x = (a = 1, b = 2)
+def y = (...x, a = 3) -- `y` is now (a = 3, b = 2)
+def z = (...x, c = 4) -- `z` is now `(a = 1, b = 2, c = 4)`. Note the fact that a new property has been added
+```
+
+Unlike `with`, the spread operator can be used on multiple input objects, to create a mix of properties
+
+```nyx
+def x = (a = 1, b = 2)
+def y = (c = 3, d = 4)
+def z = (...x, ...y) -- `z` is now `(a = 1, b = 2, c = 3, d = 4)`
+```
+
+Note that the order of the input objects is important. If two input objects have the same property, the last one will be used.
 
 ## Nested Records
 

@@ -2,7 +2,7 @@ import Link from "next/link";
 
 export default function DocsTopNav() {
   return (
-    <div className="nyx-surface flex flex-wrap items-center gap-4 rounded-3xl px-5 py-4">
+    <div className="nyx-surface flex flex-wrap items-center gap-4 px-5 py-4">
       <div className="flex items-center gap-3">
         <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-[color:var(--nyx-accent)] text-sm font-semibold text-white">
           N

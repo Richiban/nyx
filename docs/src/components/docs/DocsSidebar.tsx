@@ -8,7 +8,7 @@ export default function DocsSidebar() {
   const pathname = usePathname();
 
   return (
-    <aside className="nyx-surface h-fit w-full rounded-3xl p-6">
+    <aside className="nyx-surface h-fit w-full p-6">
       <div className="mb-6">
         <p className="text-xs uppercase tracking-[0.2em] text-[color:var(--nyx-muted)]">
           Navigate

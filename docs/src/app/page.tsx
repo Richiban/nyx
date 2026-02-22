@@ -4,7 +4,7 @@ export default function Home() {
   return (
     <div className="min-h-screen">
       <header className="nyx-grid">
-        <div className="mx-auto flex max-w-6xl items-center justify-between px-6 py-6">
+        <div className="mx-auto flex items-center justify-between px-6 py-6">
           <div className="flex items-center gap-3">
             <div className="nyx-surface flex h-10 w-10 items-center justify-center rounded-xl text-lg font-semibold">
               N
@@ -30,7 +30,7 @@ export default function Home() {
         </div>
       </header>
 
-      <main className="mx-auto grid max-w-6xl gap-10 px-6 pb-24 pt-12 md:grid-cols-[1.2fr_0.8fr]">
+      <main className="mx-auto grid gap-10 px-6 pb-24 pt-12 md:grid-cols-[1.2fr_0.8fr]">
         <section className="nyx-fade-in space-y-8">
           <div className="nyx-pill inline-flex items-center gap-2 rounded-full px-4 py-2 text-xs uppercase tracking-[0.2em]">
             <span className="h-2 w-2 rounded-full bg-[var(--nyx-accent)]" />
@@ -61,7 +61,7 @@ export default function Home() {
         </section>
 
         <section className="nyx-fade-in flex flex-col gap-6 md:items-end">
-          <div className="nyx-surface nyx-glow w-full rounded-3xl p-6 md:max-w-sm">
+          <div className="nyx-surface nyx-glow w-full p-6 md:max-w-sm">
             <h2 className="text-lg font-semibold">Explore the docs</h2>
             <p className="mt-2 text-sm text-[color:var(--nyx-muted)]">
               A Gleam-style flow: overview, syntax, patterns, and recipes.
@@ -81,7 +81,7 @@ export default function Home() {
               </Link>
             </div>
           </div>
-          <div className="nyx-surface nyx-float w-full rounded-3xl p-6 md:max-w-sm">
+          <div className="nyx-surface nyx-float w-full p-6 md:max-w-sm">
             <h3 className="text-base font-semibold">Nyx style guide</h3>
             <p className="mt-2 text-sm text-[color:var(--nyx-muted)]">
               Build consistent docs with curated components, MDX blocks, and a

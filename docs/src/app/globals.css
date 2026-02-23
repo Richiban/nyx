@@ -14,8 +14,8 @@
 }
 
 @theme inline {
-  --font-sans: var(--font-heading);
-  --font-mono: var(--font-mono);
+  --font-sans: var(--font-body);
+  --font-mono: var(--font-body);
 }
 
 * {
@@ -27,15 +27,17 @@ body {
   background: radial-gradient(1200px 600px at 10% -10%, #ffe7d9 0%, transparent 60%),
     radial-gradient(1000px 800px at 90% -20%, #d9e6ff 0%, transparent 60%),
     var(--nyx-paper);
-  font-family: var(--font-body), serif;
+  font-family: var(--font-body), "Source Code Pro", monospace;
   min-height: 100vh;
 }
 
 h1,
 h2,
 h3,
-h4 {
-  font-family: var(--font-audiowide), var(--font-heading), sans-serif;
+h4,
+h5,
+h6 {
+  font-family: var(--font-heading), "Audiowide", sans-serif;
   letter-spacing: -0.02em;
 }
 

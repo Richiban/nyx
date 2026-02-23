@@ -1,0 +1,11 @@
+
+def mapOption: (#some(a) | r, a -> b) -> #some(b) | r = {
+  | #some(x), f -> #some(f(x))
+  | r, _ -> r
+}
+
+def v: #some(int) | #noInt = #some(42)
+
+def main = {
+  v \mapOption { + 1 }
+}

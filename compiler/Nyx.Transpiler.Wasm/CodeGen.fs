@@ -4,10 +4,12 @@ open System
 open Parser.Program
 
 type private TranspileEnv =
-    { KnownFunctions: Set<string>;
-    Locals: Map<string, string>;
-    DbgTempLocal: string option;
-    TagIds: Map<string, int> }
+        { KnownFunctions: Set<string>;
+            Locals: Map<string, string>;
+            DbgTempLocal: string option;
+            TagIds: Map<string, int>;
+            MatchTempNames: string list;
+            NextMatchTemp: int }
 
 let private sanitizeIdentifier (name: string) =
     let sanitized =
@@ -103,8 +105,130 @@ let private createNameMap (names: string list) =
 let private sanitizeImportSuffix (name: string) = sanitizeIdentifier name
 
 let private tagPayloadMask = 65535
+let private tagDiscriminantMask = -65536
 
 let private tagDiscriminantBase (id: int) = id <<< 16
+
+let rec private countMatchExpressions (expr: Expression) : int =
+    match expr with
+    | Match(values, arms) ->
+        let arity = values.Length
+        let maxArityInArms =
+            arms |> List.map (fun (_, armExpr) -> countMatchArity armExpr) |> List.max
+        max arity maxArityInArms
+    | FunctionCall(_, _, args) -> args |> List.sumBy countMatchExpressions
+    | BinaryOp(_, left, right) -> countMatchExpressions left + countMatchExpressions right
+    | IfExpr(cond, thenExpr, elseExpr) ->
+        countMatchExpressions cond + countMatchExpressions thenExpr + countMatchExpressions elseExpr
+    | Lambda(_, body) -> countMatchExpressions body
+    | Pipe(value, _, _, args) -> countMatchExpressions value + (args |> List.sumBy countMatchExpressions)
+    | Block statements ->
+        statements
+        |> List.sumBy (function
+            | DefStatement(_, _, _, rhs) -> countMatchExpressions rhs
+            | ExprStatement value -> countMatchExpressions value
+            | ImportStatement _
+            | TypeDefStatement _
+            | UseStatement _ -> 0)
+    | TupleExpr values -> values |> List.sumBy countMatchExpressions
+    | ListExpr values -> values |> List.sumBy countMatchExpressions
+    | RecordExpr fields ->
+        fields
+        |> List.sumBy (function
+            | NamedField(_, value) -> countMatchExpressions value
+            | PositionalField value -> countMatchExpressions value)
+    | UseIn(_, body) -> countMatchExpressions body
+    | MemberAccess(value, _, _) -> countMatchExpressions value
+    | TagExpr(_, payload) -> payload |> Option.map countMatchExpressions |> Option.defaultValue 0
+    | InterpolatedString parts ->
+        parts
+        |> List.sumBy (function
+            | StringText _ -> 0
+            | StringExpr value -> countMatchExpressions value)
+    | WorkflowBindExpr(_, value) -> countMatchExpressions value
+    | WorkflowReturnExpr value -> countMatchExpressions value
+    | UnitExpr -> 0
+    | LiteralExpr _ -> 0
+    | IdentifierExpr _ -> 0
+
+and countMatchArity (expr: Expression) : int =
+    match expr with
+    | Match(values, arms) ->
+        let arity = values.Length
+        let maxArityInArms =
+            arms |> List.map (fun (_, armExpr) -> countMatchArity armExpr) |> List.max
+        max arity maxArityInArms
+    | FunctionCall(_, _, args) -> args |> List.map countMatchArity |> List.max
+    | BinaryOp(_, left, right) -> max (countMatchArity left) (countMatchArity right)
+    | IfExpr(cond, thenExpr, elseExpr) ->
+        [countMatchArity cond; countMatchArity thenExpr; countMatchArity elseExpr] |> List.max
+    | Lambda(_, body) -> countMatchArity body
+    | Pipe(value, _, _, args) -> max (countMatchArity value) (args |> List.map countMatchArity |> List.max)
+    | Block statements ->
+        statements
+        |> List.map (function
+            | DefStatement(_, _, _, rhs) -> countMatchArity rhs
+            | ExprStatement value -> countMatchArity value
+            | ImportStatement _
+            | TypeDefStatement _
+            | UseStatement _ -> 0)
+        |> List.max
+    | TupleExpr values
+    | ListExpr values -> values |> List.map countMatchArity |> List.max
+    | RecordExpr fields ->
+        fields
+        |> List.map (function
+            | NamedField(_, value) -> countMatchArity value
+            | PositionalField value -> countMatchArity value)
+        |> List.max
+    | UseIn(_, body) -> countMatchArity body
+    | MemberAccess(value, _, _) -> countMatchArity value
+    | TagExpr(_, payload) -> payload |> Option.map countMatchArity |> Option.defaultValue 0
+    | InterpolatedString parts ->
+        parts
+        |> List.map (function
+            | StringText _ -> 0
+            | StringExpr value -> countMatchArity value)
+        |> List.max
+    | WorkflowBindExpr(_, value)
+    | WorkflowReturnExpr value -> countMatchArity value
+    | UnitExpr
+    | LiteralExpr _
+    | IdentifierExpr _ -> 0
+    | FunctionCall(_, _, args) -> args |> List.sumBy countMatchExpressions
+    | BinaryOp(_, left, right) -> countMatchExpressions left + countMatchExpressions right
+    | IfExpr(cond, thenExpr, elseExpr) ->
+        countMatchExpressions cond + countMatchExpressions thenExpr + countMatchExpressions elseExpr
+    | Lambda(_, body) -> countMatchExpressions body
+    | Pipe(value, _, _, args) -> countMatchExpressions value + (args |> List.sumBy countMatchExpressions)
+    | Block statements ->
+        statements
+        |> List.sumBy (function
+            | DefStatement(_, _, _, rhs) -> countMatchExpressions rhs
+            | ExprStatement value -> countMatchExpressions value
+            | ImportStatement _
+            | TypeDefStatement _
+            | UseStatement _ -> 0)
+    | TupleExpr values
+    | ListExpr values -> values |> List.sumBy countMatchExpressions
+    | RecordExpr fields ->
+        fields
+        |> List.sumBy (function
+            | NamedField(_, value) -> countMatchExpressions value
+            | PositionalField value -> countMatchExpressions value)
+    | UseIn(_, body) -> countMatchExpressions body
+    | MemberAccess(value, _, _) -> countMatchExpressions value
+    | TagExpr(_, payload) -> payload |> Option.map countMatchExpressions |> Option.defaultValue 0
+    | InterpolatedString parts ->
+        parts
+        |> List.sumBy (function
+            | StringText _ -> 0
+            | StringExpr value -> countMatchExpressions value)
+    | WorkflowBindExpr(_, value)
+    | WorkflowReturnExpr value -> countMatchExpressions value
+    | UnitExpr
+    | LiteralExpr _
+    | IdentifierExpr _ -> 0
 
 let rec private containsDbgCallExpr (expr: Expression) : bool =
     match expr with
@@ -326,7 +450,10 @@ let rec private collectTagNamesExpr (expr: Expression) : string list =
             | PositionalField value -> collectTagNamesExpr value)
     | Match(values, arms) ->
         let valueTags = values |> List.collect collectTagNamesExpr
-        let armTags = arms |> List.collect (fun (_, armExpr) -> collectTagNamesExpr armExpr)
+        let armTags =
+            arms
+            |> List.collect (fun (patterns, armExpr) ->
+                (patterns |> List.collect collectTagNamesPattern) @ (collectTagNamesExpr armExpr))
         valueTags @ armTags
     | UseIn(_, body) -> collectTagNamesExpr body
     | MemberAccess(value, _, _) -> collectTagNamesExpr value
@@ -349,6 +476,26 @@ and private collectTagNamesStatements (statements: Statement list) : string list
         | ImportStatement _
         | TypeDefStatement _
         | UseStatement _ -> [])
+
+and private collectTagNamesPattern (pattern: Pattern) : string list =
+    match pattern with
+    | TagPattern(tagName, payloadOpt) ->
+        match payloadOpt with
+        | Some payload -> tagName :: collectTagNamesPattern payload
+        | None -> [ tagName ]
+    | TuplePattern patterns
+    | ListPattern(patterns, _) -> patterns |> List.collect collectTagNamesPattern
+    | ListSplatMiddle(beforePatterns, afterPatterns) ->
+        (beforePatterns |> List.collect collectTagNamesPattern)
+        @ (afterPatterns |> List.collect collectTagNamesPattern)
+    | RecordPattern(_, patterns) -> patterns |> List.collect collectTagNamesPattern
+    | RecordMemberPattern members -> members |> List.collect (fun (_, p) -> collectTagNamesPattern p)
+    | GuardPattern(_, value)
+    | RangePattern(value, _) -> collectTagNamesExpr value
+    | LiteralPattern _
+    | IdentifierPattern _
+    | WildcardPattern
+    | ElsePattern -> []
 
 let rec private transpileExpression (env: TranspileEnv) (expr: Expression) : string =
     match expr with
@@ -383,6 +530,115 @@ let rec private transpileExpression (env: TranspileEnv) (expr: Expression) : str
         let thenCode = transpileExpression env thenExpr
         let elseCode = transpileExpression env elseExpr
         $"{condCode}\n    (if (result i32)\n      (then\n        {thenCode}\n      )\n      (else\n        {elseCode}\n      )\n    )"
+    // ...existing code...
+    | Match(values, arms) ->
+        // Multi-scrutinee support
+        let matchTempNames =
+            env.MatchTempNames
+            |> List.skip env.NextMatchTemp
+            |> List.take values.Length
+        if matchTempNames.Length <> values.Length then
+            failwith "Internal error: not enough match temp locals for multi-scrutinee match"
+
+        let envForNested = { env with NextMatchTemp = env.NextMatchTemp + values.Length }
+
+        let scrutineeCodes = values |> List.map (transpileExpression envForNested)
+        let setScrutineeLocals =
+            List.zip matchTempNames scrutineeCodes
+            |> List.map (fun (name, code) -> $"{code}\n    local.set ${name}")
+            |> String.concat "\n    "
+
+        let patternIsCatchAll pattern =
+            match pattern with
+            | WildcardPattern
+            | ElsePattern
+            | IdentifierPattern _ -> true
+            | _ -> false
+
+        let patternCondition pattern tempName =
+            match pattern with
+            | LiteralPattern(IntLit value) ->
+                $"local.get ${tempName}\n      i32.const {value}\n      i32.eq"
+            | LiteralPattern(BoolLit value) ->
+                let asInt = if value then 1 else 0
+                $"local.get ${tempName}\n      i32.const {asInt}\n      i32.eq"
+            | TagPattern(tagName, payloadOpt) ->
+                let tagBase =
+                    match env.TagIds |> Map.tryFind tagName with
+                    | Some id -> tagDiscriminantBase id
+                    | None -> failwith $"Internal error: missing tag discriminant for pattern #{tagName}"
+                match payloadOpt with
+                | None ->
+                    $"local.get ${tempName}\n      i32.const {tagDiscriminantMask}\n      i32.and\n      i32.const {tagBase}\n      i32.eq"
+                | Some (LiteralPattern(IntLit payload)) ->
+                    let payloadMasked = payload &&& tagPayloadMask
+                    $"local.get ${tempName}\n      i32.const {tagDiscriminantMask}\n      i32.and\n      i32.const {tagBase}\n      i32.eq\n      local.get ${tempName}\n      i32.const {tagPayloadMask}\n      i32.and\n      i32.const {payloadMasked}\n      i32.eq\n      i32.and"
+                | Some (LiteralPattern(BoolLit payload)) ->
+                    let payloadMasked = if payload then 1 else 0
+                    $"local.get ${tempName}\n      i32.const {tagDiscriminantMask}\n      i32.and\n      i32.const {tagBase}\n      i32.eq\n      local.get ${tempName}\n      i32.const {tagPayloadMask}\n      i32.and\n      i32.const {payloadMasked}\n      i32.eq\n      i32.and"
+                | Some WildcardPattern
+                | Some ElsePattern ->
+                    $"local.get ${tempName}\n      i32.const {tagDiscriminantMask}\n      i32.and\n      i32.const {tagBase}\n      i32.eq"
+                | Some (IdentifierPattern ident) ->
+                    $"local.get ${tempName}\n      i32.const {tagDiscriminantMask}\n      i32.and\n      i32.const {tagBase}\n      i32.eq"
+                | Some _ ->
+                    failwith $"Unsupported tag payload pattern for WASM MVP backend: {tagName}"
+            | WildcardPattern
+            | ElsePattern
+            | IdentifierPattern _ -> "i32.const 1"
+            | _ -> failwith $"Unsupported match pattern for WASM MVP backend: {pattern}"
+
+        let rec emitArms remainingArms =
+            match remainingArms with
+            | [] -> "unreachable"
+            | (patterns, armExpr) :: rest ->
+                if List.length patterns <> values.Length then
+                    failwith "Unsupported match arm: pattern count does not match scrutinee count"
+                let conds : string list =
+                    List.zip patterns matchTempNames
+                    |> List.map (fun (pat, temp) -> patternCondition pat temp)
+                let allConds =
+                    match conds with
+                    | [] -> "i32.const 1"
+                    | [single] -> single
+                    | many ->
+                        let many : string list = many
+                        let n = many.Length
+                        many |> String.concat "\n      " |> fun s -> $"{s}\n      " + (List.init (n - 1) (fun _ -> "i32.and") |> String.concat "\n      ")
+                // Add identifier payloads to envForNested.Locals before binding
+                let payloadIdents =
+                    patterns
+                    |> List.choose (function
+                        | TagPattern(_, Some (IdentifierPattern ident)) -> Some ident
+                        | _ -> None)
+                let envWithPayloadLocals =
+                    payloadIdents
+                    |> List.fold (fun acc ident ->
+                        let localName = $"__payload_{ident}"
+                        { acc with Locals = acc.Locals |> Map.add ident localName }) envForNested
+                let patternPayloadBinds =
+                    List.zip patterns matchTempNames
+                    |> List.choose (fun (pat, temp) ->
+                        match pat with
+                        | TagPattern(_, Some (IdentifierPattern ident)) ->
+                            let payloadLocal =
+                                match envWithPayloadLocals.Locals |> Map.tryFind ident with
+                                | Some localName -> localName
+                                | None -> failwith $"Internal error: missing local for payload variable {ident}"
+                            Some $"local.get ${temp}\n        i32.const {tagPayloadMask}\n        i32.and\n        local.set ${payloadLocal}"
+                        | _ -> None)
+                    |> String.concat "\n    "
+                let armCode =
+                    if patternPayloadBinds = "" then
+                        transpileExpression envWithPayloadLocals armExpr
+                    else
+                        $"{patternPayloadBinds}\n    {transpileExpression envWithPayloadLocals armExpr}"
+                let elseCode = emitArms rest
+                $"{allConds}\n    (if (result i32)\n      (then\n        {armCode}\n      )\n      (else\n        {elseCode}\n      )\n    )"
+
+        let armsCode = emitArms arms
+        $"{setScrutineeLocals}\n    {armsCode}"
+    // ...existing code...
     | FunctionCall(name, _, args) when name = "dbg" ->
         let dbgLocal =
             match env.DbgTempLocal with
@@ -409,6 +665,8 @@ let rec private transpileExpression (env: TranspileEnv) (expr: Expression) : str
                     | None -> failwith $"Internal error: missing tag discriminant for #{tagName}"
                 let importFn = $"dbg_tag_payload_{sanitizeImportSuffix tagName}"
                 let tagBase = tagDiscriminantBase tagId
+                let payloadCode = transpileExpression env payloadExpr
+                $"{payloadCode}\n    local.tee ${dbgLocal}\n    call ${importFn}\n    local.get ${dbgLocal}\n    i32.const {tagPayloadMask}\n    i32.and\n    i32.const {tagBase}\n    i32.or"
                 let payloadCode = transpileExpression env payloadExpr
                 $"{payloadCode}\n    local.tee ${dbgLocal}\n    call ${importFn}\n    local.get ${dbgLocal}\n    i32.const {tagPayloadMask}\n    i32.and\n    i32.const {tagBase}\n    i32.or"
             | LiteralExpr(StringLit _) -> "i32.const 0"
@@ -526,18 +784,81 @@ let transpileModuleToWat (module': Module) : string =
                 else
                     None
             let locals = parameterMap |> Map.fold (fun acc k v -> acc |> Map.add k v) localMap
+            let mutable usedLocalNames =
+                locals
+                |> Map.toList
+                |> List.map snd
+                |> Set.ofList
+
+            let matchArity = countMatchArity bodyExpr
+            let matchTempNames =
+                [ for index in 0 .. (matchArity - 1) do
+                    let baseName = $"__match_tmp_{index}"
+                    let mutable candidate = baseName
+                    let mutable suffix = 1
+                    while usedLocalNames |> Set.contains candidate do
+                        candidate <- $"{baseName}_{suffix}"
+                        suffix <- suffix + 1
+                    usedLocalNames <- usedLocalNames |> Set.add candidate
+                    yield candidate ]
+
             let env =
                 { KnownFunctions = knownFunctions
                   Locals = locals
                   DbgTempLocal = dbgLocalName
-                  TagIds = tagIdMap }
+                  TagIds = tagIdMap
+                  MatchTempNames = matchTempNames
+                  NextMatchTemp = 0 }
             let fn = sanitizeIdentifier name
             let parameterSig =
                 parameters
                 |> List.map (fun (paramName, _) -> $"(param ${parameterMap.[paramName]} i32)")
                 |> String.concat " "
+            // Collect all identifier payloads in match patterns
+            let rec collectPayloadLocals expr =
+                match expr with
+                | Match(_, arms) ->
+                    arms |> List.collect (fun (patterns, armExpr) ->
+                        let payloads = patterns |> List.choose (function
+                            | TagPattern(_, Some (IdentifierPattern ident)) -> Some ident
+                            | _ -> None)
+                        List.append payloads (collectPayloadLocals armExpr))
+                | FunctionCall(_, _, args) -> args |> List.collect collectPayloadLocals
+                | BinaryOp(_, left, right) -> List.append (collectPayloadLocals left) (collectPayloadLocals right)
+                | IfExpr(cond, thenExpr, elseExpr) ->
+                    List.append (collectPayloadLocals cond) (List.append (collectPayloadLocals thenExpr) (collectPayloadLocals elseExpr))
+                | Lambda(_, body) -> collectPayloadLocals body
+                | Pipe(value, _, _, args) -> List.append (collectPayloadLocals value) (args |> List.collect collectPayloadLocals)
+                | Block statements ->
+                    statements |> List.collect (function
+                        | DefStatement(_, _, _, rhs) -> collectPayloadLocals rhs
+                        | ExprStatement value -> collectPayloadLocals value
+                        | _ -> [])
+                | TupleExpr values
+                | ListExpr values -> values |> List.collect collectPayloadLocals
+                | RecordExpr fields ->
+                    fields |> List.collect (function
+                        | NamedField(_, value) -> collectPayloadLocals value
+                        | PositionalField value -> collectPayloadLocals value)
+                | UseIn(_, body) -> collectPayloadLocals body
+                | MemberAccess(value, _, _) -> collectPayloadLocals value
+                | TagExpr(_, payload) -> payload |> Option.map collectPayloadLocals |> Option.defaultValue []
+                | InterpolatedString parts ->
+                    parts |> List.collect (function
+                        | StringText _ -> []
+                        | StringExpr value -> collectPayloadLocals value)
+                | WorkflowBindExpr(_, value)
+                | WorkflowReturnExpr value -> collectPayloadLocals value
+                | UnitExpr
+                | LiteralExpr _
+                | IdentifierExpr _ -> []
+
+            let payloadLocals = collectPayloadLocals bodyExpr |> List.distinct
+            let payloadLocalNames = payloadLocals |> List.map (fun ident -> $"__payload_{ident}")
             let localsSig =
                 [ yield! (localNames |> List.map (fun localName -> localMap.[localName]))
+                  yield! matchTempNames
+                  yield! payloadLocalNames
                   match dbgLocalName with
                   | Some name -> yield name
                   | None -> () ]

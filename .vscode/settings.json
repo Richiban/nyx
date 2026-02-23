@@ -4,6 +4,10 @@
             "approve": true,
             "matchCommandLine": true
         },
-        "nyx": true
+        "nyx": true,
+        "/^pwsh -c \\./run-nyx\\.ps1 \\./thirteen\\.nyx r$/": {
+            "approve": true,
+            "matchCommandLine": true
+        }
     }
 }

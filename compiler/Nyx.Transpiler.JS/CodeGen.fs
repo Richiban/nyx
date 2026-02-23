@@ -75,6 +75,18 @@ let private renderQualifiedName (name: string) =
         |> Array.skip 1
         |> Array.fold (fun acc part -> renderMemberAccess acc part) first
 
+let private renderDestructure (ctxName: string) (names: Set<string>) =
+    if names.IsEmpty then
+        []
+    else
+        let entries =
+            names
+            |> Set.toList
+            |> List.map (fun name ->
+                let escaped = escapeIdentifier name
+                if escaped = name then name else sprintf "%s: %s" name escaped)
+        [ sprintf "const { %s } = %s;" (String.concat ", " entries) ctxName ]
+
 let private extractContextNames (typeExpr: TypeExpr) : TypeExpr list =
     match typeExpr with
     | TypeWithContext(ctxs, _) -> ctxs
@@ -141,23 +153,6 @@ let private resolveRecordTypes (typeDefs: Map<string, TypeExpr>) =
     |> Map.fold (fun acc name body ->
         if isRecordType (Set.singleton name) body then acc |> Set.add name else acc) Set.empty
 
-let private resolveTopLevelRecordValues (module': Module) : Map<string, Set<string>> =
-    module'
-    |> List.choose (function
-        | Def (ValueDef(_, name, _, expr)) ->
-            let members =
-                match expr with
-                | RecordExpr fields ->
-                    fields
-                    |> List.choose (function
-                        | NamedField(memberName, _) -> Some memberName
-                        | PositionalField _ -> None)
-                    |> Set.ofList
-                | _ -> Set.empty
-            if members.IsEmpty then None else Some (name, members)
-        | _ -> None)
-    |> Map.ofList
-
 let rec private contextMembersFromTypeExpr (env: TranspileEnv) (typeExpr: TypeExpr) : Set<string> =
     match contextNameFromTypeExpr typeExpr with
     | Some name -> env.ContextMembers |> Map.tryFind name |> Option.defaultValue Set.empty
@@ -186,9 +181,8 @@ let private contextMembersFromUseExpr (env: TranspileEnv) (expr: Expression) : S
         env.ContextMembers |> Map.tryFind name |> Option.defaultValue Set.empty
     | IdentifierExpr(name, _) ->
         match env.ContextMembers |> Map.tryFind name with
-        | Some members when not members.IsEmpty -> members
+        | Some members -> members
         | None -> env.KnownRecordValues |> Map.tryFind name |> Option.defaultValue Set.empty
-        | Some _ -> env.KnownRecordValues |> Map.tryFind name |> Option.defaultValue Set.empty
     | _ -> Set.empty
 
 let private recordMembersFromValueExpr (expr: Expression) : Set<string> =
@@ -281,8 +275,6 @@ let rec private transpileExpressionWithEnv (env: TranspileEnv) (expr: Expression
             if env.ContextFunctions |> Map.containsKey name then
                 let ctxExpr = env.ContextVar |> Option.defaultValue "{}"
                 sprintf "%s(%s)" emittedName ctxExpr
-            elif env.ContextVar.IsSome && not (name.Contains(".")) && not (env.BoundNames |> Set.contains name) then
-                renderMemberAccess (env.ContextVar.Value) name
             else
                 emittedName
         match args with
@@ -299,13 +291,7 @@ let rec private transpileExpressionWithEnv (env: TranspileEnv) (expr: Expression
     
     | Lambda(params', body) ->
         let paramStr = params' |> List.map (fst >> escapeIdentifier) |> String.concat ", "
-        let lambdaBound =
-            params'
-            |> List.map fst
-            |> Set.ofList
-            |> Set.union env.BoundNames
-        let envForLambda = { env with BoundNames = lambdaBound }
-        let bodyExpr = transpileExpressionWithEnv envForLambda body
+        let bodyExpr = transpileExpressionWithEnv env body
         let emittedBody =
             match body with
             | RecordExpr _
@@ -357,6 +343,12 @@ let rec private transpileExpressionWithEnv (env: TranspileEnv) (expr: Expression
                 let ctxName = ctxVarName env.NextCtxId
                 let baseCtx = env.ContextVar |> Option.defaultValue "{}"
                 let envWithCtx = { env with ContextVar = Some ctxName; BoundNames = env.BoundNames; NextCtxId = env.NextCtxId + 1 }
+tement _ -> true | _ -> false)
+        let ctxName, envWithCtx, initLines =
+            if hasUse then
+                let ctxName = ctxVarName env.NextCtxId
+                let baseCtx = env.ContextVar |> Option.defaultValue "{}"
+                let envWithCtx = { env with ContextVar = Some ctxName; BoundNames = Set.empty; NextCtxId = env.NextCtxId + 1 }
                 ctxName, envWithCtx, [sprintf "let %s = %s;" ctxName baseCtx]
             else
                 env.ContextVar |> Option.defaultValue "", env, []
@@ -378,30 +370,7 @@ let rec private transpileExpressionWithEnv (env: TranspileEnv) (expr: Expression
         let lastLines, returnLine =
             match lastStmtOpt with
             | Some (ExprStatement expr) ->
-                let returnExpr =
-                    let tryUseBlockCallFallback () =
-                        if hasUse then
-                            match expr with
-                            | FunctionCall(name, _, args) when not (name.Contains(".")) && not (currentEnv.BoundNames |> Set.contains name) && name <> "dbg" && not (currentEnv.ContextFunctions |> Map.containsKey name) ->
-                                let argStrs =
-                                    match args with
-                                    | [] -> ""
-                                    | [single] ->
-                                        match single with
-                                        | TupleExpr items -> items |> List.map (transpileExpressionWithEnv currentEnv) |> String.concat ", "
-                                        | _ -> transpileExpressionWithEnv currentEnv single
-                                    | multiple -> multiple |> List.map (transpileExpressionWithEnv currentEnv) |> String.concat ", "
-                                Some (sprintf "%s(%s)" (renderMemberAccess ctxName name) argStrs)
-                            | _ -> None
-                        else
-                            None
-                    tryUseBlockCallFallback ()
-                    |> Option.orElseWith (fun () ->
-                        match expr with
-                        | FunctionCall(name, _, args) -> transpileCallInContext currentEnv name args
-                        | _ -> None)
-                    |> Option.defaultValue (transpileExpressionWithEnv currentEnv expr)
-                [], sprintf "return %s;" returnExpr
+                [], sprintf "return %s;" (transpileExpressionWithEnv currentEnv expr)
             | Some lastStmt ->
                 let lines, nextEnv = transpileStatement currentEnv lastStmt
                 currentEnv <- nextEnv
@@ -573,21 +542,6 @@ and transpileUseBinding (env: TranspileEnv) (binding: UseBinding) : string =
     match binding with
     | UseValue expr -> transpileExpressionWithEnv env expr
 
-and private transpileCallInContext (env: TranspileEnv) (name: string) (args: Expression list) : string option =
-    if env.ContextVar.IsSome && not (name.Contains(".")) && not (env.BoundNames |> Set.contains name) && not (env.ContextFunctions |> Map.containsKey name) then
-        let baseCall = renderMemberAccess env.ContextVar.Value name
-        let argStrs =
-            match args with
-            | [] -> ""
-            | [single] ->
-                match single with
-                | TupleExpr items -> items |> List.map (transpileExpressionWithEnv env) |> String.concat ", "
-                | _ -> transpileExpressionWithEnv env single
-            | multiple -> multiple |> List.map (transpileExpressionWithEnv env) |> String.concat ", "
-        Some (sprintf "%s(%s)" baseCall argStrs)
-    else
-        None
-
 and transpileStatement (env: TranspileEnv) (stmt: Statement) : string list * TranspileEnv =
     match stmt with
     | DefStatement(_, name, typeOpt, expr) ->
@@ -606,21 +560,23 @@ and transpileStatement (env: TranspileEnv) (stmt: Statement) : string list * Tra
                 env
         let nextEnvWithRecords =
             let members = recordMembersFromValueExpr expr
-            let withMembers =
-                if members.IsEmpty then nextEnv
-                else { nextEnv with KnownRecordValues = nextEnv.KnownRecordValues |> Map.add name members }
-            { withMembers with BoundNames = withMembers.BoundNames |> Set.add name }
+            if members.IsEmpty then nextEnv
+            else { nextEnv with KnownRecordValues = nextEnv.KnownRecordValues |> Map.add name members }
         let definitionName = renderQualifiedName name
         let isQualified = name.Contains(".")
         let definition =
             if hasContext then
                 let ctxParam = ctxVarName 0
+                let destructure =
+                    match renderDestructure ctxParam contextMembers with
+                    | [] -> ""
+                    | lines -> String.concat " " lines
                 let innerEnv = { nextEnvWithRecords with ContextVar = Some ctxParam; BoundNames = Set.empty }
                 let bodyExpr = transpileExpressionWithEnv innerEnv expr
                 if isQualified then
-                    sprintf "%s = (%s) => { return %s; };" definitionName ctxParam bodyExpr
+                    sprintf "%s = (%s) => { %s return %s; };" definitionName ctxParam destructure bodyExpr
                 else
-                    sprintf "const %s = (%s) => { return %s; };" definitionName ctxParam bodyExpr
+                    sprintf "const %s = (%s) => { %s return %s; };" definitionName ctxParam destructure bodyExpr
             else
                 if isQualified then
                     sprintf "%s = %s;" definitionName (transpileExpressionWithEnv env expr)
@@ -637,16 +593,14 @@ and transpileStatement (env: TranspileEnv) (stmt: Statement) : string list * Tra
         | Some ctxName ->
             let bindingExpr = transpileUseBinding env binding
             let mergedLine = sprintf "%s = { ...%s, ...%s };" ctxName ctxName bindingExpr
-            let nextEnv = env
-            [ mergedLine ], nextEnv
-    | ExprStatement expr ->
-        let exprCode =
-            match expr with
-            | FunctionCall(name, _, args) ->
-                transpileCallInContext env name args
-                |> Option.defaultValue (transpileExpressionWithEnv env expr)
-            | _ -> transpileExpressionWithEnv env expr
-        [ sprintf "%s;" exprCode ], env
+            let newMembers =
+                match binding with
+                | UseValue expr -> contextMembersFromUseExpr env expr
+            let newNames = newMembers |> Set.difference env.BoundNames
+            let destructureLines = renderDestructure ctxName newNames
+            let nextEnv = { env with BoundNames = env.BoundNames |> Set.union newMembers }
+            [ mergedLine ] @ destructureLines, nextEnv
+    | ExprStatement expr -> [ sprintf "%s;" (transpileExpressionWithEnv env expr) ], env
 
 let private transpileTopLevelItem (env: TranspileEnv) (item: TopLevelItem) : string list * TranspileEnv =
     match item with
@@ -727,8 +681,7 @@ let transpileModule (module': Module) : string =
         |> Map.ofList
     let contextMembers = resolveContextMembers typeDefs
     let recordTypes = resolveRecordTypes typeDefs
-    let topLevelRecordValues = resolveTopLevelRecordValues module'
-    let mutable env = { emptyEnv with ContextMembers = contextMembers; RecordTypes = recordTypes; KnownRecordValues = topLevelRecordValues }
+    let mutable env = { emptyEnv with ContextMembers = contextMembers; RecordTypes = recordTypes }
     let dbgPreludeNeeded = moduleUsesDbg module' && not (moduleDefinesDbg module')
     let lines =
         module'

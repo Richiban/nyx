@@ -1,0 +1,12 @@
+type AD = #a | #b | #c | #d
+
+def f: AD -> int = {
+  | #a -> 1
+  | #b -> 2
+  | #c -> 3
+  | #d -> 4
+}
+
+def r = f(#a)
+
+dbg(r)

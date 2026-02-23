@@ -26,3 +26,7 @@ let ``Fixture tag comparison if-expression`` () =
 [<Fact>]
 let ``Fixture payload tag comparison if-expression`` () =
     assertFixture "ControlFlow" "payload-tag-comparison"
+
+[<Fact>]
+let ``Fixture tag match function`` () =
+    assertFixture "ControlFlow" "tag-match"

@@ -2,6 +2,20 @@
 
 Nanyx provides powerful collection types for working with sequences of data. The primary collection type is the list, which is immutable and efficiently supports functional operations.
 
+Nanyx is a bit unusual in that the `[a, b, c]` syntax can be used to construct a collection of any type that follows the requiside builder pattern.
+
+So `def items: A = [1, 2, 3]` will lower to:
+
+```nyx
+def items: A = A.buildSeq {
+  yield! 1
+  yield! 2
+  yield! 3
+}
+```
+
+If no target type is specified for the collection then the compiler will choose one (usually `list`).
+
 ## Lists
 
 Lists are immutable sequences of values:

@@ -1,5 +1,9 @@
 import type { Metadata } from "next";
-import { JetBrains_Mono, Literata, Space_Grotesk } from "next/font/google";
+import { JetBrains_Mono, Literata, Space_Grotesk, Audiowide } from "next/font/google";
+const audiowide = Audiowide({
+  variable: "--font-audiowide",
+  subsets: ["latin"],
+});
 import "./globals.css";
 
 const spaceGrotesk = Space_Grotesk({
@@ -22,15 +26,14 @@ export const metadata: Metadata = {
   description: "Nanyx language documentation and guides",
 };
 
-export default function RootLayout({
   children,
 }: Readonly<{
-  children: React.ReactNode;
+    children: React.ReactNode;
 }>) {
   return (
     <html lang="en">
       <body
-        className={`${spaceGrotesk.variable} ${literata.variable} ${jetBrainsMono.variable} antialiased`}
+        className={`${spaceGrotesk.variable} ${literata.variable} ${jetBrainsMono.variable} ${audiowide.variable} antialiased`}
       >
         {children}
       </body>

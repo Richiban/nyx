@@ -1,11 +1,13 @@
+
 import Link from "next/link";
+import NanyxLogo from "@/components/NanyxLogo";
 
 export default function DocsTopNav() {
   return (
     <div className="nyx-surface flex flex-wrap items-center gap-4 px-5 py-4">
       <div className="flex items-center gap-3">
-        <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-[color:var(--nyx-accent)] text-sm font-semibold text-white">
-          N
+        <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-[color:var(--nyx-accent)]">
+          <NanyxLogo width={32} height={32} />
         </div>
         <div>
           <p className="text-xs uppercase tracking-[0.2em] text-[color:var(--nyx-muted)]">

@@ -130,7 +130,7 @@ def (name = name, _) = user  -- only extract name
 
 ## Tuples
 
-Tuples are anonymous records with numbered fields:
+Tuples are simply records with anonymous (positional) fields:
 
 ```nyx
 -- Tuple creation
@@ -141,6 +141,14 @@ def (x, y) = point
 
 -- Tuple type
 def origin: (int, int) = (0, 0)
+```
+
+Positional and named fields can appear in the same object, but positional fields must always come first:
+
+```nyx
+def myObject = ("a", "b", someField = "c")
+
+def badObject = ("a", "b", someField = "c", "d") -- Error: positional field after named
 ```
 
 ## Named Tuples

@@ -29,6 +29,7 @@ export default function DocsPageNav() {
     <nav
       aria-label="Documentation pagination"
       className="mt-12 grid gap-4 border-t border-black/10 pt-6 md:grid-cols-2"
+      style={{ fontFamily: "'Audiowide', sans-serif" }}
     >
       {previous ? (
         <Link

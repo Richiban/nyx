@@ -19,11 +19,9 @@ export default function NanyxLogo(props: React.SVGProps<SVGSVGElement>) {
         <circle cx="64" cy="64" r="46" strokeWidth="1" />
       </g>
       <g fill="url(#nxGrad)">
-        {/* N (shifted left) */}
         <g transform="translate(-6,0)">
           <path d="M34 88 V40 H44 L60 64 V40 H70 V88 H60 L44 64 V88 Z" />
         </g>
-        {/* X (shifted right) */}
         <g transform="translate(8,0)">
           <path d="M94 88 H82 L74 74 L66 88 H54 L70 64 L54 40 H66 L74 54 L82 40 H94 L78 64 Z" />
         </g>

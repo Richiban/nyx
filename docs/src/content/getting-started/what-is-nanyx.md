@@ -25,9 +25,7 @@ Nanyx is designed for developers who want the safety guarantees of a statically-
 // Your first taste of Nanyx
 import nanyx/io
 
-pub fn main() {
-  io.println("Welcome to Nanyx! 🚀")
-}
+println("Welcome to Nanyx! 🚀")
 ```
 
 Ready to get started? Let's [install Nanyx](/docs/getting-started/installation) and write your first program.

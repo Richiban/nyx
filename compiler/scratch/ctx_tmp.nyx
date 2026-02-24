@@ -1,1 +1,0 @@
-context Console = (\n  println: string -> ()\n)\n\ncontext Sum(a) = (\n  zero: a\n  plus: a, a -> a\n)

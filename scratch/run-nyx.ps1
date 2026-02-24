@@ -1,6 +1,6 @@
 param(
-    [Parameter(Position = 0)]
-    [string]$NyxFile = "./twelve.nyx",
+    [Parameter(Position = 0, Mandatory = $true)]
+    [string]$NyxFile,
 
     [Parameter(Position = 1)]
     [string]$ExportName = "main",
@@ -11,7 +11,7 @@ param(
 
 $nyxPath = Resolve-Path $NyxFile -ErrorAction Stop
 $watPath = [System.IO.Path]::ChangeExtension($nyxPath.Path, ".wat")
-$compilerProject = Join-Path $PSScriptRoot "../../compiler/Nyx.Compiler.Cli/NyxCompiler.Cli.fsproj"
+$compilerProject = Join-Path $PSScriptRoot "../compiler/Nyx.Compiler.Cli/NyxCompiler.Cli.fsproj"
 
 Write-Host "Compiling $($nyxPath.Path) -> $watPath"
 dotnet run --project $compilerProject -- $nyxPath.Path --target wasm --out $watPath
@@ -20,5 +20,21 @@ if ($LASTEXITCODE -ne 0) {
 }
 
 Write-Host "Running $watPath (export: $ExportName)"
-node (Join-Path $PSScriptRoot "run-wat.mjs") $watPath $ExportName @ExportArgs
+
+$wasmtime = Get-Command wasmtime -ErrorAction SilentlyContinue
+if (-not $wasmtime) {
+    Write-Error "wasmtime was not found in PATH. Install it or add it to PATH to run .wat files."
+    exit 1
+}
+
+$args = @()
+if ($ExportName) {
+    $args += @("--invoke", $ExportName)
+}
+if ($ExportArgs.Count -gt 0) {
+    $args += $ExportArgs
+}
+$args += $watPath
+
+& $wasmtime.Source $args
 exit $LASTEXITCODE

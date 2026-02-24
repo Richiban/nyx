@@ -1,3 +1,0 @@
-context Console = (
-  println: string -> ()
-)

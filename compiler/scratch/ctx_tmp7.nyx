@@ -1,5 +1,0 @@
-context Console = (
-  println: string -> ()
-)
-
-type Foo = int

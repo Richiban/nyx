@@ -35,7 +35,7 @@ export function DocsHeader({ onToggleSidebar, onOpenSearch }: DocsHeaderProps) {
 
         <Link to="/" className="flex items-center gap-2.5 mr-auto">
           <div className="h-8 w-8 rounded-lg flex items-center justify-center">
-            <img src="/public/nanyx.svg" />
+            <img src="/nanyx.svg" />
           </div>
           <span
             className="text-lg font-bold tracking-tight"

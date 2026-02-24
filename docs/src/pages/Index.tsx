@@ -18,7 +18,7 @@ const Index = () => {
         <div className="relative max-w-5xl mx-auto px-6 py-24 md:py-32 text-center">
           <div className="inline-flex items-center gap-2.5 mb-8">
             <div className="h-12 w-12 rounded-xl flex items-center justify-center shadow-lg shadow-primary/25">
-              <img src="/public/nanyx.svg"/>
+              <img src="/nanyx.svg"/>
             </div>
             <h1 className="text-4xl md:text-5xl font-bold tracking-tight" style={{ fontFamily: "'Space Grotesk', system-ui, sans-serif" }}>
               Nanyx

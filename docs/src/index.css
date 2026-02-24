@@ -1,0 +1,213 @@
+@import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600&family=Space+Grotesk:wght@400;500;600;700&family=Inter:wght@400;500;600&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --background: 210 20% 98%;
+    --foreground: 240 10% 10%;
+
+    --card: 0 0% 100%;
+    --card-foreground: 240 10% 10%;
+
+    --popover: 0 0% 100%;
+    --popover-foreground: 240 10% 10%;
+
+    --primary: 262 83% 58%;
+    --primary-foreground: 0 0% 100%;
+
+    --secondary: 174 62% 47%;
+    --secondary-foreground: 0 0% 100%;
+
+    --muted: 220 14% 94%;
+    --muted-foreground: 220 9% 46%;
+
+    --accent: 262 83% 95%;
+    --accent-foreground: 262 83% 40%;
+
+    --destructive: 0 84% 60%;
+    --destructive-foreground: 0 0% 100%;
+
+    --border: 220 13% 90%;
+    --input: 220 13% 90%;
+    --ring: 262 83% 58%;
+
+    --radius: 0.625rem;
+
+    --sidebar-background: 0 0% 100%;
+    --sidebar-foreground: 240 10% 10%;
+    --sidebar-primary: 262 83% 58%;
+    --sidebar-primary-foreground: 0 0% 100%;
+    --sidebar-accent: 262 83% 95%;
+    --sidebar-accent-foreground: 262 83% 40%;
+    --sidebar-border: 220 13% 92%;
+    --sidebar-ring: 262 83% 58%;
+
+    --code-bg: 220 14% 96%;
+    --code-border: 220 13% 90%;
+    --code-text: 240 10% 10%;
+  }
+
+  .dark {
+    --background: 240 10% 6%;
+    --foreground: 210 20% 94%;
+
+    --card: 240 10% 9%;
+    --card-foreground: 210 20% 94%;
+
+    --popover: 240 10% 9%;
+    --popover-foreground: 210 20% 94%;
+
+    --primary: 262 83% 65%;
+    --primary-foreground: 0 0% 100%;
+
+    --secondary: 174 62% 50%;
+    --secondary-foreground: 0 0% 100%;
+
+    --muted: 240 6% 15%;
+    --muted-foreground: 220 9% 60%;
+
+    --accent: 262 40% 18%;
+    --accent-foreground: 262 83% 78%;
+
+    --destructive: 0 62% 30%;
+    --destructive-foreground: 210 40% 98%;
+
+    --border: 240 6% 18%;
+    --input: 240 6% 18%;
+    --ring: 262 83% 65%;
+
+    --sidebar-background: 240 10% 8%;
+    --sidebar-foreground: 210 20% 94%;
+    --sidebar-primary: 262 83% 65%;
+    --sidebar-primary-foreground: 0 0% 100%;
+    --sidebar-accent: 262 40% 18%;
+    --sidebar-accent-foreground: 262 83% 78%;
+    --sidebar-border: 240 6% 16%;
+    --sidebar-ring: 262 83% 65%;
+
+    --code-bg: 240 10% 10%;
+    --code-border: 240 6% 18%;
+    --code-text: 210 20% 90%;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+
+  body {
+    @apply bg-background text-foreground font-sans;
+    font-family: 'Inter', system-ui, sans-serif;
+  }
+
+  h1, h2, h3, h4, h5, h6 {
+    font-family: 'Space Grotesk', system-ui, sans-serif;
+  }
+
+  code, pre {
+    font-family: 'JetBrains Mono', monospace;
+  }
+}
+
+/* Prose styling for markdown content */
+.prose {
+  @apply max-w-none;
+}
+
+.prose h1 {
+  @apply text-3xl font-bold mb-4 mt-8 first:mt-0;
+  font-family: 'Space Grotesk', system-ui, sans-serif;
+}
+
+.prose h2 {
+  @apply text-2xl font-semibold mb-3 mt-8;
+  font-family: 'Space Grotesk', system-ui, sans-serif;
+}
+
+.prose h3 {
+  @apply text-xl font-semibold mb-2 mt-6;
+  font-family: 'Space Grotesk', system-ui, sans-serif;
+}
+
+.prose p {
+  @apply mb-4 leading-relaxed text-foreground/90;
+}
+
+.prose ul {
+  @apply mb-4 ml-6 list-disc space-y-1;
+}
+
+.prose ol {
+  @apply mb-4 ml-6 list-decimal space-y-1;
+}
+
+.prose li {
+  @apply leading-relaxed text-foreground/90;
+}
+
+.prose a {
+  @apply text-primary underline underline-offset-2 hover:text-primary/80 transition-colors;
+}
+
+.prose strong {
+  @apply font-semibold text-foreground;
+}
+
+.prose blockquote {
+  @apply border-l-4 border-primary/30 pl-4 py-1 my-4 italic text-muted-foreground;
+}
+
+.prose hr {
+  @apply my-8 border-border;
+}
+
+.prose table {
+  @apply w-full mb-4 text-sm;
+}
+
+.prose th {
+  @apply border-b-2 border-border px-4 py-2 text-left font-semibold;
+}
+
+.prose td {
+  @apply border-b border-border px-4 py-2;
+}
+
+.prose code:not(pre code) {
+  @apply px-1.5 py-0.5 rounded text-sm font-medium;
+  background: hsl(var(--code-bg));
+  color: hsl(var(--accent-foreground));
+}
+
+.prose pre {
+  @apply rounded-lg p-4 mb-4 overflow-x-auto text-sm border;
+  background: hsl(var(--code-bg)) !important;
+  border-color: hsl(var(--code-border));
+}
+
+.prose pre code {
+  @apply p-0 bg-transparent text-sm;
+  background: transparent !important;
+}
+
+/* Scrollbar styling */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  @apply bg-border rounded-full;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  @apply bg-muted-foreground/30;
+}

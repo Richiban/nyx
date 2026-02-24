@@ -1,8 +1,0 @@
-module TestLambdas
-
-def identity = { x -> x }
-def add = { x, y -> x + y }
-def triple = { x -> x * 3 }
-def useIdentity = identity(42)
-def useAdd = add(5, 10)
-def applyTwice = { f, x -> f(f(x)) }

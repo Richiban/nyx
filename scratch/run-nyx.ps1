@@ -11,7 +11,7 @@ param(
 
 $nyxPath = Resolve-Path $NyxFile -ErrorAction Stop
 $watPath = [System.IO.Path]::ChangeExtension($nyxPath.Path, ".wat")
-$compilerProject = Join-Path $PSScriptRoot "../compiler/Nyx.Compiler.Cli/NyxCompiler.Cli.fsproj"
+$compilerProject = Join-Path $PSScriptRoot "../compiler/Nanyx.Compiler.Cli/NyxCompiler.Cli.fsproj"
 
 Write-Host "Compiling $($nyxPath.Path) -> $watPath"
 dotnet run --project $compilerProject -- $nyxPath.Path --target wasm --out $watPath

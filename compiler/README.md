@@ -41,17 +41,17 @@ compiler/
 │   ├── ParserTests.fs
 │   ├── Parser.Tests.fsproj
 │   └── testdata/
-├── Nyx.Compiler/              # Type-checker core library
+├── Nanyx.Compiler/              # Type-checker core library
 │   └── NyxCompiler.fsproj
-├── Nyx.Compiler.Cli/          # CLI entry point wrapping the compiler
+├── Nanyx.Compiler.Cli/          # CLI entry point wrapping the compiler
 │   └── NyxCompiler.Cli.fsproj
-├── Nyx.Compiler.Tests/        # Compiler-level unit/integration tests
-│   └── Nyx.Compiler.Tests.fsproj
+├── Nanyx.Compiler.Tests/        # Compiler-level unit/integration tests
+│   └── Nanyx.Compiler.Tests.fsproj
 ├── Nyx.Transpiler.JS/         # JS transpiler
 │   └── Transpiler.fsproj
 ├── Nyx.Transpiler.JS.Tests/   # Transpiler tests
 │   └── Transpiler.Tests.fsproj
-├── Nyx.Compiler.sln           # Solution covering all projects
+├── Nanyx.Compiler.sln           # Solution covering all projects
 └── README.md
 ```
 
@@ -59,14 +59,14 @@ compiler/
 
 ```powershell
 cd compiler
-dotnet build Nyx.Compiler.sln
+dotnet build Nanyx.Compiler.sln
 ```
 
 ## Running Tests
 
 ```powershell
 cd compiler
-dotnet test Nyx.Compiler.sln
+dotnet test Nanyx.Compiler.sln
 ```
 
 All 56 tests should pass:
@@ -98,13 +98,13 @@ dotnet run --project compiler/Nyx.Parser/NyxParser.fsproj sample.nyx
 You can now emit WebAssembly text format (`.wat`) directly from the compiler CLI:
 
 ```powershell
-dotnet run --project compiler/Nyx.Compiler.Cli/NyxCompiler.Cli.fsproj -- sample.nyx --target wasm
+dotnet run --project compiler/Nanyx.Compiler.Cli/NyxCompiler.Cli.fsproj -- sample.nyx --target wasm
 ```
 
 Optional output path:
 
 ```powershell
-dotnet run --project compiler/Nyx.Compiler.Cli/NyxCompiler.Cli.fsproj -- sample.nyx --target wasm --out sample.wat
+dotnet run --project compiler/Nanyx.Compiler.Cli/NyxCompiler.Cli.fsproj -- sample.nyx --target wasm --out sample.wat
 ```
 
 Current WASM backend support is intentionally minimal and focused on bootstrapping:

@@ -1,8 +1,0 @@
-module TestRecords
-
-def point = (x = 10, y = 20)
-def person = (name = "Alice", age = 30)
-def nested = (outer = (inner = 42))
-def accessX = point.x
-def accessY = point.y
-def accessNested = nested.outer.inner

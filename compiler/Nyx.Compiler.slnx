@@ -1,0 +1,15 @@
+<Solution>
+  <Folder Name="/Nanyx.Compiler.Cli/">
+    <Project Path="Nanyx.Compiler.Cli/NanyxCompiler.Cli.fsproj" />
+  </Folder>
+  <Folder Name="/Nanyx.Compiler.Wasm.Tests/">
+    <Project Path="Nanyx.Compiler.Wasm.Tests/Nanyx.Compiler.Wasm.Test.fsproj" />
+  </Folder>
+  <Folder Name="/Nanyx.Compiler/">
+    <Project Path="Nanyx.Compiler/NanyxCompiler.fsproj" />
+  </Folder>
+  <Project Path="Nanyx.Compiler.Tests/Nanyx.Compiler.Tests.fsproj" />
+  <Project Path="Nanyx.Compiler.Wasm/Nanyx.Compiler.Wasm.fsproj" />
+  <Project Path="Nanyx.Parser.Tests/Nanyx.Parser.Tests.fsproj" />
+  <Project Path="Nanyx.Parser/Nanyx.Parser.fsproj" />
+</Solution>

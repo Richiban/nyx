@@ -108,12 +108,12 @@ cd nyx
 Build the compiler:
 ```bash
 cd compiler
-dotnet build Nyx.Compiler.sln
+dotnet build Nanyx.Compiler.sln
 ```
 
 Run tests to verify the installation:
 ```bash
-dotnet test Nyx.Compiler.sln
+dotnet test Nanyx.Compiler.sln
 ```
 
 ### Your First Nanyx Program
@@ -134,7 +134,7 @@ main()
 
 Compile and type-check it:
 ```bash
-dotnet run --project compiler/Nyx.Compiler.Cli/NyxCompiler.Cli.fsproj hello.nyx
+dotnet run --project compiler/Nanyx.Compiler.Cli/NyxCompiler.Cli.fsproj hello.nyx
 ```
 
 ## Language Features
@@ -468,11 +468,11 @@ The Nanyx repository is organized as follows:
 nyx/
 ├── compiler/               # Compiler implementation (F#)
 │   ├── Nyx.Parser/        # FParsec-based parser
-│   ├── Nyx.Compiler/      # Type checker and inference engine
-│   ├── Nyx.Compiler.Cli/  # Command-line interface
+│   ├── Nanyx.Compiler/      # Type checker and inference engine
+│   ├── Nanyx.Compiler.Cli/  # Command-line interface
 │   ├── Nyx.Transpiler.JS/ # JavaScript code generator
 │   ├── Nyx.Parser.Tests/  # Parser unit and integration tests
-│   ├── Nyx.Compiler.Tests/# Compiler and type checker tests
+│   ├── Nanyx.Compiler.Tests/# Compiler and type checker tests
 │   └── Nyx.Transpiler.JS.Tests/ # Transpiler tests
 ├── examples/              # Example Nanyx programs
 │   ├── fizzbuzzbaz.nyx   # FizzBuzz variant with configurable rules
@@ -490,9 +490,9 @@ nyx/
 ### Compiler Components
 
 - **Nyx.Parser**: Parses `.nyx` source files into an Abstract Syntax Tree (AST)
-- **Nyx.Compiler**: Performs type inference and type checking using Hindley-Milner algorithm
+- **Nanyx.Compiler**: Performs type inference and type checking using Hindley-Milner algorithm
 - **Nyx.Transpiler.JS**: Transpiles type-checked AST to JavaScript
-- **Nyx.Compiler.Cli**: Command-line tool for compiling Nanyx programs
+- **Nanyx.Compiler.Cli**: Command-line tool for compiling Nanyx programs
 
 ## Building from Source
 
@@ -512,12 +512,12 @@ nyx/
 2. Build the entire solution:
    ```bash
    cd compiler
-   dotnet build Nyx.Compiler.sln
+   dotnet build Nanyx.Compiler.sln
    ```
 
 3. Run all tests:
    ```bash
-   dotnet test Nyx.Compiler.sln
+   dotnet test Nanyx.Compiler.sln
    ```
 
    Expected output: All 56+ tests should pass, including:
@@ -534,10 +534,10 @@ The Nanyx compiler CLI can parse, type-check, and report on `.nyx` files:
 
 ```bash
 # Basic usage
-dotnet run --project compiler/Nyx.Compiler.Cli/NyxCompiler.Cli.fsproj myfile.nyx
+dotnet run --project compiler/Nanyx.Compiler.Cli/NyxCompiler.Cli.fsproj myfile.nyx
 
 # From the compiled binary
-cd compiler/Nyx.Compiler.Cli/bin/Debug/net10.0
+cd compiler/Nanyx.Compiler.Cli/bin/Debug/net10.0
 ./NyxCompiler.Cli myfile.nyx
 ```
 
@@ -559,7 +559,7 @@ def result = add(5, 10)
 
 Run the compiler:
 ```bash
-dotnet run --project compiler/Nyx.Compiler.Cli/NyxCompiler.Cli.fsproj example.nyx
+dotnet run --project compiler/Nanyx.Compiler.Cli/NyxCompiler.Cli.fsproj example.nyx
 ```
 
 Output:
@@ -735,7 +735,7 @@ Contributions to Nanyx are welcome! Here's how you can help:
 1. Fork and clone the repository
 2. Create a feature branch: `git checkout -b feature/my-feature`
 3. Make your changes
-4. Run tests: `dotnet test compiler/Nyx.Compiler.sln`
+4. Run tests: `dotnet test compiler/Nanyx.Compiler.sln`
 5. Commit with clear messages
 6. Push to your fork
 7. Open a pull request

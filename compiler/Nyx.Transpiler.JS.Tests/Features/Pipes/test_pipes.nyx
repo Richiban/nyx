@@ -1,6 +1,0 @@
-module Math
-
-def add = { a, b -> a + b }
-def double = { x -> x * 2 }
-def result = 5 \add(10)
-def chained = 3 \double \double

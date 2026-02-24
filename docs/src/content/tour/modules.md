@@ -116,24 +116,24 @@ def double: int -> int = { x -> x * 2 }
 def triple: int -> int = { x -> x * 3 }
 ```
 
-## Private Definitions
+## Public vs private Definitions
 
-Use `private` to hide internal implementation details:
+Use `export` to make a type or definition available to other modules.
 
 ```nyx
 module Utils
 
 -- Public
-def processData: Data -> Result = { data ->
+export def processData: Data -> Result = { data ->
   data \validate \transform
 }
 
 -- Private helper
-private def validate: Data -> Data = { data ->
+def validate: Data -> Data = { data ->
   -- validation logic
 }
 
-private def transform: Data -> Data = { data ->
+def transform: Data -> Data = { data ->
   -- transformation logic
 }
 ```
@@ -143,11 +143,11 @@ private def transform: Data -> Data = { data ->
 Organize related functionality:
 
 ```nyx
-module Collections.List
+module collections.list
 
-def map: (list(a), (a -> b)) -> list(b) = { ... }
-def filter: (list(a), (a -> bool)) -> list(a) = { ... }
-def fold: (list(a), b, (b, a) -> b) -> b = { ... }
+export def map: (list(a), (a -> b)) -> list(b) = { ... }
+export def filter: (list(a), (a -> bool)) -> list(a) = { ... }
+export def fold: (list(a), b, (b, a) -> b) -> b = { ... }
 ```
 
 ```nyx
@@ -163,7 +163,7 @@ def lookup: (map(k, v), k) -> Option(v) = { ... }
 Create hierarchies with dot notation:
 
 ```nyx
-module MyApp.Users.Validation
+module users.validation
 
 def validateEmail: string -> Result(Email, ValidationError) = { ... }
 def validateAge: int -> Result(Age, ValidationError) = { ... }
@@ -186,13 +186,13 @@ export Collections.Map (empty, insert, lookup)
 Define constants at module level:
 
 ```nyx
-module Config
+module config
 
-def AppName = "MyApp"
-def Version = "1.0.0"
-def MaxRetries = 3
+def appName = "MyApp"
+def version = "1.0.0"
+def maxRetries = 3
 
-def DatabaseConfig = (
+def databaseConfig = (
   host = "localhost"
   port = 5432
   database = "myapp"
@@ -226,16 +226,18 @@ import Shared
 
 ## Standard Library Modules
 
-Nanyx's standard library is organized into modules:
+Nanyx's standard library appears as a package called `nanyx` and is organized into modules:
 
 ```nyx
-import List
-import Map
-import Set
-import String
-import Math
-import Option
-import Result
+import (
+  nanyx/list
+  nanyx/map
+  nanyx/set
+  nanyx/string
+  nanyx/math
+  nanyx/option
+  nanyx/result
+)
 ```
 
 ## Example: User Management Module

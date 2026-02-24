@@ -55,12 +55,12 @@
           "default": true,
           "description": "Run Nanyx compiler on save to surface diagnostics."
         },
-        "nyx.compilerProject": {
+        "Nanyx.CompilerProject": {
           "type": "string",
-          "default": "compiler/Nyx.Compiler.Cli/Nyx.Compiler.Cli.fsproj",
-          "description": "Relative path to Nyx.Compiler.Cli.fsproj in the workspace."
+          "default": "compiler/Nanyx.Compiler.Cli/Nanyx.Compiler.Cli.fsproj",
+          "description": "Relative path to Nanyx.Compiler.Cli.fsproj in the workspace."
         },
-        "nyx.compilerDotnetPath": {
+        "Nanyx.CompilerDotnetPath": {
           "type": "string",
           "default": "dotnet",
           "description": "Path to the dotnet executable."

@@ -18,9 +18,9 @@ def g: [Console + CAdd] = { s ->
     println(r)
 }
 
-def h = {
+def main = {
     use Console(
-        println = { s -> () }
+        println = { s -> dbg(s) }
     )
 
     use CAdd(
@@ -30,4 +30,4 @@ def h = {
     g("Hello world")
 }
 
-h()
+main()

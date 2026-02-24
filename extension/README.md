@@ -11,8 +11,8 @@ This extension provides editor support for the Nanyx language, including syntax 
 ## Settings
 
 - `nyx.typecheckOnSave`: Run the compiler on save/open to surface diagnostics (default: `true`).
-- `nyx.compilerProject`: Path (relative to workspace root) to `NyxCompiler.Cli.fsproj`.
-- `nyx.compilerDotnetPath`: Path to the `dotnet` executable (default: `dotnet`).
+- `Nanyx.CompilerProject`: Path (relative to workspace root) to `NyxCompiler.Cli.fsproj`.
+- `Nanyx.CompilerDotnetPath`: Path to the `dotnet` executable (default: `dotnet`).
 
 ## How it works
 
@@ -20,5 +20,5 @@ The language server executes `dotnet run --project <NyxCompiler.Cli.fsproj> -- <
 
 ## Troubleshooting
 
-- If you see **"Nanyx compiler project not found"**, update `nyx.compilerProject` to match your workspace layout.
-- If `dotnet` is not on your PATH, set `nyx.compilerDotnetPath` to the full path.
+- If you see **"Nanyx compiler project not found"**, update `Nanyx.CompilerProject` to match your workspace layout.
+- If `dotnet` is not on your PATH, set `Nanyx.CompilerDotnetPath` to the full path.

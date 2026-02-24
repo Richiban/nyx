@@ -1,6 +1,7 @@
 module Transpiler.Wasm.CodeGen
 
 open System
+open System.Text
 open Parser.Program
 
 type private TranspileEnv =
@@ -9,7 +10,8 @@ type private TranspileEnv =
             DbgTempLocal: string option;
             TagIds: Map<string, int>;
             MatchTempNames: string list;
-            NextMatchTemp: int }
+            NextMatchTemp: int;
+            StringLiterals: Map<string, int> }
 
 let private sanitizeIdentifier (name: string) =
     let sanitized =
@@ -109,6 +111,36 @@ let private tagDiscriminantMask = -65536
 
 let private tagDiscriminantBase (id: int) = id <<< 16
 
+let private stringDataBaseOffset = 256
+
+let private dbgDataBaseOffset = 128
+
+let private dbgNewlineOffset = dbgDataBaseOffset + 64
+
+let private escapeWasmData (bytes: byte array) =
+    let sb = StringBuilder()
+    for b in bytes do
+        let c = char b
+        if b >= 0x20uy && b <= 0x7Euy && c <> '"' && c <> '\\' then
+            sb.Append c |> ignore
+        else
+            sb.Append(sprintf "\\%02x" b) |> ignore
+    sb.ToString()
+
+let private buildStringLiteralMap (literals: string list) =
+    let mutable offset = stringDataBaseOffset
+    let entries =
+        literals
+        |> List.map (fun value ->
+            let bytes = Encoding.UTF8.GetBytes value
+            let lengthBytes = BitConverter.GetBytes bytes.Length
+            let dataBytes = Array.concat [ lengthBytes; bytes; [| 0uy |] ]
+            let currentOffset = offset
+            offset <- offset + dataBytes.Length
+            value, currentOffset, dataBytes)
+    let map = entries |> List.map (fun (value, baseOffset, _) -> value, baseOffset + 4) |> Map.ofList
+    map, entries
+
 let rec private countMatchExpressions (expr: Expression) : int =
     match expr with
     | Match(values, arms) ->
@@ -192,40 +224,6 @@ and countMatchArity (expr: Expression) : int =
         |> List.max
     | WorkflowBindExpr(_, value)
     | WorkflowReturnExpr value -> countMatchArity value
-    | UnitExpr
-    | LiteralExpr _
-    | IdentifierExpr _ -> 0
-    | FunctionCall(_, _, args) -> args |> List.sumBy countMatchExpressions
-    | BinaryOp(_, left, right) -> countMatchExpressions left + countMatchExpressions right
-    | IfExpr(cond, thenExpr, elseExpr) ->
-        countMatchExpressions cond + countMatchExpressions thenExpr + countMatchExpressions elseExpr
-    | Lambda(_, body) -> countMatchExpressions body
-    | Pipe(value, _, _, args) -> countMatchExpressions value + (args |> List.sumBy countMatchExpressions)
-    | Block statements ->
-        statements
-        |> List.sumBy (function
-            | DefStatement(_, _, _, rhs) -> countMatchExpressions rhs
-            | ExprStatement value -> countMatchExpressions value
-            | ImportStatement _
-            | TypeDefStatement _
-            | UseStatement _ -> 0)
-    | TupleExpr values
-    | ListExpr values -> values |> List.sumBy countMatchExpressions
-    | RecordExpr fields ->
-        fields
-        |> List.sumBy (function
-            | NamedField(_, value) -> countMatchExpressions value
-            | PositionalField value -> countMatchExpressions value)
-    | UseIn(_, body) -> countMatchExpressions body
-    | MemberAccess(value, _, _) -> countMatchExpressions value
-    | TagExpr(_, payload) -> payload |> Option.map countMatchExpressions |> Option.defaultValue 0
-    | InterpolatedString parts ->
-        parts
-        |> List.sumBy (function
-            | StringText _ -> 0
-            | StringExpr value -> countMatchExpressions value)
-    | WorkflowBindExpr(_, value)
-    | WorkflowReturnExpr value -> countMatchExpressions value
     | UnitExpr
     | LiteralExpr _
     | IdentifierExpr _ -> 0
@@ -315,6 +313,46 @@ let rec private collectDbgTagNamesExpr (expr: Expression) : string list =
     | UnitExpr
     | LiteralExpr _
     | IdentifierExpr _ -> []
+
+and private collectStringLiteralsExpr (expr: Expression) : string list =
+    match expr with
+    | LiteralExpr(StringLit value) -> [ value ]
+    | Block statements -> collectStringLiteralsStatements statements
+    | BinaryOp(_, left, right) -> collectStringLiteralsExpr left @ collectStringLiteralsExpr right
+    | IfExpr(cond, thenExpr, elseExpr) ->
+        collectStringLiteralsExpr cond @ collectStringLiteralsExpr thenExpr @ collectStringLiteralsExpr elseExpr
+    | FunctionCall(_, _, args) -> args |> List.collect collectStringLiteralsExpr
+    | Lambda(_, body) -> collectStringLiteralsExpr body
+    | Pipe(value, _, _, args) -> collectStringLiteralsExpr value @ (args |> List.collect collectStringLiteralsExpr)
+    | TupleExpr items
+    | ListExpr items -> items |> List.collect collectStringLiteralsExpr
+    | RecordExpr fields ->
+        fields
+        |> List.collect (function
+            | NamedField(_, value) -> collectStringLiteralsExpr value
+            | PositionalField value -> collectStringLiteralsExpr value)
+    | Match(values, arms) ->
+        let valueStrings = values |> List.collect collectStringLiteralsExpr
+        let armStrings = arms |> List.collect (fun (_, armExpr) -> collectStringLiteralsExpr armExpr)
+        valueStrings @ armStrings
+    | UseIn(_, body) -> collectStringLiteralsExpr body
+    | MemberAccess(inner, _, _) -> collectStringLiteralsExpr inner
+    | TagExpr(_, payload) -> payload |> Option.map collectStringLiteralsExpr |> Option.defaultValue []
+    | InterpolatedString _
+    | WorkflowBindExpr _
+    | WorkflowReturnExpr _
+    | UnitExpr
+    | LiteralExpr _
+    | IdentifierExpr _ -> []
+
+and private collectStringLiteralsStatements (statements: Statement list) : string list =
+    statements
+    |> List.collect (function
+        | DefStatement(_, _, _, rhs) -> collectStringLiteralsExpr rhs
+        | ExprStatement expr -> collectStringLiteralsExpr expr
+        | ImportStatement _
+        | TypeDefStatement _
+        | UseStatement _ -> [])
 
 and private collectDbgTagNamesStatements (statements: Statement list) : string list =
     statements
@@ -419,6 +457,53 @@ let rec private containsRegularDbgExpr (expr: Expression) : bool =
     | LiteralExpr _
     | IdentifierExpr _ -> false
 
+and private containsDbgStringLiteralExpr (expr: Expression) : bool =
+    let flattenDbgArgs args =
+        match args with
+        | [TupleExpr items] -> items
+        | _ -> args
+
+    match expr with
+    | FunctionCall(name, _, args) when name = "dbg" ->
+        match flattenDbgArgs args with
+        | [LiteralExpr(StringLit _)] -> true
+        | _ -> false
+    | FunctionCall(_, _, args) -> args |> List.exists containsDbgStringLiteralExpr
+    | BinaryOp(_, left, right) -> containsDbgStringLiteralExpr left || containsDbgStringLiteralExpr right
+    | IfExpr(cond, thenExpr, elseExpr) ->
+        containsDbgStringLiteralExpr cond || containsDbgStringLiteralExpr thenExpr || containsDbgStringLiteralExpr elseExpr
+    | Lambda(_, body) -> containsDbgStringLiteralExpr body
+    | Pipe(value, _, _, args) -> containsDbgStringLiteralExpr value || (args |> List.exists containsDbgStringLiteralExpr)
+    | Block statements -> statements |> List.exists (function
+        | DefStatement(_, _, _, rhs) -> containsDbgStringLiteralExpr rhs
+        | ExprStatement expr -> containsDbgStringLiteralExpr expr
+        | ImportStatement _
+        | TypeDefStatement _
+        | UseStatement _ -> false)
+    | TupleExpr values
+    | ListExpr values -> values |> List.exists containsDbgStringLiteralExpr
+    | RecordExpr fields ->
+        fields
+        |> List.exists (function
+            | NamedField(_, value) -> containsDbgStringLiteralExpr value
+            | PositionalField value -> containsDbgStringLiteralExpr value)
+    | Match(values, arms) ->
+        (values |> List.exists containsDbgStringLiteralExpr)
+        || (arms |> List.exists (fun (_, armExpr) -> containsDbgStringLiteralExpr armExpr))
+    | UseIn(_, body) -> containsDbgStringLiteralExpr body
+    | MemberAccess(value, _, _) -> containsDbgStringLiteralExpr value
+    | TagExpr(_, payload) -> payload |> Option.exists containsDbgStringLiteralExpr
+    | InterpolatedString parts ->
+        parts
+        |> List.exists (function
+            | StringText _ -> false
+            | StringExpr inner -> containsDbgStringLiteralExpr inner)
+    | WorkflowBindExpr(_, value)
+    | WorkflowReturnExpr value -> containsDbgStringLiteralExpr value
+    | UnitExpr
+    | LiteralExpr _
+    | IdentifierExpr _ -> false
+
 and private containsRegularDbgStatements (statements: Statement list) : bool =
     statements
     |> List.exists (function
@@ -501,6 +586,10 @@ let rec private transpileExpression (env: TranspileEnv) (expr: Expression) : str
     match expr with
     | LiteralExpr(IntLit value) ->
         $"i32.const {value}"
+    | LiteralExpr(StringLit value) ->
+        match env.StringLiterals |> Map.tryFind value with
+        | Some offset -> $"i32.const {offset}"
+        | None -> failwith $"Internal error: missing string literal offset for {value}"
     | IdentifierExpr(name, _) ->
         match env.Locals |> Map.tryFind name with
         | Some localName -> $"local.get ${localName}"
@@ -667,13 +756,11 @@ let rec private transpileExpression (env: TranspileEnv) (expr: Expression) : str
                 let tagBase = tagDiscriminantBase tagId
                 let payloadCode = transpileExpression env payloadExpr
                 $"{payloadCode}\n    local.tee ${dbgLocal}\n    call ${importFn}\n    local.get ${dbgLocal}\n    i32.const {tagPayloadMask}\n    i32.and\n    i32.const {tagBase}\n    i32.or"
-                let payloadCode = transpileExpression env payloadExpr
-                $"{payloadCode}\n    local.tee ${dbgLocal}\n    call ${importFn}\n    local.get ${dbgLocal}\n    i32.const {tagPayloadMask}\n    i32.and\n    i32.const {tagBase}\n    i32.or"
-            | LiteralExpr(StringLit _) -> "i32.const 0"
             | LiteralExpr(BoolLit value) -> if value then "i32.const 1" else "i32.const 0"
             | _ -> transpileExpression env argExpr
         match argExpr with
         | TagExpr _ -> argCode
+        | LiteralExpr(StringLit _) -> $"{argCode}\n    local.tee ${dbgLocal}\n    call $dbg_str\n    local.get ${dbgLocal}"
         | _ -> $"{argCode}\n    local.tee ${dbgLocal}\n    call $dbg\n    local.get ${dbgLocal}"
     | FunctionCall(name, _, args) ->
         if not (env.KnownFunctions.Contains name) then
@@ -729,6 +816,7 @@ let transpileModuleToWat (module': Module) : string =
     let knownFunctions = defs |> List.map fst |> Set.ofList
     let moduleUsesDbg = defs |> List.exists (fun (_, expr) -> containsDbgCallExpr expr)
     let moduleUsesRegularDbg = defs |> List.exists (fun (_, expr) -> containsRegularDbgExpr expr)
+    let moduleUsesDbgString = defs |> List.exists (fun (_, expr) -> containsDbgStringLiteralExpr expr)
     let dbgTagNames =
         defs
         |> List.collect (fun (_, expr) -> collectDbgTagNamesExpr expr)
@@ -746,6 +834,13 @@ let transpileModuleToWat (module': Module) : string =
         |> List.sort
         |> List.mapi (fun index name -> name, index + 1)
         |> Map.ofList
+
+    let stringLiterals =
+        defs
+        |> List.collect (fun (_, expr) -> collectStringLiteralsExpr expr)
+        |> List.distinct
+
+    let stringLiteralMap, stringLiteralData = buildStringLiteralMap stringLiterals
 
     let renderedFunctions =
         defs
@@ -808,7 +903,8 @@ let transpileModuleToWat (module': Module) : string =
                   DbgTempLocal = dbgLocalName
                   TagIds = tagIdMap
                   MatchTempNames = matchTempNames
-                  NextMatchTemp = 0 }
+                  NextMatchTemp = 0
+                  StringLiterals = stringLiteralMap }
             let fn = sanitizeIdentifier name
             let parameterSig =
                 parameters
@@ -873,9 +969,184 @@ let transpileModuleToWat (module': Module) : string =
             $"  (func ${fn} {functionHeader}\n    {bodyCode}\n  )\n  (export \"{name}\" (func ${fn}))")
         |> String.concat "\n\n"
 
-    let dbgImport =
-        if moduleUsesRegularDbg then
-            "  (import \"env\" \"dbg\" (func $dbg (param i32)))"
+    let moduleUsesDbgHelpers = moduleUsesRegularDbg || moduleUsesDbgString
+
+    let dbgPrelude =
+        if moduleUsesDbgHelpers then
+            [ "  (import \"wasi_snapshot_preview1\" \"fd_write\" (func $fd_write (param i32 i32 i32 i32) (result i32)))"
+              "  (memory 1)"
+              "  (export \"memory\" (memory 0))"
+              $"  (data (i32.const {dbgDataBaseOffset}) \"dbg: \")"
+              $"  (data (i32.const {dbgNewlineOffset}) \"\\0a\")"
+              "  (func $dbg (param $x i32)"
+              "    (local $n i32)"
+              "    (local $isneg i32)"
+              "    (local $pos i32)"
+              "    (local $start i32)"
+              "    (local $lo i32)"
+              "    (local $hi i32)"
+              "    (local $tmp i32)"
+              "    local.get $x"
+              "    local.set $n"
+              "    local.get $n"
+              "    i32.const 0"
+              "    i32.lt_s"
+              "    if"
+              "      i32.const 1"
+              "      local.set $isneg"
+              "      local.get $n"
+              "      i32.const -1"
+              "      i32.mul"
+              "      local.set $n"
+              "    end"
+              $"    i32.const {dbgNewlineOffset}"
+              "    local.set $pos"
+              "    local.get $isneg"
+              "    if"
+              "      local.get $pos"
+              "      i32.const 45"
+              "      i32.store8"
+              "      local.get $pos"
+              "      i32.const 1"
+              "      i32.add"
+              "      local.set $pos"
+              "    end"
+              "    local.get $n"
+              "    i32.const 0"
+              "    i32.eq"
+              "    if"
+              "      local.get $pos"
+              "      i32.const 48"
+              "      i32.store8"
+              "      local.get $pos"
+              "      i32.const 1"
+              "      i32.add"
+              "      local.set $pos"
+              "    else"
+              "      local.get $pos"
+              "      local.set $start"
+              "      loop $digits"
+              "        local.get $pos"
+              "        local.get $n"
+              "        i32.const 10"
+              "        i32.rem_u"
+              "        i32.const 48"
+              "        i32.add"
+              "        i32.store8"
+              "        local.get $pos"
+              "        i32.const 1"
+              "        i32.add"
+              "        local.set $pos"
+              "        local.get $n"
+              "        i32.const 10"
+              "        i32.div_u"
+              "        local.set $n"
+              "        local.get $n"
+              "        i32.const 0"
+              "        i32.ne"
+              "        br_if $digits"
+              "      end"
+              "      local.get $start"
+              "      local.set $lo"
+              "      local.get $pos"
+              "      i32.const 1"
+              "      i32.sub"
+              "      local.set $hi"
+              "      block $rev_done"
+              "        loop $rev"
+              "          local.get $lo"
+              "          local.get $hi"
+              "          i32.ge_u"
+              "          br_if $rev_done"
+              "          local.get $lo"
+              "          i32.load8_u"
+              "          local.set $tmp"
+              "          local.get $lo"
+              "          local.get $hi"
+              "          i32.load8_u"
+              "          i32.store8"
+              "          local.get $hi"
+              "          local.get $tmp"
+              "          i32.store8"
+              "          local.get $lo"
+              "          i32.const 1"
+              "          i32.add"
+              "          local.set $lo"
+              "          local.get $hi"
+              "          i32.const 1"
+              "          i32.sub"
+              "          local.set $hi"
+              "          br $rev"
+              "        end"
+              "      end"
+              "    end"
+              "    local.get $pos"
+              "    i32.const 10"
+              "    i32.store8"
+              "    local.get $pos"
+              "    i32.const 1"
+              "    i32.add"
+              "    local.set $pos"
+              "    i32.const 0"
+              $"    i32.const {dbgDataBaseOffset}"
+              "    i32.store"
+              "    i32.const 4"
+              "    local.get $pos"
+              $"    i32.const {dbgDataBaseOffset}"
+              "    i32.sub"
+              "    i32.store"
+              "    i32.const 1"
+              "    i32.const 0"
+              "    i32.const 1"
+              "    i32.const 8"
+              "    call $fd_write"
+              "    drop"
+              "  )"
+              "  (func $dbg_str (param $ptr i32)"
+              "    (local $len i32)"
+              "    local.get $ptr"
+              "    i32.const 4"
+              "    i32.sub"
+              "    i32.load"
+              "    local.set $len"
+              "    i32.const 0"
+              $"    i32.const {dbgDataBaseOffset}"
+              "    i32.store"
+              "    i32.const 4"
+              "    i32.const 5"
+              "    i32.store"
+              "    i32.const 1"
+              "    i32.const 0"
+              "    i32.const 1"
+              "    i32.const 8"
+              "    call $fd_write"
+              "    drop"
+              "    i32.const 0"
+              "    local.get $ptr"
+              "    i32.store"
+              "    i32.const 4"
+              "    local.get $len"
+              "    i32.store"
+              "    i32.const 1"
+              "    i32.const 0"
+              "    i32.const 1"
+              "    i32.const 8"
+              "    call $fd_write"
+              "    drop"
+              "    i32.const 0"
+              $"    i32.const {dbgNewlineOffset}"
+              "    i32.store"
+              "    i32.const 4"
+              "    i32.const 1"
+              "    i32.store"
+              "    i32.const 1"
+              "    i32.const 0"
+              "    i32.const 1"
+              "    i32.const 8"
+              "    call $fd_write"
+              "    drop"
+              "  )" ]
+            |> String.concat "\n"
         else
             ""
 
@@ -891,18 +1162,25 @@ let transpileModuleToWat (module': Module) : string =
             let importName = $"dbg_tag_payload_{sanitizeImportSuffix tagName}"
             $"  (import \"env\" \"{importName}\" (func ${importName} (param i32)))")
 
+    let dataSegments =
+        stringLiteralData
+        |> List.map (fun (_, offset, bytes) ->
+            $"  (data (i32.const {offset}) \"{escapeWasmData bytes}\")")
+        |> String.concat "\n"
+
     let allImports =
-        [ if not (String.IsNullOrWhiteSpace dbgImport) then dbgImport
+        [ if not (String.IsNullOrWhiteSpace dbgPrelude) then dbgPrelude
           yield! dbgTagImports
           yield! dbgTagPayloadImports ]
         |> List.filter (fun line -> not (String.IsNullOrWhiteSpace line))
         |> String.concat "\n\n"
 
-    if String.IsNullOrWhiteSpace renderedFunctions && String.IsNullOrWhiteSpace allImports then
+    if String.IsNullOrWhiteSpace renderedFunctions && String.IsNullOrWhiteSpace allImports && String.IsNullOrWhiteSpace dataSegments then
         "(module)"
     else
         let parts =
             [ if not (String.IsNullOrWhiteSpace allImports) then allImports
+              if not (String.IsNullOrWhiteSpace dataSegments) then dataSegments
               if not (String.IsNullOrWhiteSpace renderedFunctions) then renderedFunctions ]
         let body = String.concat "\n\n" parts
         $"(module\n{body}\n)"

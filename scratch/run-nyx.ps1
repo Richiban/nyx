@@ -27,13 +27,7 @@ if (-not $wasmtime) {
     exit 1
 }
 
-$dbgModulePath = Join-Path $PSScriptRoot "dbg.wat"
-if (-not (Test-Path $dbgModulePath)) {
-    Write-Error "dbg.wat was not found at $dbgModulePath."
-    exit 1
-}
-
-$args = @("--preload", "env=$dbgModulePath")
+$args = @()
 if ($ExportName) {
     $args += @("--invoke", $ExportName)
 }

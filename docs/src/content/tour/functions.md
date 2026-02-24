@@ -3,62 +3,278 @@ title: "Functions"
 description: "Defining and calling functions"
 order: 3
 ---
+# Functions and Lambdas
 
-# Functions
+Functions are first-class values in Nanyx, meaning they can be passed as arguments, returned from other functions, and stored in data structures.
 
-Functions are first-class values in Nanyx.
+## Function Basics
 
-## Defining Functions
+All functions in Nanyx take exactly one argument and return exactly one result. The function type signature is `a -> b`, where `a` is the input type and `b` is the output type.
 
-```nanyx
-fn add(a: Int, b: Int) -> Int {
-  a + b
+```nyx
+-- Simple function
+def double: int -> int = { x -> x * 2 }
+
+-- Calling the function
+def result = double(21)  -- 42
+```
+
+## Multi-Parameter Functions
+
+Since all functions take one argument, multi-parameter functions actually take a record (tuple):
+
+```nyx
+def add: (int, int) -> int = { x, y -> x + y }
+-- The type (int, int) -> int means: takes a record of two ints, returns an int
+
+-- Calling with multiple arguments
+def sum = add(5, 10)  -- 15
+```
+
+## Unit Type
+
+The `()` type (unit) represents the absence of a meaningful value. It's used for functions that don't take input or don't return output:
+
+```nyx
+-- No meaningful return value
+def printHello: () -> () = {
+  println("Hello")
+  -- Don't need to write `return ()`
+}
+
+-- No parameters
+def getMessage: () -> string = {
+  "Hello, World!"
 }
 ```
 
-The last expression is the return value — no `return` keyword needed.
+## Lambda Expressions
 
-## Public Functions
+Lambda expressions (also called anonymous functions) are created with braces:
 
-Use `pub` to export a function from a module:
+```nyx
+-- Explicit lambda
+def print1 = { print("1") }
 
-```nanyx
-pub fn greet(name: String) -> String {
-  "Hello, " <> name <> "!"
+-- Lambda with parameter
+def increment = { x -> x + 1 }
+
+-- Lambda in higher-order function
+def names = data \map { item -> item.name }
+```
+
+## Shorthand Lambdas
+
+Nanyx provides convenient shorthand syntax for common lambda patterns:
+
+```nyx
+-- Property access
+def names = users \map { .name }
+-- Equivalent to: users \map { user -> user.name }
+
+-- Binary operators
+def doubled = numbers \map { * 2 }
+-- Equivalent to: numbers \map { x -> x * 2 }
+
+def incremented = numbers \map { + 1 }
+-- Equivalent to: numbers \map { x -> x + 1 }
+
+-- Comparison operators
+def adults = users \filter { .age > 18 }
+-- Equivalent to: users \filter { user -> user.age > 18 }
+```
+
+## Higher-Order Functions
+
+Functions that take other functions as arguments or return functions are called higher-order functions:
+
+```nyx
+-- Takes a function as an argument
+def apply: ((a -> b), a) -> b = { f, x -> f(x) }
+
+-- Returns a function
+def makeAdder: int -> (int -> int) = { x ->
+  { y -> x + y }
+}
+
+def add5 = makeAdder(5)
+def result = add5(10)  -- 15
+```
+
+## Pattern Matching in Functions
+
+Functions can pattern match directly on their arguments:
+
+```nyx
+-- Simple pattern matching function
+rec sumList: list(int) -> int = {
+  | [] -> 0
+  | [head, ...tail] -> head + sumList(tail)
+}
+
+-- Multiple arguments with patterns
+def divide: (int, int) -> Result(int, #divideByZero) = { 
+  | _, 0 -> #error(#divideByZero)
+  | x, y -> #ok(x / y)
+}
+
+-- Pattern matching with guards
+def classify: int -> string = {
+  | 0 -> "zero"
+  | 1 -> "one"
+  | n if n < 0 -> "negative"
+  | _ -> "other"
 }
 ```
 
-## Anonymous Functions
+## Recursive Functions
 
-```nanyx
-let double = fn(x: Int) -> Int { x * 2 }
+Use the `rec` keyword to define recursive functions:
 
-let numbers = [1, 2, 3]
-let doubled = list.map(numbers, fn(x) { x * 2 })
-// [2, 4, 6]
-```
-
-## Pipelines
-
-The pipe operator `|>` passes the result of one function to the next:
-
-```nanyx
-"hello world"
-|> string.uppercase
-|> string.split(" ")
-|> list.first
-// Ok("HELLO")
-```
-
-This is equivalent to `list.first(string.split(string.uppercase("hello world"), " "))` but much more readable!
-
-## Labeled Arguments
-
-```nanyx
-pub fn create_user(name name: String, age age: Int) -> User {
-  User(name: name, age: age)
+```nyx
+rec factorial: int -> int = { n ->
+  if n <= 1
+    -> 1
+    else -> n * factorial(n - 1)
 }
 
-// Call with labels in any order
-create_user(age: 25, name: "Alice")
+rec length: list(a) -> int = {
+  | [] -> 0
+  | [_, ...tail] -> 1 + length(tail)
+}
+```
+
+## Function Composition
+
+Functions can be composed to create new functions:
+
+```nyx
+def compose: ((b -> c), (a -> b)) -> (a -> c) = { f, g ->
+  { x -> f(g(x)) }
+}
+
+def addOne = { + 1 }
+def double = { * 2 }
+
+def addOneThenDouble = compose(double, addOne)
+def result = addOneThenDouble(5)  -- 12
+```
+
+## Currying
+
+While Nanyx functions naturally take one argument, you can create curried-style functions:
+
+```nyx
+def add: int -> (int -> int) = { x ->
+  { y -> x + y }
+}
+
+def add5 = add(5)
+def result = add5(10)  -- 15
+```
+
+## Partial Application
+
+With records, you can simulate partial application:
+
+```nyx
+def process: (config: Config, data: Data) -> Result = { config, data ->
+  -- processing logic
+}
+
+-- Create a partially applied version
+def processWithConfig = { data -> process(myConfig, data) }
+```
+
+## Type Annotations for Clarity
+
+While type inference works well, annotating function signatures is recommended for exported functions:
+
+```nyx
+-- Without annotation (inferred)
+def add = { x, y -> x + y }
+
+-- With annotation (clearer, better errors)
+def add: (int, int) -> int = { x, y -> x + y }
+```
+
+Type annotations serve as documentation and help catch errors early.
+
+## Pure Functions
+
+Functions without effects (no contexts) are pure - they always return the same output for the same input:
+
+```nyx
+-- Pure function
+def add: (int, int) -> int = { x, y -> x + y }
+
+-- Effectful function (requires context)
+def greet: <Console> string -> () = { name ->
+  println("Hello, {name}!")
+}
+```
+
+## Function Examples
+
+### Map Implementation
+
+```nyx
+rec map: (list(a), (a -> b)) -> list(b) = { xs, f ->
+  match xs
+    | [] -> []
+    | [head, ...tail] -> [f(head), ...map(tail, f)]
+}
+```
+
+### Filter Implementation
+
+```nyx
+rec filter: (list(a), (a -> bool)) -> list(a) = { xs, predicate ->
+  match xs
+    | [] -> []
+    | [head, ...tail] ->
+        if predicate(head)
+          -> [head, ...filter(tail, predicate)]
+          else -> filter(tail, predicate)
+}
+```
+
+### Fold Implementation
+
+```nyx
+rec fold: (list(a), b, (b, a) -> b) -> b = { xs, acc, f ->
+  match xs
+    | [] -> acc
+    | [head, ...tail] -> fold(tail, f(acc, head), f)
+}
+```
+
+## Polymorphic functions
+
+In Nanyx a polymorphic function is simply one whose return type depends on 
+the types of its argument(s)
+
+The simplest polymorphic function is probably the identity function, i.e.
+a function that does nothing other than return its input
+
+```nyx
+def id = { x -> x }
+```
+
+Thanks to type inference we don't have to write type annotations for this
+function or give it a specification, but if we wanted to it would look like
+this:
+
+```nyx
+def id: α -> α = { x -> x }
+```
+
+The lowercase `a`, when used in a type position, is a type variable (equivalent
+to the concept of 'generics' in other languages). 
+
+```nyx
+def head : list(α) -> #some(α) | #emptyList  = { 
+  | []      -> #emptyList
+  | [x, ..] -> #some(x) 
+}
 ```

@@ -195,7 +195,7 @@ While type inference works well, annotating function signatures is recommended f
 def add = { x, y -> x + y }
 
 -- With annotation (clearer, better errors)
-def add: (int, int) -> int = { x, y -> x + y }
+export def add: (int, int) -> int = { x, y -> x + y }
 ```
 
 Type annotations serve as documentation and help catch errors early.

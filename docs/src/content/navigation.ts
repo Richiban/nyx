@@ -12,7 +12,7 @@ export const navSections: NavSection[] = [
   {
     title: "Overview",
     basePath: "/docs/overview",
-    icon: "MagnifyingGlass",
+    icon: "View",
     pages: overviewPages,
   },
   {

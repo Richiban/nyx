@@ -1008,16 +1008,16 @@ let transpileModuleToWat (module': Module) : string =
                     usedLocalNames <- usedLocalNames |> Set.add candidate
                     yield candidate ]
 
-                        let env =
-                                { KnownFunctions = knownFunctions
-                                    Locals = locals
-                                    DbgTempLocal = dbgLocalName
-                                    TagIds = tagIdMap
-                                    MatchTempNames = matchTempNames
-                                    NextMatchTemp = 0
-                                    StringLiterals = stringLiteralMap
-                                    ContextFunctions = Map.empty
-                                    PendingUseBindings = ref pendingUseBindings }
+            let env =
+                { KnownFunctions = knownFunctions
+                  Locals = locals
+                  DbgTempLocal = dbgLocalName
+                  TagIds = tagIdMap
+                  MatchTempNames = matchTempNames
+                  NextMatchTemp = 0
+                  StringLiterals = stringLiteralMap
+                  ContextFunctions = Map.empty
+                  PendingUseBindings = ref pendingUseBindings }
             let fn = sanitizeIdentifier name
             let parameterSig =
                 parameters

@@ -1,9 +1,9 @@
 
-def s = 42
+def main = {
+    def s = 42
+    
+    dbg(42)
+    dbg("Hello world")
+}
 
-def r = s + 1
-
-def x =
-    match 2
-    | 1 -> 0
-    | 2 -> 2
+main()

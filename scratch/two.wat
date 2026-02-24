@@ -1,40 +1,18 @@
 (module
-  (func $s (result i32)
+  (import "env" "dbg" (func $dbg (param i32)))
+
+  (func $main (result i32) (local $s i32) (local $__dbg_tmp i32)
     i32.const 42
+    local.set $s
+    i32.const 42
+    local.tee $__dbg_tmp
+    call $dbg
+    local.get $__dbg_tmp
+    drop
+    i32.const 0
+    local.tee $__dbg_tmp
+    call $dbg
+    local.get $__dbg_tmp
   )
-  (export "s" (func $s))
-
-  (func $r (result i32)
-    call $s
-    i32.const 1
-    i32.add
-  )
-  (export "r" (func $r))
-
-  (func $x (result i32) (local $__match_tmp_0 i32)
-    i32.const 2
-    local.set $__match_tmp_0
-    local.get $__match_tmp_0
-      i32.const 1
-      i32.eq
-    (if (result i32)
-      (then
-        i32.const 0
-      )
-      (else
-        local.get $__match_tmp_0
-      i32.const 2
-      i32.eq
-    (if (result i32)
-      (then
-        i32.const 2
-      )
-      (else
-        unreachable
-      )
-    )
-      )
-    )
-  )
-  (export "x" (func $x))
+  (export "main" (func $main))
 )

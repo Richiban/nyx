@@ -1,35 +1,37 @@
 ---
 title: "Variables"
-description: "Let bindings and immutability in Nanyx"
+description: "Def bindings and immutability in Nanyx"
 order: 1
 ---
 
 # Variables
 
-In Nanyx, variables are immutable by default. You declare them using the `let` keyword.
+In Nanyx, variables are immutable by default. You declare them using the `def` keyword.
 
-## Let Bindings
+## Def Bindings
 
 ```nanyx
-let name = "Nanyx"
-let version = 4
-let pi = 3.14159
+def name = "Nanyx"
+def version = 4
+def pi = 3.14159
 ```
 
 Once a value is bound, it cannot be reassigned:
 
 ```nanyx
-let x = 10
+def x = 10
 x = 20  // ✗ Compile error: cannot reassign immutable variable
 ```
 
 ## Mutable Variables
 
-When you need mutation, use `let mut`:
+When you need mutation, Nanyx supports _bounded mutability_ using the `memory` context:
 
 ```nanyx
-let mut counter = 0
-counter = counter + 1  // ✓ This works
+memory {
+  def counter = mut(0)
+  counter := counter + 1  // ✓ This works
+}
 ```
 
 > **Tip:** Prefer immutable bindings whenever possible. They make your code easier to reason about.
@@ -39,10 +41,10 @@ counter = counter + 1  // ✓ This works
 Nanyx can infer types, but you can add annotations for clarity:
 
 ```nanyx
-let name: String = "Nanyx"
-let count: Int = 42
-let ratio: Float = 0.75
-let active: Bool = true
+def name: String = "Nanyx"
+def count: Int = 42
+def ratio: Float = 0.75
+def active: Bool = true
 ```
 
 ## Blocks
@@ -50,10 +52,10 @@ let active: Bool = true
 A block expression returns the value of its last expression:
 
 ```nanyx
-let result = {
-  let a = 10
-  let b = 20
+def result =
+  def a = 10
+  def b = 20
   a + b
-}
+
 // result is 30
 ```

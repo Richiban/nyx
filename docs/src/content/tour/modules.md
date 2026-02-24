@@ -241,35 +241,37 @@ import Result
 ## Example: User Management Module
 
 ```nyx
-module UserManagement
+module userManagement
 
-type User = (
+export type User = (
   id: UserId
   name: string
   email: Email
   role: #admin | #user
 )
 
-type ValidationError =
+export type ValidationError =
   | #invalidEmail
   | #nameTooShort
   | #emailTaken
 
-def createUser: (string, Email) -> Result(User, ValidationError) = { name, email ->
-  if name.length < 3
-    -> #error(#nameTooShort)
-  else
-    def id = generateId()
-    #ok((id = id, name = name, email = email, role = #user))
-}
+export def createUser
+  : [Random] (string, Email) -> Result(User, ValidationError) 
+  = { name, email ->
+    if name.length < 3 then
+      #error(#nameTooShort)
+    else
+      def id = generateId()
+      #ok(id = id, name = name, email = email, role = #user)
+  }
 
 def validateEmail: Email -> Result(Email, ValidationError) = { email ->
-  if email \contains("@")
-    -> #ok(email)
-    else -> #error(#invalidEmail)
+  if email \contains("@") then
+    #ok(email)
+  else #error(#invalidEmail)
 }
 
-private def generateId: () -> UserId = {
+def generateId: [Random] () -> UserId = {
   -- Implementation detail, not exported
   UserId(randomInt())
 }
@@ -287,17 +289,19 @@ private def generateId: () -> UserId = {
 ## Using Modules
 
 ```nyx
-module MyApp
+module myApp
 
-import UserManagement as Users
-import DataProcessing
+import (
+  userManagement as users
+  dataProcessing
+)
 
 def main = {
-  def result = Users.createUser("Alice", "alice@example.com")
+  def result = users.createUser("Alice", "alice@example.com")
   
   match result
     | #ok(user) ->
-        user \DataProcessing.process \save
+        user \dataProcessing.process \save
     | #error(err) ->
         err \logError
 }

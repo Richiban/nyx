@@ -35,6 +35,8 @@ let private wasmBinaryInstruction op =
     | "<=" -> Some "i32.le_s"
     | ">" -> Some "i32.gt_s"
     | ">=" -> Some "i32.ge_s"
+    | "&&" -> Some "i32.and"
+    | "||" -> Some "i32.or"
     | _ -> None
 
 let private flattenCallArgs (args: Expression list) =
@@ -200,6 +202,11 @@ let private collectContextUseBindings (expr: Expression) : (string * Expression)
 
     collectFromExpr expr
 
+let private maxOrZero list =
+    match list with
+    | [] -> 0
+    | _ -> List.max list
+
 let rec private countMatchExpressions (expr: Expression) : int =
     match expr with
     | Match(values, arms) ->
@@ -247,14 +254,14 @@ and countMatchArity (expr: Expression) : int =
     | Match(values, arms) ->
         let arity = values.Length
         let maxArityInArms =
-            arms |> List.map (fun (_, armExpr) -> countMatchArity armExpr) |> List.max
+            arms |> List.map (fun (_, armExpr) -> countMatchArity armExpr) |> maxOrZero
         max arity maxArityInArms
-    | FunctionCall(_, _, args) -> args |> List.map countMatchArity |> List.max
+    | FunctionCall(_, _, args) -> args |> List.map countMatchArity |> maxOrZero
     | BinaryOp(_, left, right) -> max (countMatchArity left) (countMatchArity right)
     | IfExpr(cond, thenExpr, elseExpr) ->
         [countMatchArity cond; countMatchArity thenExpr; countMatchArity elseExpr] |> List.max
     | Lambda(_, body) -> countMatchArity body
-    | Pipe(value, _, _, args) -> max (countMatchArity value) (args |> List.map countMatchArity |> List.max)
+    | Pipe(value, _, _, args) -> max (countMatchArity value) (args |> List.map countMatchArity |> maxOrZero)
     | Block statements ->
         statements
         |> List.map (function
@@ -263,15 +270,15 @@ and countMatchArity (expr: Expression) : int =
             | ImportStatement _
             | TypeDefStatement _
             | UseStatement _ -> 0)
-        |> List.max
+        |> maxOrZero
     | TupleExpr values
-    | ListExpr values -> values |> List.map countMatchArity |> List.max
+    | ListExpr values -> values |> List.map countMatchArity |> maxOrZero
     | RecordExpr fields ->
         fields
         |> List.map (function
             | NamedField(_, value) -> countMatchArity value
             | PositionalField value -> countMatchArity value)
-        |> List.max
+        |> maxOrZero
     | UseIn(_, body) -> countMatchArity body
     | MemberAccess(value, _, _) -> countMatchArity value
     | TagExpr(_, payload) -> payload |> Option.map countMatchArity |> Option.defaultValue 0
@@ -280,7 +287,7 @@ and countMatchArity (expr: Expression) : int =
         |> List.map (function
             | StringText _ -> 0
             | StringExpr value -> countMatchArity value)
-        |> List.max
+        |> maxOrZero
     | WorkflowBindExpr(_, value)
     | WorkflowReturnExpr value -> countMatchArity value
     | UnitExpr
@@ -643,8 +650,12 @@ and private collectTagNamesPattern (pattern: Pattern) : string list =
 
 let rec private transpileExpression (env: TranspileEnv) (expr: Expression) : string =
     match expr with
+    | UnitExpr ->
+        "i32.const 0"
     | LiteralExpr(IntLit value) ->
         $"i32.const {value}"
+    | LiteralExpr(BoolLit value) ->
+        if value then "i32.const 1" else "i32.const 0"
     | LiteralExpr(StringLit value) ->
         match env.StringLiterals |> Map.tryFind value with
         | Some offset -> $"i32.const {offset}"
@@ -848,6 +859,23 @@ let rec private transpileExpression (env: TranspileEnv) (expr: Expression) : str
                 | _ ->
                     let prefix = argsCode |> String.concat "\n    "
                     $"{prefix}\n    call ${sanitizeIdentifier name}"
+    | Pipe(value, funcName, _, args) ->
+        // Pipe x \f(a, b) translates to f(x, a, b)
+        let valueCode = transpileExpression env value
+        let argsCode =
+            flattenCallArgs args
+            |> List.map (transpileExpression env)
+        let allArgsCode = valueCode :: argsCode
+        match env.ContextFunctions |> Map.tryFind funcName with
+        | Some ctxFn ->
+            let prefix = allArgsCode |> String.concat "\n    "
+            $"{prefix}\n    i32.const {ctxFnSlot ctxFn}\n    call_indirect (type $ctx_fn_{ctxFnArity ctxFn})"
+        | None ->
+            if not (env.KnownFunctions.Contains funcName) then
+                failwith $"Unsupported pipe target for WASM MVP backend: {funcName}"
+            else
+                let prefix = allArgsCode |> String.concat "\n    "
+                $"{prefix}\n    call ${sanitizeIdentifier funcName}"
     | Lambda(args, body) when args.IsEmpty ->
         transpileExpression env body
     | Block statements ->

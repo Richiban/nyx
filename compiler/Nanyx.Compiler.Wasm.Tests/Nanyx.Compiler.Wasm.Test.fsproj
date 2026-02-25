@@ -10,6 +10,16 @@
     <Compile Include="TestHelpers.fs" />
     <Compile Include="Features\Core\FunctionAndLocalsTests.fs" />
     <Compile Include="Features\ControlFlow\ControlFlowFixtureTests.fs" />
+    <Compile Include="E2E\E2ETests.fs" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Content Include="E2E\**\*.nyx">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
+    <Content Include="E2E\**\*.wat">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
   </ItemGroup>
 
   <ItemGroup>

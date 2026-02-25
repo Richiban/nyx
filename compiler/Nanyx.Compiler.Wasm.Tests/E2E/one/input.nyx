@@ -1,0 +1,6 @@
+
+def main = {
+  dbg("Hello world")
+}
+
+main()

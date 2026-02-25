@@ -8,6 +8,7 @@
         "/^pwsh -c \\./run-nyx\\.ps1 \\./thirteen\\.nyx r$/": {
             "approve": true,
             "matchCommandLine": true
-        }
+        },
+        "mkdir": true
     }
 }

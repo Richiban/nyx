@@ -65,3 +65,7 @@ let ``E2E - eleven - record with named fields`` () =
 [<Fact>]
 let ``E2E - twelve - mixed positional and named fields`` () =
     runE2ETest "twelve"
+
+[<Fact>]
+let ``E2E - thirteen - type definition and type constructor`` () =
+    runE2ETest "thirteen"

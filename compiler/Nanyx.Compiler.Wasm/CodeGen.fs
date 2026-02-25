@@ -6,7 +6,7 @@ open Parser.Program
 
 type private ContextFn = string * int * int
 
-type private TranspileEnv = { KnownFunctions: Set<string>; Locals: Map<string, string>; DbgTempLocal: string option; TagIds: Map<string, int>; MatchTempNames: string list; NextMatchTemp: int; StringLiterals: Map<string, int>; ContextFunctions: Map<string, ContextFn>; PendingUseBindings: Map<string, ContextFn> list ref; RecordLayouts: Map<string, string list> }
+type private TranspileEnv = { KnownFunctions: Set<string>; Locals: Map<string, string>; DbgTempLocal: string option; TagIds: Map<string, int>; MatchTempNames: string list; NextMatchTemp: int; StringLiterals: Map<string, int>; ContextFunctions: Map<string, ContextFn>; PendingUseBindings: Map<string, ContextFn> list ref; RecordLayouts: Map<string, string list>; TypeLayouts: Map<string, string list> }
 
 let private ctxFnName (name: string, _, _) = name
 let private ctxFnSlot (_, slot: int, _) = slot
@@ -951,25 +951,51 @@ let rec private transpileExpression (env: TranspileEnv) (expr: Expression) : str
         | LiteralExpr(StringLit _) -> $"{argCode}\n    local.tee ${dbgLocal}\n    call $dbg_str\n    local.get ${dbgLocal}"
         | _ -> $"{argCode}\n    local.tee ${dbgLocal}\n    call $dbg\n    local.get ${dbgLocal}"
     | FunctionCall(name, _, args) ->
-        let argsCode =
-            flattenCallArgs args
-            |> List.map (transpileExpression env)
-        match env.ContextFunctions |> Map.tryFind name with
-        | Some ctxFn ->
-            let prefix = argsCode |> String.concat "\n    "
-            if prefix = "" then
-                $"i32.const {ctxFnSlot ctxFn}\n    call_indirect (type $ctx_fn_{ctxFnArity ctxFn})"
-            else
-                $"{prefix}\n    i32.const {ctxFnSlot ctxFn}\n    call_indirect (type $ctx_fn_{ctxFnArity ctxFn})"
+        // Check if this is a type constructor call (e.g., Person(...))
+        match env.TypeLayouts |> Map.tryFind name with
+        | Some typeFieldNames ->
+            // Treat as record expression - extract fields from args
+            let flatArgs = flattenCallArgs args
+            match flatArgs with
+            | [RecordExpr fields] ->
+                // Sort fields alphabetically by name and store on heap
+                let sortedFields =
+                    fields
+                    |> List.mapi (fun i field ->
+                        match field with
+                        | NamedField(fieldName, expr) -> (fieldName, expr)
+                        | PositionalField expr -> (string i, expr))
+                    |> List.sortBy fst
+                let n = sortedFields.Length
+                let sizeBytes = n * 4
+                let fieldCodes = sortedFields |> List.mapi (fun i (_, expr) ->
+                    let exprCode = transpileExpression env expr
+                    let offset = i * 4
+                    $"global.get $heap_ptr\n    i32.const {offset}\n    i32.add\n    {exprCode}\n    i32.store")
+                let storeAll = fieldCodes |> String.concat "\n    "
+                $"{storeAll}\n    global.get $heap_ptr\n    global.get $heap_ptr\n    i32.const {sizeBytes}\n    i32.add\n    global.set $heap_ptr"
+            | _ ->
+                failwith $"Type constructor {name} expects a record expression as argument"
         | None ->
-            if not (env.KnownFunctions.Contains name) then
-                failwith $"Unsupported function call for WASM MVP backend: {name}"
-            else
-                match argsCode with
-                | [] -> $"call ${sanitizeIdentifier name}"
-                | _ ->
-                    let prefix = argsCode |> String.concat "\n    "
-                    $"{prefix}\n    call ${sanitizeIdentifier name}"
+            let argsCode =
+                flattenCallArgs args
+                |> List.map (transpileExpression env)
+            match env.ContextFunctions |> Map.tryFind name with
+            | Some ctxFn ->
+                let prefix = argsCode |> String.concat "\n    "
+                if prefix = "" then
+                    $"i32.const {ctxFnSlot ctxFn}\n    call_indirect (type $ctx_fn_{ctxFnArity ctxFn})"
+                else
+                    $"{prefix}\n    i32.const {ctxFnSlot ctxFn}\n    call_indirect (type $ctx_fn_{ctxFnArity ctxFn})"
+            | None ->
+                if not (env.KnownFunctions.Contains name) then
+                    failwith $"Unsupported function call for WASM MVP backend: {name}"
+                else
+                    match argsCode with
+                    | [] -> $"call ${sanitizeIdentifier name}"
+                    | _ ->
+                        let prefix = argsCode |> String.concat "\n    "
+                        $"{prefix}\n    call ${sanitizeIdentifier name}"
     | Pipe(value, funcName, _, args) ->
         // Pipe x \f(a, b) translates to f(x, a, b)
         let valueCode = transpileExpression env value
@@ -1046,19 +1072,48 @@ let private defBodyAndParameters (expr: Expression) =
     | Lambda(args, body) -> args, body
     | _ -> [], expr
 
+let private extractTypeLayouts (module': Module) : Map<string, string list> =
+    module'
+    |> List.choose (function
+        | Def (TypeDef(name, _, _, TypeRecord fields)) ->
+            let fieldNames =
+                fields
+                |> List.choose (function
+                    | TypeField(fieldName, _, _, _, _) -> Some fieldName
+                    | TypeMember(fieldName, _) -> Some fieldName)
+                |> List.sort
+            Some (name, fieldNames)
+        | _ -> None)
+    |> Map.ofList
+
+let private getLayoutFromTypeExpr (typeLayouts: Map<string, string list>) (typeExpr: TypeExpr option) : string list option =
+    match typeExpr with
+    | Some (TypeName typeName) -> typeLayouts |> Map.tryFind typeName
+    | Some (TypeRecord fields) ->
+        let fieldNames =
+            fields
+            |> List.choose (function
+                | TypeField(fieldName, _, _, _, _) -> Some fieldName
+                | TypeMember(fieldName, _) -> Some fieldName)
+            |> List.sort
+        Some fieldNames
+    | _ -> None
+
 let transpileModuleToWat (module': Module) : string =
     let defs =
         module'
         |> List.choose (function
-            | Def (ValueDef(_, name, _, expr)) -> Some(name, expr)
+            | Def (ValueDef(_, name, typeOpt, expr)) -> Some(name, typeOpt, expr)
             | _ -> None)
+
+    let typeLayouts = extractTypeLayouts module'
 
     let mutable nextContextIndex = 0
     let mutable contextDefs: (string * Expression) list = []
     let mutable contextFnList: ContextFn list = []
     let contextBindingsByDef =
         defs
-        |> List.map (fun (defName, expr) ->
+        |> List.map (fun (defName, _, expr) ->
             let bindings = collectContextUseBindings expr
             let bindingMaps =
                 bindings
@@ -1080,25 +1135,25 @@ let transpileModuleToWat (module': Module) : string =
         |> Map.ofList
 
     let knownFunctions =
-        (defs |> List.map fst) @ (contextDefs |> List.map fst)
+        (defs |> List.map (fun (n, _, _) -> n)) @ (contextDefs |> List.map fst)
         |> Set.ofList
-    let moduleUsesDbg = defs |> List.exists (fun (_, expr) -> containsDbgCallExpr expr)
-    let moduleUsesRegularDbg = defs |> List.exists (fun (_, expr) -> containsRegularDbgExpr expr)
-    let moduleUsesDbgString = defs |> List.exists (fun (_, expr) -> containsDbgStringLiteralExpr expr)
-    let moduleUsesHeap = defs |> List.exists (fun (_, expr) -> usesHeapAllocationExpr expr)
+    let moduleUsesDbg = defs |> List.exists (fun (_, _, expr) -> containsDbgCallExpr expr)
+    let moduleUsesRegularDbg = defs |> List.exists (fun (_, _, expr) -> containsRegularDbgExpr expr)
+    let moduleUsesDbgString = defs |> List.exists (fun (_, _, expr) -> containsDbgStringLiteralExpr expr)
+    let moduleUsesHeap = defs |> List.exists (fun (_, _, expr) -> usesHeapAllocationExpr expr)
     let dbgTagNames =
         defs
-        |> List.collect (fun (_, expr) -> collectDbgTagNamesExpr expr)
+        |> List.collect (fun (_, _, expr) -> collectDbgTagNamesExpr expr)
         |> List.distinct
         |> List.sort
     let dbgTagPayloadNames =
         defs
-        |> List.collect (fun (_, expr) -> collectDbgTagPayloadNamesExpr expr)
+        |> List.collect (fun (_, _, expr) -> collectDbgTagPayloadNamesExpr expr)
         |> List.distinct
         |> List.sort
     let tagIdMap =
         defs
-        |> List.collect (fun (_, expr) -> collectTagNamesExpr expr)
+        |> List.collect (fun (_, _, expr) -> collectTagNamesExpr expr)
         |> List.distinct
         |> List.sort
         |> List.mapi (fun index name -> name, index + 1)
@@ -1106,12 +1161,12 @@ let transpileModuleToWat (module': Module) : string =
 
     let stringLiterals =
         defs
-        |> List.collect (fun (_, expr) -> collectStringLiteralsExpr expr)
+        |> List.collect (fun (_, _, expr) -> collectStringLiteralsExpr expr)
         |> List.distinct
 
     let stringLiteralMap, stringLiteralData = buildStringLiteralMap stringLiterals
 
-    let renderFunction (name: string) (expr: Expression) (exportFn: bool) (pendingUseBindings: Map<string, ContextFn> list) =
+    let renderFunction (name: string) (defTypeOpt: TypeExpr option) (expr: Expression) (exportFn: bool) (pendingUseBindings: Map<string, ContextFn> list) =
             let parameters, bodyExpr = defBodyAndParameters expr
             let parameterNames = parameters |> List.map fst
             let parameterMap = createNameMap parameterNames
@@ -1164,6 +1219,32 @@ let transpileModuleToWat (module': Module) : string =
                     usedLocalNames <- usedLocalNames |> Set.add candidate
                     yield candidate ]
 
+            // Initialize RecordLayouts from def-level type annotations
+            // Extract parameter types from TypeFunc chain: (A -> B -> C) means params are A, B
+            let rec extractParamTypes (t: TypeExpr) : TypeExpr list =
+                match t with
+                | TypeFunc(param, ret) -> param :: extractParamTypes ret
+                | _ -> []
+
+            let defParamTypes =
+                match defTypeOpt with
+                | Some t -> extractParamTypes t
+                | None -> []
+
+            let initialRecordLayouts =
+                List.zip parameterNames (defParamTypes @ List.replicate (parameterNames.Length - defParamTypes.Length) (TypeUnit))
+                |> List.choose (fun (paramName, paramType) ->
+                    match getLayoutFromTypeExpr typeLayouts (Some paramType) with
+                    | Some fieldNames -> Some (paramName, fieldNames)
+                    | None ->
+                        // Also try lambda parameter type annotation
+                        match parameters |> List.tryFind (fun (n, _) -> n = paramName) with
+                        | Some (_, paramTypeOpt) ->
+                            getLayoutFromTypeExpr typeLayouts paramTypeOpt
+                            |> Option.map (fun fieldNames -> (paramName, fieldNames))
+                        | None -> None)
+                |> Map.ofList
+
             let env =
                 { KnownFunctions = knownFunctions
                   Locals = locals
@@ -1174,7 +1255,8 @@ let transpileModuleToWat (module': Module) : string =
                   StringLiterals = stringLiteralMap
                   ContextFunctions = Map.empty
                   PendingUseBindings = ref pendingUseBindings
-                  RecordLayouts = Map.empty }
+                  RecordLayouts = initialRecordLayouts
+                  TypeLayouts = typeLayouts }
             let fn = sanitizeIdentifier name
             let parameterSig =
                 parameters
@@ -1243,13 +1325,13 @@ let transpileModuleToWat (module': Module) : string =
 
     let renderedUserFunctions =
         defs
-        |> List.map (fun (name, expr) ->
+        |> List.map (fun (name, typeOpt, expr) ->
             let pending = contextBindingsByDef |> Map.tryFind name |> Option.defaultValue []
-            renderFunction name expr true pending)
+            renderFunction name typeOpt expr true pending)
 
     let renderedContextFunctions =
         contextDefs
-        |> List.map (fun (name, expr) -> renderFunction name expr false [])
+        |> List.map (fun (name, expr) -> renderFunction name None expr false [])
 
     let renderedFunctions =
         renderedUserFunctions @ renderedContextFunctions

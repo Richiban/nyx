@@ -1,0 +1,21 @@
+type Person = (
+  id: int
+  age: int
+  score: int
+)
+
+def sumPerson: Person -> int = { p ->
+  p.id + p.age + p.score
+}
+
+def main = {
+  def p = (id = 1, age = 30, score = 100)
+  def sum1 = sumPerson(p)
+  dbg(sum1)
+
+  def p2 = Person(id = 2, age = 25, score = 80)
+  def sum2 = sumPerson(p2)
+  dbg(sum2)
+
+  sum1 + sum2
+}

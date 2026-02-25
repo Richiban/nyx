@@ -54,7 +54,7 @@ let private numericType =
     TyPrimitive "int"
 
 let private tupleFieldName index =
-    $"item{index}"
+    string index
 
 let rec private isAssignableType (expected: Ty) (actual: Ty) =
     match expected, actual with
@@ -151,7 +151,7 @@ let private isContextDef (modifiers: TypeDefModifier list) =
 
 let private tupleRecordType (items: Ty list) =
     items
-    |> List.mapi (fun index ty -> tupleFieldName (index + 1), ty)
+    |> List.mapi (fun index ty -> tupleFieldName index, ty)
     |> Map.ofList
     |> TyRecord
 
@@ -426,7 +426,7 @@ let private argTypesFromExpected (state: InferState) (args: (Identifier * TypeEx
                 match fields |> Map.tryFind name with
                 | Some ty -> ty
                 | None ->
-                    let tupleName = tupleFieldName (index + 1)
+                    let tupleName = tupleFieldName index
                     match fields |> Map.tryFind tupleName with
                     | Some ty -> ty
                     | None ->
@@ -692,7 +692,7 @@ let rec private inferExpr (env: TypeEnv) (state: InferState) (expr: Expression) 
             let positionalExprs = positionalResults |> List.choose (function Ok ty -> Some ty | _ -> None)
             let positionalFieldsMap =
                 positionalExprs
-                |> List.mapi (fun index typedExpr -> tupleFieldName (index + 1), typedExpr.Type)
+                |> List.mapi (fun index typedExpr -> tupleFieldName index, typedExpr.Type)
             let namedFieldsMap =
                 namedResults
                 |> List.choose (function Ok (name, typedExpr) -> Some (name, typedExpr.Type) | _ -> None)

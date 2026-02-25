@@ -12,7 +12,6 @@ type Ty =
     | TyPrimitive of string
     | TyNominal of string * Ty * bool
     | TyFunc of Ty * Ty
-    | TyTuple of Ty list
     | TyRecord of Map<string, Ty>
     | TyTag of string * Ty option
     | TyApply of string * Ty list

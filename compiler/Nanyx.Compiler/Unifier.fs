@@ -7,11 +7,11 @@ type Subst = Map<int, Ty>
 
 module Unifier =
     let private tupleFieldName index =
-        $"item{index}"
+        string index
 
     let private tupleFieldMap items =
         items
-        |> List.mapi (fun index ty -> tupleFieldName (index + 1), ty)
+        |> List.mapi (fun index ty -> tupleFieldName index, ty)
         |> Map.ofList
 
     let private tryTupleLikeRecord (fields: Map<string, Ty>) : Ty list option * (string * Ty) list =
@@ -19,21 +19,17 @@ module Unifier =
             fields
             |> Map.toList
             |> List.fold (fun (tupleAcc, namedAcc) (name, ty) ->
-                if name.StartsWith("item") then
-                    let indexStr = name.Substring(4)
-                    match System.Int32.TryParse(indexStr) with
-                    | true, index when index > 0 ->
-                        ((index, ty) :: tupleAcc, namedAcc)
-                    | _ -> (tupleAcc, (name, ty) :: namedAcc)
-                else
-                    (tupleAcc, (name, ty) :: namedAcc)) ([], [])
+                match System.Int32.TryParse(name) with
+                | true, index when index >= 0 ->
+                    ((index, ty) :: tupleAcc, namedAcc)
+                | _ -> (tupleAcc, (name, ty) :: namedAcc)) ([], [])
         let orderedTuple = tupleFields |> List.sortBy fst
-        let expectedIndices = [1 .. orderedTuple.Length]
+        let expectedIndices = [0 .. orderedTuple.Length - 1]
         let hasAllIndices =
             orderedTuple
             |> List.map fst
             |> fun indices -> indices = expectedIndices
-        if hasAllIndices then
+        if hasAllIndices && orderedTuple.Length > 0 then
             let tupleItems = orderedTuple |> List.map snd
             Some tupleItems, namedFields
         else
@@ -48,11 +44,6 @@ module Unifier =
             | None -> $"'t{v.Id}"
         | TyNominal(name, _, _) -> name
         | TyFunc(arg, ret) -> $"{tyToString arg} -> {tyToString ret}"
-        | TyTuple items ->
-            items
-            |> List.map tyToString
-            |> String.concat ", "
-            |> fun inner -> $"({inner})"
         | TyRecord fields ->
             match tryTupleLikeRecord fields with
             | Some tupleItems, namedFields ->
@@ -157,7 +148,6 @@ module Unifier =
             | None -> ty
         | TyNominal(name, underlying, isPrivate) -> TyNominal(name, apply subst underlying, isPrivate)
         | TyFunc(arg, ret) -> TyFunc(apply subst arg, apply subst ret)
-        | TyTuple items -> TyTuple(items |> List.map (apply subst))
         | TyRecord fields ->
             fields |> Map.map (fun _ v -> apply subst v) |> TyRecord
         | TyTag(name, payload) -> TyTag(name, payload |> Option.map (apply subst))
@@ -170,7 +160,6 @@ module Unifier =
         | TyVar v -> v.Id = varId
         | TyNominal(_, underlying, _) -> occurs varId underlying
         | TyFunc(arg, ret) -> occurs varId arg || occurs varId ret
-        | TyTuple items -> items |> List.exists (occurs varId)
         | TyRecord fields -> fields |> Map.exists (fun _ v -> occurs varId v)
         | TyTag(_, payload) -> payload |> Option.exists (occurs varId)
         | TyApply(_, args) -> args |> List.exists (occurs varId)
@@ -224,18 +213,7 @@ module Unifier =
                     loop subst ((l, underlying, Equal) :: rest)
                 | TyFunc(lArg, lRet), TyFunc(rArg, rRet) ->
                     loop subst ((lArg, rArg, Equal) :: (lRet, rRet, Equal) :: rest)
-                | TyTuple lItems, TyTuple rItems when lItems.Length = rItems.Length ->
-                    let pairs = List.zip lItems rItems |> List.map (fun (lTy, rTy) -> (lTy, rTy, Equal))
-                    loop subst (pairs @ rest)
-                | TyTuple lItems, TyTuple rItems ->
-                    Error (tupleLengthMessage lItems.Length rItems.Length l r)
-                | TyTuple lItems, TyRecord rFields ->
-                    let lFields = tupleFieldMap lItems
-                    unifyRecordFields lFields rFields rest l r
                 | TyRecord lFields, TyRecord rFields ->
-                    unifyRecordFields lFields rFields rest l r
-                | TyRecord lFields, TyTuple rItems ->
-                    let rFields = tupleFieldMap rItems
                     unifyRecordFields lFields rFields rest l r
                 | TyTag(lName, lPayload), TyTag(rName, rPayload) when lName = rName ->
                     match lPayload, rPayload with

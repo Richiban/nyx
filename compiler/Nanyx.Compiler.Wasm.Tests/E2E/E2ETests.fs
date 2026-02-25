@@ -53,3 +53,7 @@ let ``E2E - eight - recursion`` () =
 [<Fact>]
 let ``E2E - nine - comparison operators`` () =
     runE2ETest "nine"
+
+[<Fact>]
+let ``E2E - ten - tuple allocation and access`` () =
+    runE2ETest "ten"

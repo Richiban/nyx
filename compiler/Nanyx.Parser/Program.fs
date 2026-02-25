@@ -884,9 +884,11 @@ let primaryExprNoWs =
 
 do simpleExpressionRef := primaryExprNoWs
 
-// Member access: parse base expression, then chain .field.field.field...
+// Member access: parse base expression, then chain .field.field.field... or .0.1.2...
 let memberAccessChain =
-    let dotField = pstring "." >>. (getPosition .>>. identifierNoWs |>> fun (pos, field) -> field, Some (posToRange pos))
+    let tupleIndex = many1Satisfy isDigit
+    let fieldOrIndex = identifierNoWs <|> tupleIndex
+    let dotField = pstring "." >>. (getPosition .>>. fieldOrIndex |>> fun (pos, field) -> field, Some (posToRange pos))
     primaryExprNoWs >>= fun baseExpr ->
         many dotField |>> fun fields ->
             List.fold (fun expr (field, range) -> MemberAccess(expr, field, range)) baseExpr fields

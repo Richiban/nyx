@@ -114,6 +114,8 @@ let private tagDiscriminantBase (id: int) = id <<< 16
 
 let private stringDataBaseOffset = 256
 
+let private heapBaseOffset = 4096  // Start heap after string data region
+
 let private dbgDataBaseOffset = 128
 
 let private dbgNewlineOffset = dbgDataBaseOffset + 64
@@ -333,6 +335,44 @@ and private containsDbgCallStatements (statements: Statement list) : bool =
     |> List.exists (function
         | DefStatement(_, _, _, rhs) -> containsDbgCallExpr rhs
         | ExprStatement expr -> containsDbgCallExpr expr
+        | ImportStatement _
+        | TypeDefStatement _
+        | UseStatement _ -> false)
+
+let rec private usesHeapAllocationExpr (expr: Expression) : bool =
+    match expr with
+    | TupleExpr _
+    | ListExpr _
+    | RecordExpr _ -> true
+    | FunctionCall(_, _, args) -> flattenCallArgs args |> List.exists usesHeapAllocationExpr
+    | BinaryOp(_, left, right) -> usesHeapAllocationExpr left || usesHeapAllocationExpr right
+    | IfExpr(cond, thenExpr, elseExpr) ->
+        usesHeapAllocationExpr cond || usesHeapAllocationExpr thenExpr || usesHeapAllocationExpr elseExpr
+    | Block statements -> usesHeapAllocationStatements statements
+    | Lambda(_, body) -> usesHeapAllocationExpr body
+    | Pipe(value, _, _, args) -> usesHeapAllocationExpr value || (flattenCallArgs args |> List.exists usesHeapAllocationExpr)
+    | Match(values, arms) ->
+        (values |> List.exists usesHeapAllocationExpr)
+        || (arms |> List.exists (fun (_, armExpr) -> usesHeapAllocationExpr armExpr))
+    | UseIn(_, body) -> usesHeapAllocationExpr body
+    | MemberAccess(inner, _, _) -> usesHeapAllocationExpr inner
+    | TagExpr(_, payload) -> payload |> Option.exists usesHeapAllocationExpr
+    | InterpolatedString parts ->
+        parts
+        |> List.exists (function
+            | StringText _ -> false
+            | StringExpr inner -> usesHeapAllocationExpr inner)
+    | WorkflowBindExpr(_, value)
+    | WorkflowReturnExpr value -> usesHeapAllocationExpr value
+    | UnitExpr
+    | LiteralExpr _
+    | IdentifierExpr _ -> false
+
+and private usesHeapAllocationStatements (statements: Statement list) : bool =
+    statements
+    |> List.exists (function
+        | DefStatement(_, _, _, rhs) -> usesHeapAllocationExpr rhs
+        | ExprStatement expr -> usesHeapAllocationExpr expr
         | ImportStatement _
         | TypeDefStatement _
         | UseStatement _ -> false)
@@ -689,6 +729,28 @@ let rec private transpileExpression (env: TranspileEnv) (expr: Expression) : str
         let thenCode = transpileExpression env thenExpr
         let elseCode = transpileExpression env elseExpr
         $"{condCode}\n    (if (result i32)\n      (then\n        {thenCode}\n      )\n      (else\n        {elseCode}\n      )\n    )"
+    | TupleExpr items ->
+        // Allocate (4 * n) bytes on the heap for n i32 values
+        // Store each item, return pointer to first element
+        let n = items.Length
+        let sizeBytes = n * 4
+        let itemCodes = items |> List.mapi (fun i item ->
+            let itemCode = transpileExpression env item
+            let offset = i * 4
+            // Get heap pointer, add offset, get value, store
+            $"global.get $heap_ptr\n    i32.const {offset}\n    i32.add\n    {itemCode}\n    i32.store")
+        let storeAll = itemCodes |> String.concat "\n    "
+        // Store all items, then push return value (original ptr), then bump heap
+        $"{storeAll}\n    global.get $heap_ptr\n    global.get $heap_ptr\n    i32.const {sizeBytes}\n    i32.add\n    global.set $heap_ptr"
+    | MemberAccess(tupleExpr, indexStr, _) ->
+        // Tuple element access: t.0, t.1, etc.
+        match System.Int32.TryParse(indexStr) with
+        | true, index ->
+            let tupleCode = transpileExpression env tupleExpr
+            let offset = index * 4
+            $"{tupleCode}\n    i32.const {offset}\n    i32.add\n    i32.load"
+        | false, _ ->
+            failwith $"Unsupported member access for WASM MVP backend: .{indexStr}"
     // ...existing code...
     | Match(values, arms) ->
         // Multi-scrutinee support
@@ -958,6 +1020,7 @@ let transpileModuleToWat (module': Module) : string =
     let moduleUsesDbg = defs |> List.exists (fun (_, expr) -> containsDbgCallExpr expr)
     let moduleUsesRegularDbg = defs |> List.exists (fun (_, expr) -> containsRegularDbgExpr expr)
     let moduleUsesDbgString = defs |> List.exists (fun (_, expr) -> containsDbgStringLiteralExpr expr)
+    let moduleUsesHeap = defs |> List.exists (fun (_, expr) -> usesHeapAllocationExpr expr)
     let dbgTagNames =
         defs
         |> List.collect (fun (_, expr) -> collectDbgTagNamesExpr expr)
@@ -1360,8 +1423,25 @@ let transpileModuleToWat (module': Module) : string =
             $"  (data (i32.const {offset}) \"{escapeWasmData bytes}\")")
         |> String.concat "\n"
 
+    // Add memory if we have string literals or heap allocation, but no dbg helpers (dbgPrelude already includes memory)
+    let needsMemory = (not (List.isEmpty stringLiteralData) || moduleUsesHeap) && not moduleUsesDbgHelpers
+    let memorySection =
+        if needsMemory then
+            "  (memory 1)\n  (export \"memory\" (memory 0))"
+        else
+            ""
+
+    // Add heap global if we use heap allocation
+    let heapSection =
+        if moduleUsesHeap then
+            $"  (global $heap_ptr (mut i32) (i32.const {heapBaseOffset}))"
+        else
+            ""
+
     let allImports =
         [ if not (String.IsNullOrWhiteSpace dbgPrelude) then dbgPrelude
+          if not (String.IsNullOrWhiteSpace memorySection) then memorySection
+          if not (String.IsNullOrWhiteSpace heapSection) then heapSection
           if not (String.IsNullOrWhiteSpace contextPrelude) then contextPrelude
           yield! dbgTagImports
           yield! dbgTagPayloadImports ]

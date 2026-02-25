@@ -9,6 +9,7 @@
             "approve": true,
             "matchCommandLine": true
         },
-        "mkdir": true
+        "mkdir": true,
+        "Out-File": true
     }
 }

@@ -27,10 +27,6 @@ module TypeEnv =
         | TyNominal(_, underlying, _) -> freeTyVars underlying
         | TyFunc(arg, ret) ->
             Set.union (freeTyVars arg) (freeTyVars ret)
-        | TyTuple items ->
-            items
-            |> List.map freeTyVars
-            |> List.fold Set.union Set.empty
         | TyRecord fields ->
             fields
             |> Map.values

@@ -1,0 +1,15 @@
+def inRange = { x, lo, hi -> x >= lo && x <= hi }
+
+def check = { a, b ->
+    if a || b then 1 else 0
+}
+
+def main = {
+    def r1 = inRange(5, 1, 10)
+    def r2 = inRange(15, 1, 10)
+    def c1 = check(true, false)
+    def c2 = check(false, false)
+    if r1 && c1 == 1 && r2 == 0 && c2 == 0
+    then 42
+    else 0
+}

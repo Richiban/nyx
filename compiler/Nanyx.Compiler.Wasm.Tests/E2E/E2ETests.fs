@@ -29,3 +29,19 @@ let ``E2E - two - pipe expression`` () =
 [<Fact>]
 let ``E2E - three - booleans and conditionals`` () =
     runE2ETest "three"
+
+[<Fact>]
+let ``E2E - four - match literals`` () =
+    runE2ETest "four"
+
+[<Fact>]
+let ``E2E - five - match tags with payload`` () =
+    runE2ETest "five"
+
+[<Fact>]
+let ``E2E - six - modulo and multi-value match`` () =
+    runE2ETest "six"
+
+[<Fact>]
+let ``E2E - seven - logical operators`` () =
+    runE2ETest "seven"

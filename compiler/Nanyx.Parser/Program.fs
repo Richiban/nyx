@@ -899,6 +899,7 @@ opp.TermParser <- primaryExpr
 // Multiplicative operators (higher precedence)
 opp.AddOperator(InfixOperator("*", ws, 7, Associativity.Left, fun x y -> BinaryOp("*", x, y)))
 opp.AddOperator(InfixOperator("/", ws, 7, Associativity.Left, fun x y -> BinaryOp("/", x, y)))
+opp.AddOperator(InfixOperator("%", ws, 7, Associativity.Left, fun x y -> BinaryOp("%", x, y)))
 
 // Additive operators
 opp.AddOperator(InfixOperator("+", ws, 6, Associativity.Left, fun x y -> BinaryOp("+", x, y)))
@@ -913,6 +914,10 @@ opp.AddOperator(InfixOperator(">=", ws, 4, Associativity.Left, fun x y -> Binary
 // Equality operators 
 opp.AddOperator(InfixOperator("==", ws, 3, Associativity.Left, fun x y -> BinaryOp("==", x, y)))
 opp.AddOperator(InfixOperator("!=", ws, 3, Associativity.Left, fun x y -> BinaryOp("!=", x, y)))
+
+// Logical operators (lowest precedence)
+opp.AddOperator(InfixOperator("&&", ws, 2, Associativity.Left, fun x y -> BinaryOp("&&", x, y)))
+opp.AddOperator(InfixOperator("||", ws, 1, Associativity.Left, fun x y -> BinaryOp("||", x, y)))
 
 // Note: Comma is NOT an operator in the OPP
 // Commas are handled explicitly in tuple/record literals and function calls

@@ -1,0 +1,19 @@
+def isEven = { n -> n % 2 == 0 }
+
+def fizzbuzz = { n ->
+    def mod3 = n % 3
+    def mod5 = n % 5
+    match mod3, mod5
+    | 0, 0 -> 15
+    | 0, _ -> 3
+    | _, 0 -> 5
+    | _, _ -> n
+}
+
+def main = {
+    def a = fizzbuzz(15)
+    def b = fizzbuzz(9)
+    def c = fizzbuzz(10)
+    def d = fizzbuzz(7)
+    a + b + c + d
+}

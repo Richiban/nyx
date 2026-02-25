@@ -6,7 +6,7 @@ open Parser.Program
 
 type private ContextFn = string * int * int
 
-type private TranspileEnv = { KnownFunctions: Set<string>; Locals: Map<string, string>; DbgTempLocal: string option; TagIds: Map<string, int>; MatchTempNames: string list; NextMatchTemp: int; StringLiterals: Map<string, int>; ContextFunctions: Map<string, ContextFn>; PendingUseBindings: Map<string, ContextFn> list ref; RecordLayouts: Map<string, string list>; TypeLayouts: Map<string, string list> }
+type private TranspileEnv = { KnownFunctions: Set<string>; Locals: Map<string, string>; DbgTempLocal: string option; TagIds: Map<string, int>; MatchTempNames: string list; NextMatchTemp: int; StringLiterals: Map<string, int>; ContextFunctions: Map<string, ContextFn>; PendingUseBindings: Map<string, ContextFn> list ref; RecordLayouts: Map<string, string list>; TypeLayouts: Map<string, string list>; TypeFieldTypes: Map<string, Map<string, string>>; RecordFieldTypes: Map<string, Map<string, string>> }
 
 let private ctxFnName (name: string, _, _) = name
 let private ctxFnSlot (_, slot: int, _) = slot
@@ -118,7 +118,8 @@ let private heapBaseOffset = 4096  // Start heap after string data region
 
 let private dbgDataBaseOffset = 128
 
-let private dbgNewlineOffset = dbgDataBaseOffset + 64
+let private dbgDigitBufferOffset = dbgDataBaseOffset + 64  // dbg writes digits starting here (192)
+let private dbgStrNewlineOffset = dbgDigitBufferOffset + 32  // dbg_str newline at 224 (safe from dbg's buffer)
 
 let private escapeWasmData (bytes: byte array) =
     let sb = StringBuilder()
@@ -925,6 +926,17 @@ let rec private transpileExpression (env: TranspileEnv) (expr: Expression) : str
             match flattenCallArgs args with
             | [single] -> single
             | _ -> failwith "dbg expects a single argument"
+        // Helper to detect if expression is a string-typed member access
+        let isStringTypedExpr expr =
+            match expr with
+            | MemberAccess(IdentifierExpr(varName, _), fieldName, _) ->
+                match env.RecordFieldTypes |> Map.tryFind varName with
+                | Some fieldTypes ->
+                    match fieldTypes |> Map.tryFind fieldName with
+                    | Some "string" -> true
+                    | _ -> false
+                | None -> false
+            | _ -> false
         let argCode =
             match argExpr with
             | TagExpr(tagName, None) ->
@@ -949,6 +961,7 @@ let rec private transpileExpression (env: TranspileEnv) (expr: Expression) : str
         match argExpr with
         | TagExpr _ -> argCode
         | LiteralExpr(StringLit _) -> $"{argCode}\n    local.tee ${dbgLocal}\n    call $dbg_str\n    local.get ${dbgLocal}"
+        | _ when isStringTypedExpr argExpr -> $"{argCode}\n    local.tee ${dbgLocal}\n    call $dbg_str\n    local.get ${dbgLocal}"
         | _ -> $"{argCode}\n    local.tee ${dbgLocal}\n    call $dbg\n    local.get ${dbgLocal}"
     | FunctionCall(name, _, args) ->
         // Check if this is a type constructor call (e.g., Person(...))
@@ -1025,20 +1038,41 @@ let rec private transpileExpression (env: TranspileEnv) (expr: Expression) : str
                 | Some localName ->
                     let rhsCode = transpileExpression env rhs
                     // Track record layout if rhs is a RecordExpr
+                    // Helper to infer type from literal
+                    let inferTypeFromExpr expr =
+                        match expr with
+                        | LiteralExpr(StringLit _) -> "string"
+                        | LiteralExpr(IntLit _) -> "int"
+                        | LiteralExpr(BoolLit _) -> "bool"
+                        | _ -> "unknown"
+
                     let updatedEnv =
                         match rhs with
                         | RecordExpr fields ->
-                            let sortedFieldNames =
+                            let fieldInfo =
                                 fields
                                 |> List.mapi (fun i field ->
                                     match field with
-                                    | NamedField(n, _) -> n
-                                    | PositionalField _ -> string i)
-                                |> List.sort
-                            { env with RecordLayouts = env.RecordLayouts |> Map.add name sortedFieldNames }
+                                    | NamedField(n, expr) -> (n, inferTypeFromExpr expr)
+                                    | PositionalField expr -> (string i, inferTypeFromExpr expr))
+                            let sortedFieldNames = fieldInfo |> List.map fst |> List.sort
+                            let fieldTypes = fieldInfo |> Map.ofList
+                            { env with
+                                RecordLayouts = env.RecordLayouts |> Map.add name sortedFieldNames
+                                RecordFieldTypes = env.RecordFieldTypes |> Map.add name fieldTypes }
                         | TupleExpr items ->
                             let fieldNames = items |> List.mapi (fun i _ -> string i)
-                            { env with RecordLayouts = env.RecordLayouts |> Map.add name fieldNames }
+                            let fieldTypes = items |> List.mapi (fun i expr -> (string i, inferTypeFromExpr expr)) |> Map.ofList
+                            { env with
+                                RecordLayouts = env.RecordLayouts |> Map.add name fieldNames
+                                RecordFieldTypes = env.RecordFieldTypes |> Map.add name fieldTypes }
+                        | FunctionCall(typeName, _, _) when env.TypeLayouts |> Map.containsKey typeName ->
+                            // Type constructor call - use the type's field types
+                            let typeFieldTypes = env.TypeFieldTypes |> Map.tryFind typeName |> Option.defaultValue Map.empty
+                            let typeLayout = env.TypeLayouts |> Map.tryFind typeName |> Option.defaultValue []
+                            { env with
+                                RecordLayouts = env.RecordLayouts |> Map.add name typeLayout
+                                RecordFieldTypes = env.RecordFieldTypes |> Map.add name typeFieldTypes }
                         | _ -> env
                     let restCode = transpileStatements updatedEnv tail
                     $"{rhsCode}\n    local.set ${localName}\n    {restCode}"
@@ -1072,31 +1106,60 @@ let private defBodyAndParameters (expr: Expression) =
     | Lambda(args, body) -> args, body
     | _ -> [], expr
 
-let private extractTypeLayouts (module': Module) : Map<string, string list> =
-    module'
-    |> List.choose (function
-        | Def (TypeDef(name, _, _, TypeRecord fields)) ->
-            let fieldNames =
-                fields
-                |> List.choose (function
-                    | TypeField(fieldName, _, _, _, _) -> Some fieldName
-                    | TypeMember(fieldName, _) -> Some fieldName)
-                |> List.sort
-            Some (name, fieldNames)
-        | _ -> None)
-    |> Map.ofList
+let private extractTypeLayouts (module': Module) : Map<string, string list> * Map<string, Map<string, string>> =
+    let results =
+        module'
+        |> List.choose (function
+            | Def (TypeDef(name, _, _, TypeRecord fields)) ->
+                let fieldInfo =
+                    fields
+                    |> List.choose (function
+                        | TypeField(fieldName, _, _, typeOpt, _) ->
+                            let typeName =
+                                match typeOpt with
+                                | Some (TypeName t) -> t
+                                | _ -> "unknown"
+                            Some (fieldName, typeName)
+                        | TypeMember(fieldName, typeOpt) ->
+                            let typeName =
+                                match typeOpt with
+                                | Some (TypeName t) -> t
+                                | _ -> "unknown"
+                            Some (fieldName, typeName))
+                let sortedFieldNames = fieldInfo |> List.map fst |> List.sort
+                let fieldTypeMap = fieldInfo |> Map.ofList
+                Some (name, sortedFieldNames, fieldTypeMap)
+            | _ -> None)
+    let layouts = results |> List.map (fun (n, fields, _) -> (n, fields)) |> Map.ofList
+    let fieldTypes = results |> List.map (fun (n, _, types) -> (n, types)) |> Map.ofList
+    layouts, fieldTypes
 
-let private getLayoutFromTypeExpr (typeLayouts: Map<string, string list>) (typeExpr: TypeExpr option) : string list option =
+let private getLayoutFromTypeExpr (typeLayouts: Map<string, string list>) (typeFieldTypes: Map<string, Map<string, string>>) (typeExpr: TypeExpr option) : (string list * Map<string, string>) option =
     match typeExpr with
-    | Some (TypeName typeName) -> typeLayouts |> Map.tryFind typeName
+    | Some (TypeName typeName) ->
+        match typeLayouts |> Map.tryFind typeName, typeFieldTypes |> Map.tryFind typeName with
+        | Some layout, Some types -> Some (layout, types)
+        | Some layout, None -> Some (layout, Map.empty)
+        | _ -> None
     | Some (TypeRecord fields) ->
-        let fieldNames =
+        let fieldInfo =
             fields
             |> List.choose (function
-                | TypeField(fieldName, _, _, _, _) -> Some fieldName
-                | TypeMember(fieldName, _) -> Some fieldName)
-            |> List.sort
-        Some fieldNames
+                | TypeField(fieldName, _, _, typeOpt, _) ->
+                    let typeName =
+                        match typeOpt with
+                        | Some (TypeName t) -> t
+                        | _ -> "unknown"
+                    Some (fieldName, typeName)
+                | TypeMember(fieldName, typeOpt) ->
+                    let typeName =
+                        match typeOpt with
+                        | Some (TypeName t) -> t
+                        | _ -> "unknown"
+                    Some (fieldName, typeName))
+        let fieldNames = fieldInfo |> List.map fst |> List.sort
+        let fieldTypes = fieldInfo |> Map.ofList
+        Some (fieldNames, fieldTypes)
     | _ -> None
 
 let transpileModuleToWat (module': Module) : string =
@@ -1106,7 +1169,7 @@ let transpileModuleToWat (module': Module) : string =
             | Def (ValueDef(_, name, typeOpt, expr)) -> Some(name, typeOpt, expr)
             | _ -> None)
 
-    let typeLayouts = extractTypeLayouts module'
+    let typeLayouts, typeFieldTypes = extractTypeLayouts module'
 
     let mutable nextContextIndex = 0
     let mutable contextDefs: (string * Expression) list = []
@@ -1231,18 +1294,27 @@ let transpileModuleToWat (module': Module) : string =
                 | Some t -> extractParamTypes t
                 | None -> []
 
-            let initialRecordLayouts =
+            let initialRecordInfo =
                 List.zip parameterNames (defParamTypes @ List.replicate (parameterNames.Length - defParamTypes.Length) (TypeUnit))
                 |> List.choose (fun (paramName, paramType) ->
-                    match getLayoutFromTypeExpr typeLayouts (Some paramType) with
-                    | Some fieldNames -> Some (paramName, fieldNames)
+                    match getLayoutFromTypeExpr typeLayouts typeFieldTypes (Some paramType) with
+                    | Some (fieldNames, fieldTypes) -> Some (paramName, fieldNames, fieldTypes)
                     | None ->
                         // Also try lambda parameter type annotation
                         match parameters |> List.tryFind (fun (n, _) -> n = paramName) with
                         | Some (_, paramTypeOpt) ->
-                            getLayoutFromTypeExpr typeLayouts paramTypeOpt
-                            |> Option.map (fun fieldNames -> (paramName, fieldNames))
+                            getLayoutFromTypeExpr typeLayouts typeFieldTypes paramTypeOpt
+                            |> Option.map (fun (fieldNames, fieldTypes) -> (paramName, fieldNames, fieldTypes))
                         | None -> None)
+
+            let initialRecordLayouts =
+                initialRecordInfo
+                |> List.map (fun (n, fields, _) -> (n, fields))
+                |> Map.ofList
+
+            let initialRecordFieldTypes =
+                initialRecordInfo
+                |> List.map (fun (n, _, types) -> (n, types))
                 |> Map.ofList
 
             let env =
@@ -1256,7 +1328,9 @@ let transpileModuleToWat (module': Module) : string =
                   ContextFunctions = Map.empty
                   PendingUseBindings = ref pendingUseBindings
                   RecordLayouts = initialRecordLayouts
-                  TypeLayouts = typeLayouts }
+                  TypeLayouts = typeLayouts
+                  TypeFieldTypes = typeFieldTypes
+                  RecordFieldTypes = initialRecordFieldTypes }
             let fn = sanitizeIdentifier name
             let parameterSig =
                 parameters
@@ -1345,7 +1419,7 @@ let transpileModuleToWat (module': Module) : string =
               "  (memory 1)"
               "  (export \"memory\" (memory 0))"
               $"  (data (i32.const {dbgDataBaseOffset}) \"dbg: \")"
-              $"  (data (i32.const {dbgNewlineOffset}) \"\\0a\")"
+              $"  (data (i32.const {dbgStrNewlineOffset}) \"\\0a\")"
               "  (func $dbg (param $x i32)"
               "    (local $n i32)"
               "    (local $isneg i32)"
@@ -1367,7 +1441,7 @@ let transpileModuleToWat (module': Module) : string =
               "      i32.mul"
               "      local.set $n"
               "    end"
-              $"    i32.const {dbgNewlineOffset}"
+              $"    i32.const {dbgDigitBufferOffset}"
               "    local.set $pos"
               "    local.get $isneg"
               "    if"
@@ -1502,7 +1576,7 @@ let transpileModuleToWat (module': Module) : string =
               "    call $fd_write"
               "    drop"
               "    i32.const 0"
-              $"    i32.const {dbgNewlineOffset}"
+              $"    i32.const {dbgStrNewlineOffset}"
               "    i32.store"
               "    i32.const 4"
               "    i32.const 1"

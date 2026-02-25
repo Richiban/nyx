@@ -14,7 +14,7 @@ $watPath = [System.IO.Path]::ChangeExtension($nyxPath.Path, ".wat")
 $compilerProject = Join-Path $PSScriptRoot "../compiler/Nanyx.Compiler.Cli/NanyxCompiler.Cli.fsproj"
 
 Write-Host "Compiling $($nyxPath.Path) -> $watPath"
-dotnet run --project $compilerProject -- $nyxPath.Path --target wasm --out $watPath
+dotnet run --no-build --project $compilerProject -- $nyxPath.Path --target wasm --out $watPath
 if ($LASTEXITCODE -ne 0) {
     exit $LASTEXITCODE
 }

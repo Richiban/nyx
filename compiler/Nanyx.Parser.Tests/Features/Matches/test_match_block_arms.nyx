@@ -1,0 +1,23 @@
+def f = { x ->
+    match x
+    | 0 -> 
+        dbg("zero")
+        "zero"
+    | 1 ->
+        dbg("one")
+        "one"
+    | _ ->
+        dbg("other")
+        "other"
+}
+
+def g = { opt ->
+    match opt
+    | #Some(value) ->
+        def doubled = value * 2
+        dbg(doubled)
+        doubled
+    | #None ->
+        dbg(0)
+        0
+}

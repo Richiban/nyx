@@ -1,0 +1,18 @@
+def boolToInt = { b -> if b then 1 else 0 }
+
+def main = {
+    def b0 = boolToInt(5 < 10)
+    def b1 = boolToInt(10 < 5)
+    def b2 = boolToInt(5 > 10)
+    def b3 = boolToInt(10 > 5)
+    def b4 = boolToInt(5 <= 5)
+    def b5 = boolToInt(5 <= 4)
+    def b6 = boolToInt(5 >= 5)
+    def b7 = boolToInt(4 >= 5)
+    def b8 = boolToInt(5 == 5)
+    def b9 = boolToInt(5 == 6)
+    def b10 = boolToInt(5 != 6)
+    def b11 = boolToInt(5 != 5)
+    
+    b0 + b1 * 2 + b2 * 4 + b3 * 8 + b4 * 16 + b5 * 32 + b6 * 64 + b7 * 128 + b8 * 256 + b9 * 512 + b10 * 1024 + b11 * 2048
+}

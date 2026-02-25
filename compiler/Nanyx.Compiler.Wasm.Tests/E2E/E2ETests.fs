@@ -45,3 +45,11 @@ let ``E2E - six - modulo and multi-value match`` () =
 [<Fact>]
 let ``E2E - seven - logical operators`` () =
     runE2ETest "seven"
+
+[<Fact>]
+let ``E2E - eight - recursion`` () =
+    runE2ETest "eight"
+
+[<Fact>]
+let ``E2E - nine - comparison operators`` () =
+    runE2ETest "nine"

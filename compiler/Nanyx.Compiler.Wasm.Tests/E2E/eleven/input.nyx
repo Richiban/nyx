@@ -1,0 +1,4 @@
+def main = {
+    def person = (name = 42, age = 30, score = 100)
+    person.name + person.age + person.score
+}

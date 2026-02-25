@@ -57,3 +57,11 @@ let ``E2E - nine - comparison operators`` () =
 [<Fact>]
 let ``E2E - ten - tuple allocation and access`` () =
     runE2ETest "ten"
+
+[<Fact>]
+let ``E2E - eleven - record with named fields`` () =
+    runE2ETest "eleven"
+
+[<Fact>]
+let ``E2E - twelve - mixed positional and named fields`` () =
+    runE2ETest "twelve"

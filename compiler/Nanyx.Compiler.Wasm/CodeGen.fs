@@ -6,7 +6,7 @@ open Parser.Program
 
 type private ContextFn = string * int * int
 
-type private TranspileEnv = { KnownFunctions: Set<string>; Locals: Map<string, string>; DbgTempLocal: string option; TagIds: Map<string, int>; MatchTempNames: string list; NextMatchTemp: int; StringLiterals: Map<string, int>; ContextFunctions: Map<string, ContextFn>; PendingUseBindings: Map<string, ContextFn> list ref }
+type private TranspileEnv = { KnownFunctions: Set<string>; Locals: Map<string, string>; DbgTempLocal: string option; TagIds: Map<string, int>; MatchTempNames: string list; NextMatchTemp: int; StringLiterals: Map<string, int>; ContextFunctions: Map<string, ContextFn>; PendingUseBindings: Map<string, ContextFn> list ref; RecordLayouts: Map<string, string list> }
 
 let private ctxFnName (name: string, _, _) = name
 let private ctxFnSlot (_, slot: int, _) = slot
@@ -742,15 +742,64 @@ let rec private transpileExpression (env: TranspileEnv) (expr: Expression) : str
         let storeAll = itemCodes |> String.concat "\n    "
         // Store all items, then push return value (original ptr), then bump heap
         $"{storeAll}\n    global.get $heap_ptr\n    global.get $heap_ptr\n    i32.const {sizeBytes}\n    i32.add\n    global.set $heap_ptr"
-    | MemberAccess(tupleExpr, indexStr, _) ->
-        // Tuple element access: t.0, t.1, etc.
-        match System.Int32.TryParse(indexStr) with
+    | RecordExpr fields ->
+        // Sort fields alphabetically by name, store in that order on heap
+        let sortedFields =
+            fields
+            |> List.mapi (fun i field ->
+                match field with
+                | NamedField(name, expr) -> (name, expr)
+                | PositionalField expr -> (string i, expr))
+            |> List.sortBy fst
+        let n = sortedFields.Length
+        let sizeBytes = n * 4
+        let fieldCodes = sortedFields |> List.mapi (fun i (_, expr) ->
+            let exprCode = transpileExpression env expr
+            let offset = i * 4
+            $"global.get $heap_ptr\n    i32.const {offset}\n    i32.add\n    {exprCode}\n    i32.store")
+        let storeAll = fieldCodes |> String.concat "\n    "
+        $"{storeAll}\n    global.get $heap_ptr\n    global.get $heap_ptr\n    i32.const {sizeBytes}\n    i32.add\n    global.set $heap_ptr"
+    | MemberAccess(recordExpr, fieldName, _) ->
+        // Support both numeric indices (t.0, t.1) and named fields (r.name)
+        match System.Int32.TryParse(fieldName) with
         | true, index ->
-            let tupleCode = transpileExpression env tupleExpr
+            // Numeric index - direct offset calculation
+            let recordCode = transpileExpression env recordExpr
             let offset = index * 4
-            $"{tupleCode}\n    i32.const {offset}\n    i32.add\n    i32.load"
+            $"{recordCode}\n    i32.const {offset}\n    i32.add\n    i32.load"
         | false, _ ->
-            failwith $"Unsupported member access for WASM MVP backend: .{indexStr}"
+            // Named field - look up layout to find offset
+            match recordExpr with
+            | IdentifierExpr(varName, _) ->
+                match env.RecordLayouts |> Map.tryFind varName with
+                | Some fieldNames ->
+                    match fieldNames |> List.tryFindIndex ((=) fieldName) with
+                    | Some index ->
+                        let recordCode = transpileExpression env recordExpr
+                        let offset = index * 4
+                        $"{recordCode}\n    i32.const {offset}\n    i32.add\n    i32.load"
+                    | None ->
+                        failwith $"Unknown field '{fieldName}' for record variable '{varName}'"
+                | None ->
+                    failwith $"No record layout known for variable '{varName}' when accessing .{fieldName}"
+            | RecordExpr fields ->
+                // Inline record expression - compute layout directly
+                let sortedFieldNames =
+                    fields
+                    |> List.mapi (fun i field ->
+                        match field with
+                        | NamedField(name, _) -> name
+                        | PositionalField _ -> string i)
+                    |> List.sort
+                match sortedFieldNames |> List.tryFindIndex ((=) fieldName) with
+                | Some index ->
+                    let recordCode = transpileExpression env recordExpr
+                    let offset = index * 4
+                    $"{recordCode}\n    i32.const {offset}\n    i32.add\n    i32.load"
+                | None ->
+                    failwith $"Unknown field '{fieldName}' in inline record expression"
+            | _ ->
+                failwith $"Unsupported member access for WASM MVP backend: cannot determine layout for .{fieldName}"
     // ...existing code...
     | Match(values, arms) ->
         // Multi-scrutinee support
@@ -949,7 +998,23 @@ let rec private transpileExpression (env: TranspileEnv) (expr: Expression) : str
                 match env.Locals |> Map.tryFind name with
                 | Some localName ->
                     let rhsCode = transpileExpression env rhs
-                    let restCode = transpileStatements env tail
+                    // Track record layout if rhs is a RecordExpr
+                    let updatedEnv =
+                        match rhs with
+                        | RecordExpr fields ->
+                            let sortedFieldNames =
+                                fields
+                                |> List.mapi (fun i field ->
+                                    match field with
+                                    | NamedField(n, _) -> n
+                                    | PositionalField _ -> string i)
+                                |> List.sort
+                            { env with RecordLayouts = env.RecordLayouts |> Map.add name sortedFieldNames }
+                        | TupleExpr items ->
+                            let fieldNames = items |> List.mapi (fun i _ -> string i)
+                            { env with RecordLayouts = env.RecordLayouts |> Map.add name fieldNames }
+                        | _ -> env
+                    let restCode = transpileStatements updatedEnv tail
                     $"{rhsCode}\n    local.set ${localName}\n    {restCode}"
                 | None ->
                     failwith $"Unsupported block local for WASM MVP backend: {name}"
@@ -1108,7 +1173,8 @@ let transpileModuleToWat (module': Module) : string =
                   NextMatchTemp = 0
                   StringLiterals = stringLiteralMap
                   ContextFunctions = Map.empty
-                  PendingUseBindings = ref pendingUseBindings }
+                  PendingUseBindings = ref pendingUseBindings
+                  RecordLayouts = Map.empty }
             let fn = sanitizeIdentifier name
             let parameterSig =
                 parameters

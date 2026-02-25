@@ -6,14 +6,6 @@ open System.Collections.Generic
 type Subst = Map<int, Ty>
 
 module Unifier =
-    let private tupleFieldName index =
-        string index
-
-    let private tupleFieldMap items =
-        items
-        |> List.mapi (fun index ty -> tupleFieldName index, ty)
-        |> Map.ofList
-
     let private tryTupleLikeRecord (fields: Map<string, Ty>) : Ty list option * (string * Ty) list =
         let tupleFields, namedFields =
             fields
@@ -82,9 +74,6 @@ module Unifier =
 
     let private mismatchMessage left right =
         $"Type mismatch: {tyToString left} vs {tyToString right}."
-
-    let private tupleLengthMessage leftCount rightCount left right =
-        $"Tuple length mismatch: {leftCount} vs {rightCount}. {mismatchMessage left right}"
 
     let private tagUnionLengthMessage leftCount rightCount left right =
         $"Tag union length mismatch: {leftCount} vs {rightCount}. {mismatchMessage left right}"

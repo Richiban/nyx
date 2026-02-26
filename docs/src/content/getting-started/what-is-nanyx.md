@@ -21,11 +21,9 @@ Nanyx is a modern, type-safe programming language designed for building reliable
 
 Nanyx is designed for developers who want the safety guarantees of a statically-typed language without sacrificing developer experience. Whether you're building CLI tools, web services, or data pipelines, Nanyx provides the tools you need.
 
-```nanyx
-// Your first taste of Nanyx
-import nanyx/io
-
-println("Welcome to Nanyx! 🚀")
+```nyx
+-- Your first taste of Nanyx
+println("Welcome to Nanyx!")
 ```
 
 Ready to get started? Let's [install Nanyx](/docs/getting-started/installation) and write your first program.

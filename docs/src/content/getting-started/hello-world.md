@@ -21,20 +21,20 @@ This creates a new project with the following structure:
 hello_world/
 ├── nanyx.toml
 ├── src/
-│   └── hello_world.nx
+│   └── hello_world.nyx
 └── test/
-    └── hello_world_test.nx
+    └── hello_world_test.nyx
 ```
 
 ## Your First Program
 
-Open `src/hello_world.nx` and you'll see:
+Open `src/hello_world.nyx` and you'll see:
 
-```nanyx
-import nanyx/io
+```nyx
+module main
 
-pub fn main() {
-  io.println("Hello, World!")
+def main = {
+  println("Hello, World!")
 }
 ```
 
@@ -47,9 +47,9 @@ nanyx run
 
 ## Understanding the Code
 
-- `import nanyx/io` — imports the I/O module from the standard library
-- `pub fn main()` — declares the public entry point function
-- `io.println(...)` — prints a line to standard output
+- `module main` — declares the module name
+- `def main` — the entry point function
+- `println(...)` — prints a line to standard output
 
 ## What's Next?
 

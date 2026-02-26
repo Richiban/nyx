@@ -17,27 +17,24 @@ cd word_counter
 
 ## The Code
 
-```nanyx
-import nanyx/io
-import nanyx/file
-import nanyx/string
-import nanyx/list
-import nanyx/result
+```nyx
+module main
 
-pub fn main() {
-  case file.read("input.txt") {
-    Ok(content) -> {
-      let words = content
-        |> string.split(" ")
-        |> list.filter(fn(w) { w != "" })
+import file
+import string
+import list
+
+def main = {
+  match file.read("input.txt")
+    | #ok(content) ->
+      def words = content
+        \string.split(" ")
+        \list.filter { != "" }
       
-      let count = list.length(words)
-      io.println("Word count: " <> int.to_string(count))
-    }
-    Error(err) -> {
-      io.println("Error reading file: " <> file.error_to_string(err))
-    }
-  }
+      def count = list.length(words)
+      println("Word count: {count}")
+    | #error(err) ->
+      println("Error reading file: {err}")
 }
 ```
 
@@ -51,6 +48,6 @@ nanyx run
 
 ## Key Concepts
 
-- **File I/O** — the `file` module returns `Result` types for safe error handling
-- **Pipelines** — chain transformations with `|>` for readable data processing
+- **File I/O** — the `file` module returns result types for safe error handling
+- **Pipelines** — chain transformations with `\` for readable data processing
 - **Pattern matching** — handle success and failure cases explicitly

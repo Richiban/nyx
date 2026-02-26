@@ -1,71 +1,71 @@
 ---
-title: "nanyx/string"
+title: "string"
 description: "String manipulation functions"
 order: 3
 ---
 
-# nanyx/string
+# string
 
 The `string` module provides functions for working with UTF-8 strings.
 
 ## Functions
 
-### `length(s: String) -> Int`
+### `length: string -> int`
 
 Returns the number of grapheme clusters in the string.
 
-```nanyx
+```nyx
 string.length("hello")
-// 5
+-- 5
 ```
 
-### `uppercase(s: String) -> String`
+### `uppercase: string -> string`
 
-```nanyx
+```nyx
 string.uppercase("hello")
-// "HELLO"
+-- "HELLO"
 ```
 
-### `lowercase(s: String) -> String`
+### `lowercase: string -> string`
 
-```nanyx
+```nyx
 string.lowercase("HELLO")
-// "hello"
+-- "hello"
 ```
 
-### `split(s: String, on: String) -> List(String)`
+### `split: (string, on: string) -> list(string)`
 
-```nanyx
-string.split("a,b,c", on: ",")
-// ["a", "b", "c"]
+```nyx
+string.split("a,b,c", on = ",")
+-- ["a", "b", "c"]
 ```
 
-### `contains(s: String, sub: String) -> Bool`
+### `contains: (string, string) -> bool`
 
-```nanyx
+```nyx
 string.contains("hello world", "world")
-// True
+-- true
 ```
 
-### `replace(s: String, pattern: String, with: String) -> String`
+### `replace: (string, pattern: string, with: string) -> string`
 
-```nanyx
-string.replace("hello world", "world", "Nanyx")
-// "hello Nanyx"
+```nyx
+string.replace("hello world", pattern = "world", with = "Nanyx")
+-- "hello Nanyx"
 ```
 
-### `trim(s: String) -> String`
+### `trim: string -> string`
 
 Removes leading and trailing whitespace.
 
-```nanyx
+```nyx
 string.trim("  hello  ")
-// "hello"
+-- "hello"
 ```
 
-### `concat(strings: List(String)) -> String`
+### `concat: list(string) -> string`
 
-```nanyx
+```nyx
 string.concat(["Hello", ", ", "World"])
-// "Hello, World"
+-- "Hello, World"
 ```

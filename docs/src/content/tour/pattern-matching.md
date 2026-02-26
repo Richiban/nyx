@@ -1,70 +1,75 @@
 ---
 title: "Pattern Matching"
-description: "Powerful control flow with case expressions"
+description: "Powerful control flow with match expressions"
 order: 4
 ---
 
 # Pattern Matching
 
-Pattern matching is one of Nanyx's most powerful features. The `case` expression lets you match values against patterns and destructure data.
+Pattern matching is one of Nanyx's most powerful features. The `match` expression lets you match values against patterns and destructure data.
 
 ## Basic Matching
 
-```nanyx
-case some_value {
-  0 -> "zero"
-  1 -> "one"
-  _ -> "something else"
-}
+```nyx
+match someValue
+  | 0 -> "zero"
+  | 1 -> "one"
+  | _ -> "something else"
 ```
 
 ## Matching Custom Types
 
-```nanyx
-type Shape {
-  Circle(radius: Float)
-  Rectangle(width: Float, height: Float)
-}
+```nyx
+type Shape =
+  | #circle(float)
+  | #rectangle(float, float)
 
-fn area(shape: Shape) -> Float {
-  case shape {
-    Circle(r) -> 3.14159 *. r *. r
-    Rectangle(w, h) -> w *. h
-  }
+def area: Shape -> float = { shape ->
+  match shape
+    | #circle(r) -> 3.14159 * r * r
+    | #rectangle(w, h) -> w * h
 }
 ```
 
 ## Guards
 
-```nanyx
-fn describe_number(n: Int) -> String {
-  case n {
-    n if n < 0 -> "negative"
-    0 -> "zero"
-    n if n > 100 -> "large"
-    _ -> "positive"
-  }
+```nyx
+def describeNumber: int -> string = { n ->
+  match n
+    | n if n < 0 -> "negative"
+    | 0 -> "zero"
+    | n if n > 100 -> "large"
+    | _ -> "positive"
 }
 ```
 
 ## Destructuring
 
-```nanyx
-let #(x, y) = #(10, 20)
+```nyx
+def (x, y) = (10, 20)
 
-case result {
-  Ok(value) -> io.println("Got: " <> value)
-  Error(msg) -> io.println("Error: " <> msg)
+match result
+  | #ok(value) -> println("Got: {value}")
+  | #error(msg) -> println("Error: {msg}")
+```
+
+## Pattern Matching in Functions
+
+Since pattern matching is so common, you can merge the function definition and match patterns together:
+
+```nyx
+rec sumList: list(int) -> int = {
+  | [] -> 0
+  | [head, ...tail] -> head + sumList(tail)
 }
 ```
 
 ## Multiple Patterns
 
-```nanyx
-case day {
-  "Saturday" | "Sunday" -> "Weekend!"
-  _ -> "Weekday"
-}
+```nyx
+match day
+  | "Saturday" | "Sunday" -> "Weekend!"
+  | _ -> "Weekday"
 ```
 
 > **Note:** The Nanyx compiler ensures your patterns are exhaustive — every possible value must be handled. This prevents runtime crashes from unhandled cases.

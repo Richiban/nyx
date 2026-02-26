@@ -1,0 +1,19 @@
+
+type Println = ( println: (string) -> () )
+type Add = ( add: (int, int) -> int )
+
+def f: [Println + Add] = {
+  println("Hello")
+  add(3, 4)
+}
+
+def main = {
+  use (
+    println = { s -> 
+      dbg(s)
+      ()
+    },
+    add = { x, y -> x + y }
+  )
+  f()
+}

@@ -201,7 +201,7 @@
   (func $__ctx_main_println_0 (param $s i32) (result i32) (local $__dbg_tmp i32)
     local.get $s
     local.tee $__dbg_tmp
-    call $dbg
+    call $dbg_str
     local.get $__dbg_tmp
     drop
     i32.const 0

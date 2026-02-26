@@ -148,6 +148,14 @@ let private buildStringLiteralMap (literals: string list) =
 let private collectContextUseBindings (expr: Expression) : (string * Expression) list list =
     let rec collectFromStatement (stmt: Statement) =
         match stmt with
+        | UseStatement (UseValue (RecordExpr fields)) ->
+            // Direct record expression: use (println = { msg -> () })
+            let bindings =
+                fields
+                |> List.choose (function
+                    | NamedField(name, value) -> Some (name, value)
+                    | PositionalField _ -> None)
+            [bindings]
         | UseStatement (UseValue (FunctionCall(_, _, args))) ->
             match args with
             | [RecordExpr fields] ->

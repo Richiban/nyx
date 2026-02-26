@@ -69,3 +69,11 @@ let ``E2E - twelve - mixed positional and named fields`` () =
 [<Fact>]
 let ``E2E - thirteen - type definition and type constructor`` () =
     runE2ETest "thirteen"
+
+[<Fact>]
+let ``E2E - fourteen - context use statement`` () =
+    runE2ETest "fourteen"
+
+[<Fact>]
+let ``E2E - fifteen - context with multiple arities`` () =
+    runE2ETest "fifteen"

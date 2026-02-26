@@ -1,0 +1,6 @@
+-- Context test: use statement with function bindings
+def main = {
+  use (double = { x -> x * 2 }, triple = { x -> x * 3 })
+  
+  double(5) + triple(10)
+}

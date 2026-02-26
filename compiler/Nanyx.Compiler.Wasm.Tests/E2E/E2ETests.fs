@@ -89,3 +89,7 @@ let ``E2E - seventeen - tuple to multi-param function`` () =
 [<Fact>]
 let ``E2E - eighteen - context passing across functions`` () =
     runE2ETest "eighteen"
+
+[<Fact>]
+let ``E2E - nineteen - combined context types`` () =
+    runE2ETest "nineteen"

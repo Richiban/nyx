@@ -12,19 +12,24 @@ let private ctxFnName (name: string, _, _) = name
 let private ctxFnSlot (_, slot: int, _) = slot
 let private ctxFnArity (_, _, arity: int) = arity
 
-// Extract context type names from a TypeWithContext annotation
+// Extract context type names from a TypeWithContext or TypeContext annotation
 let private extractContextTypeNames (typeExpr: TypeExpr option) : string list =
     match typeExpr with
     | Some (TypeWithContext(contexts, _)) ->
         contexts |> List.choose (function
             | TypeName name -> Some name
             | _ -> None)
+    | Some (TypeContext contexts) ->
+        contexts |> List.choose (function
+            | TypeName name -> Some name
+            | _ -> None)
     | _ -> []
 
-// Get the inner type (without context) from a TypeWithContext
+// Get the inner type (without context) from a TypeWithContext or TypeContext
 let private unwrapContextType (typeExpr: TypeExpr option) : TypeExpr option =
     match typeExpr with
     | Some (TypeWithContext(_, inner)) -> Some inner
+    | Some (TypeContext _) -> None  // TypeContext alone has no inner type
     | other -> other
 
 let private sanitizeIdentifier (name: string) =
@@ -1508,16 +1513,23 @@ let transpileModuleToWat (module': Module) : string =
                 contextParamNames
                 |> List.mapi (fun _ (ctxFnName, paramName) ->
                     // Look up the context function's arity from the type field definitions
-                    // Default to 1 if we can't determine
                     let arity =
                         typeFieldTypes
                         |> Map.toList
                         |> List.tryPick (fun (_, fieldTypes) ->
                             fieldTypes |> Map.tryFind ctxFnName
-                            |> Option.bind (fun t ->
-                                // Parse arity from type like "(string) -> ()" - count the function params
-                                // For now, just default to 1 for simplicity
-                                Some 1))
+                            |> Option.bind (fun typeStr ->
+                                // Parse arity from type like "(string) -> (())" or "(int, int) -> (int)"
+                                // Count commas in the param section to determine arity
+                                let arrowIdx = typeStr.IndexOf("->")
+                                if arrowIdx < 0 then None
+                                else
+                                    let paramPart = typeStr.Substring(0, arrowIdx).Trim()
+                                    // Count params by counting commas + 1, but handle empty params "()"
+                                    if paramPart = "()" || paramPart = "(())" then Some 0
+                                    else
+                                        let commas = paramPart |> Seq.filter ((=) ',') |> Seq.length
+                                        Some (commas + 1)))
                         |> Option.defaultValue 1
                     // The slot isn't known at compile time - it's in the param
                     // We use -1 as a marker meaning "read from ContextParams"

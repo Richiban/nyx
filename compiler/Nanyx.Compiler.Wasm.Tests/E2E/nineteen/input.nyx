@@ -12,7 +12,9 @@ def main = {
     println = { s -> 
       dbg(s)
       ()
-    },
+    }
+  )
+  use (
     add = { x, y -> x + y }
   )
   f()

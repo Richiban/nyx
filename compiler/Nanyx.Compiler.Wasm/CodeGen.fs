@@ -80,10 +80,24 @@ let rec private collectExprLocalNames (expr: Expression) : string list =
     | LiteralExpr _
     | IdentifierExpr _ -> []
 
+// Collect names of defs that are used in a `use` statement (context-only defs)
+and private collectContextOnlyDefNames (statements: Statement list) : Set<string> =
+    statements
+    |> List.choose (function
+        | UseStatement (UseValue (IdentifierExpr (name, _))) -> Some name
+        | _ -> None)
+    |> Set.ofList
+
 and private collectStatementLocalNames (statements: Statement list) : string list =
+    let contextOnlyDefs = collectContextOnlyDefNames statements
     statements
     |> List.collect (function
-        | DefStatement(_, name, _, rhs) -> name :: collectExprLocalNames rhs
+        | DefStatement(_, name, _, rhs) ->
+            if contextOnlyDefs |> Set.contains name then
+                // Skip context-only defs - they don't need locals
+                []
+            else
+                name :: collectExprLocalNames rhs
         | ExprStatement expr -> collectExprLocalNames expr
         | ImportStatement _
         | TypeDefStatement _
@@ -146,72 +160,84 @@ let private buildStringLiteralMap (literals: string list) =
     map, entries
 
 let private collectContextUseBindings (expr: Expression) : (string * Expression) list list =
-    let rec collectFromStatement (stmt: Statement) =
+    // Helper to extract bindings from a record expression
+    let extractRecordBindings (fields: RecordField list) =
+        fields
+        |> List.choose (function
+            | NamedField(name, value) -> Some (name, value)
+            | PositionalField _ -> None)
+
+    // Collect def bindings in a block that might be used in `use identifier`
+    let rec collectDefsInBlock (statements: Statement list) : Map<string, Expression> =
+        statements
+        |> List.choose (function
+            | DefStatement(_, name, _, rhs) -> Some (name, rhs)
+            | _ -> None)
+        |> Map.ofList
+
+    let rec collectFromStatement (localDefs: Map<string, Expression>) (stmt: Statement) =
         match stmt with
         | UseStatement (UseValue (RecordExpr fields)) ->
             // Direct record expression: use (println = { msg -> () })
-            let bindings =
-                fields
-                |> List.choose (function
-                    | NamedField(name, value) -> Some (name, value)
-                    | PositionalField _ -> None)
-            [bindings]
+            [extractRecordBindings fields]
+        | UseStatement (UseValue (IdentifierExpr (name, _))) ->
+            // use identifier - look up in local defs
+            match localDefs |> Map.tryFind name with
+            | Some (RecordExpr fields) -> [extractRecordBindings fields]
+            | _ -> []
         | UseStatement (UseValue (FunctionCall(_, _, args))) ->
             match args with
-            | [RecordExpr fields] ->
-                let bindings =
-                    fields
-                    |> List.choose (function
-                        | NamedField(name, value) -> Some (name, value)
-                        | PositionalField _ -> None)
-                [bindings]
+            | [RecordExpr fields] -> [extractRecordBindings fields]
             | _ -> []
-        | DefStatement(_, _, _, rhs) -> collectFromExpr rhs
-        | ExprStatement value -> collectFromExpr value
+        | DefStatement(_, _, _, rhs) -> collectFromExpr localDefs rhs
+        | ExprStatement value -> collectFromExpr localDefs value
         | ImportStatement _
         | TypeDefStatement _ -> []
         | _ -> []
-    and collectFromExpr value =
+    and collectFromExpr (localDefs: Map<string, Expression>) value =
         match value with
         | Block statements ->
-            statements |> List.collect collectFromStatement
+            // Collect local defs first for this block scope
+            let blockDefs = collectDefsInBlock statements
+            let mergedDefs = Map.fold (fun acc k v -> Map.add k v acc) localDefs blockDefs
+            statements |> List.collect (collectFromStatement mergedDefs)
         | IfExpr(cond, thenExpr, elseExpr) ->
-            collectFromExpr cond @ collectFromExpr thenExpr @ collectFromExpr elseExpr
+            collectFromExpr localDefs cond @ collectFromExpr localDefs thenExpr @ collectFromExpr localDefs elseExpr
         | Match(values, arms) ->
-            let valueBindings = values |> List.collect collectFromExpr
-            let armBindings = arms |> List.collect (fun (_, armExpr) -> collectFromExpr armExpr)
+            let valueBindings = values |> List.collect (collectFromExpr localDefs)
+            let armBindings = arms |> List.collect (fun (_, armExpr) -> collectFromExpr localDefs armExpr)
             valueBindings @ armBindings
-        | Lambda(_, body) -> collectFromExpr body
+        | Lambda(_, body) -> collectFromExpr localDefs body
         | Pipe(value, _, _, args) ->
-            collectFromExpr value @ (args |> List.collect collectFromExpr)
-        | FunctionCall(_, _, args) -> args |> List.collect collectFromExpr
+            collectFromExpr localDefs value @ (args |> List.collect (collectFromExpr localDefs))
+        | FunctionCall(_, _, args) -> args |> List.collect (collectFromExpr localDefs)
         | TupleExpr items
-        | ListExpr items -> items |> List.collect collectFromExpr
+        | ListExpr items -> items |> List.collect (collectFromExpr localDefs)
         | RecordExpr fields ->
             fields
             |> List.collect (function
-                | NamedField(_, value) -> collectFromExpr value
-                | PositionalField value -> collectFromExpr value)
+                | NamedField(_, value) -> collectFromExpr localDefs value
+                | PositionalField value -> collectFromExpr localDefs value)
         | UseIn(binding, body) ->
             let bindingBindings =
                 match binding with
-                | UseValue inner -> collectFromExpr inner
-            bindingBindings @ collectFromExpr body
-        | TagExpr(_, payload) -> payload |> Option.map collectFromExpr |> Option.defaultValue []
-        | MemberAccess(inner, _, _) -> collectFromExpr inner
+                | UseValue inner -> collectFromExpr localDefs inner
+            bindingBindings @ collectFromExpr localDefs body
+        | TagExpr(_, payload) -> payload |> Option.map (collectFromExpr localDefs) |> Option.defaultValue []
+        | MemberAccess(inner, _, _) -> collectFromExpr localDefs inner
         | InterpolatedString parts ->
             parts
             |> List.collect (function
                 | StringText _ -> []
-                | StringExpr inner -> collectFromExpr inner)
+                | StringExpr inner -> collectFromExpr localDefs inner)
         | WorkflowBindExpr(_, value)
-        | WorkflowReturnExpr value -> collectFromExpr value
+        | WorkflowReturnExpr value -> collectFromExpr localDefs value
         | UnitExpr
         | LiteralExpr _
         | IdentifierExpr _ -> []
         | _ -> []
 
-    collectFromExpr expr
+    collectFromExpr Map.empty expr
 
 let private maxOrZero list =
     match list with
@@ -1037,10 +1063,15 @@ let rec private transpileExpression (env: TranspileEnv) (expr: Expression) : str
     | Lambda(args, body) when args.IsEmpty ->
         transpileExpression env body
     | Block statements ->
+        // Identify defs that are only used in `use` statements - skip generating code for them
+        let contextOnlyDefs = collectContextOnlyDefNames statements
         let rec transpileStatements env items =
             match items with
             | [] -> failwith "Unsupported block form for WASM MVP backend: block does not end in expression"
             | [ExprStatement expr] -> transpileExpression env expr
+            | DefStatement(_, name, _, _) :: tail when contextOnlyDefs |> Set.contains name ->
+                // Skip context-only defs - lambdas are hoisted to context functions
+                transpileStatements env tail
             | DefStatement(_, name, _, rhs) :: tail ->
                 match env.Locals |> Map.tryFind name with
                 | Some localName ->

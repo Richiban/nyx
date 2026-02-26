@@ -77,3 +77,7 @@ let ``E2E - fourteen - context use statement`` () =
 [<Fact>]
 let ``E2E - fifteen - context with multiple arities`` () =
     runE2ETest "fifteen"
+
+[<Fact>]
+let ``E2E - sixteen - use identifier reference`` () =
+    runE2ETest "sixteen"

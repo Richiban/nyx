@@ -1,0 +1,5 @@
+﻿def main = {
+    def ctx = (f = { x -> x * 2 }, g = { y -> y + 3 })
+    use ctx
+    f(5) + g(10)
+}

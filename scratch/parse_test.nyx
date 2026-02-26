@@ -1,0 +1,4 @@
+﻿def main = {
+  use ( println = { s -> dbg(s) } )
+  println("hi")
+}

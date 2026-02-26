@@ -6,11 +6,26 @@ open Parser.Program
 
 type private ContextFn = string * int * int
 
-type private TranspileEnv = { KnownFunctions: Set<string>; Locals: Map<string, string>; DbgTempLocal: string option; TagIds: Map<string, int>; MatchTempNames: string list; NextMatchTemp: int; StringLiterals: Map<string, int>; ContextFunctions: Map<string, ContextFn>; PendingUseBindings: Map<string, ContextFn> list ref; RecordLayouts: Map<string, string list>; TypeLayouts: Map<string, string list>; TypeFieldTypes: Map<string, Map<string, string>>; RecordFieldTypes: Map<string, Map<string, string>> }
+type private TranspileEnv = { KnownFunctions: Set<string>; FunctionArities: Map<string, int>; FunctionContextRequirements: Map<string, string list>; Locals: Map<string, string>; DbgTempLocal: string option; TagIds: Map<string, int>; MatchTempNames: string list; NextMatchTemp: int; StringLiterals: Map<string, int>; ContextFunctions: Map<string, ContextFn>; ContextParams: Map<string, string>; PendingUseBindings: Map<string, ContextFn> list ref; RecordLayouts: Map<string, string list>; TypeLayouts: Map<string, string list>; TypeFieldTypes: Map<string, Map<string, string>>; RecordFieldTypes: Map<string, Map<string, string>> }
 
 let private ctxFnName (name: string, _, _) = name
 let private ctxFnSlot (_, slot: int, _) = slot
 let private ctxFnArity (_, _, arity: int) = arity
+
+// Extract context type names from a TypeWithContext annotation
+let private extractContextTypeNames (typeExpr: TypeExpr option) : string list =
+    match typeExpr with
+    | Some (TypeWithContext(contexts, _)) ->
+        contexts |> List.choose (function
+            | TypeName name -> Some name
+            | _ -> None)
+    | _ -> []
+
+// Get the inner type (without context) from a TypeWithContext
+let private unwrapContextType (typeExpr: TypeExpr option) : TypeExpr option =
+    match typeExpr with
+    | Some (TypeWithContext(_, inner)) -> Some inner
+    | other -> other
 
 let private sanitizeIdentifier (name: string) =
     let sanitized =
@@ -1024,24 +1039,73 @@ let rec private transpileExpression (env: TranspileEnv) (expr: Expression) : str
             | _ ->
                 failwith $"Type constructor {name} expects a record expression as argument"
         | None ->
+            let flatArgs = flattenCallArgs args
+            let expectedArity = env.FunctionArities |> Map.tryFind name |> Option.defaultValue flatArgs.Length
+            
+            // Check if we need to destructure a tuple/record argument
             let argsCode =
-                flattenCallArgs args
-                |> List.map (transpileExpression env)
+                match flatArgs with
+                | [IdentifierExpr(varName, _)] when expectedArity > 1 ->
+                    // Single identifier passed to multi-param function - try to destructure
+                    match env.RecordLayouts |> Map.tryFind varName with
+                    | Some fieldNames when fieldNames.Length = expectedArity ->
+                        // Generate code to load each field from the record
+                        let localName = env.Locals |> Map.tryFind varName |> Option.defaultValue (sanitizeIdentifier varName)
+                        fieldNames
+                        |> List.mapi (fun i _ ->
+                            let offset = i * 4
+                            $"local.get ${localName}\n    i32.const {offset}\n    i32.add\n    i32.load")
+                    | _ ->
+                        // Not a known record, just pass it
+                        flatArgs |> List.map (transpileExpression env)
+                | _ ->
+                    flatArgs |> List.map (transpileExpression env)
+            
             match env.ContextFunctions |> Map.tryFind name with
             | Some ctxFn ->
                 let prefix = argsCode |> String.concat "\n    "
+                let slot = ctxFnSlot ctxFn
+                let slotCode = 
+                    if slot = -1 then
+                        // Slot comes from a parameter - look up in ContextParams
+                        match env.ContextParams |> Map.tryFind name with
+                        | Some paramName -> $"local.get ${paramName}"
+                        | None -> failwith $"Context function {name} not found in params"
+                    else
+                        $"i32.const {slot}"
                 if prefix = "" then
-                    $"i32.const {ctxFnSlot ctxFn}\n    call_indirect (type $ctx_fn_{ctxFnArity ctxFn})"
+                    $"{slotCode}\n    call_indirect (type $ctx_fn_{ctxFnArity ctxFn})"
                 else
-                    $"{prefix}\n    i32.const {ctxFnSlot ctxFn}\n    call_indirect (type $ctx_fn_{ctxFnArity ctxFn})"
+                    $"{prefix}\n    {slotCode}\n    call_indirect (type $ctx_fn_{ctxFnArity ctxFn})"
             | None ->
                 if not (env.KnownFunctions.Contains name) then
                     failwith $"Unsupported function call for WASM MVP backend: {name}"
                 else
-                    match argsCode with
+                    // Check if this function requires contexts - if so, pass them
+                    let requiredCtxFns = env.FunctionContextRequirements |> Map.tryFind name |> Option.defaultValue []
+                    let ctxArgsCode =
+                        requiredCtxFns
+                        |> List.map (fun ctxFnName ->
+                            // Get the context value - either from ContextFunctions (use statement) or ContextParams (passed in)
+                            match env.ContextFunctions |> Map.tryFind ctxFnName with
+                            | Some ctxFn when ctxFnSlot ctxFn >= 0 ->
+                                // Fixed slot from a use statement
+                                $"i32.const {ctxFnSlot ctxFn}"
+                            | Some _ ->
+                                // Slot from param - look in ContextParams
+                                match env.ContextParams |> Map.tryFind ctxFnName with
+                                | Some paramName -> $"local.get ${paramName}"
+                                | None -> failwith $"Context function {ctxFnName} not found"
+                            | None ->
+                                // Not in ContextFunctions - check ContextParams
+                                match env.ContextParams |> Map.tryFind ctxFnName with
+                                | Some paramName -> $"local.get ${paramName}"
+                                | None -> failwith $"Context function {ctxFnName} not available in current scope")
+                    let allArgsCode = argsCode @ ctxArgsCode
+                    match allArgsCode with
                     | [] -> $"call ${sanitizeIdentifier name}"
                     | _ ->
-                        let prefix = argsCode |> String.concat "\n    "
+                        let prefix = allArgsCode |> String.concat "\n    "
                         $"{prefix}\n    call ${sanitizeIdentifier name}"
     | Pipe(value, funcName, _, args) ->
         // Pipe x \f(a, b) translates to f(x, a, b)
@@ -1239,31 +1303,63 @@ let transpileModuleToWat (module': Module) : string =
     let knownFunctions =
         (defs |> List.map (fun (n, _, _) -> n)) @ (contextDefs |> List.map fst)
         |> Set.ofList
-    let moduleUsesDbg = defs |> List.exists (fun (_, _, expr) -> containsDbgCallExpr expr)
-    let moduleUsesRegularDbg = defs |> List.exists (fun (_, _, expr) -> containsRegularDbgExpr expr)
-    let moduleUsesDbgString = defs |> List.exists (fun (_, _, expr) -> containsDbgStringLiteralExpr expr)
-    let moduleUsesHeap = defs |> List.exists (fun (_, _, expr) -> usesHeapAllocationExpr expr)
-    let dbgTagNames =
+
+    let functionArities =
         defs
-        |> List.collect (fun (_, _, expr) -> collectDbgTagNamesExpr expr)
+        |> List.map (fun (name, _, expr) ->
+            let fnParams, _ = defBodyAndParameters expr
+            name, fnParams.Length)
+        |> Map.ofList
+
+    // Calculate context requirements for each function based on TypeWithContext annotations
+    let functionContextRequirements =
+        defs
+        |> List.choose (fun (name, typeOpt, _) ->
+            let contextTypeNames = extractContextTypeNames typeOpt
+            if contextTypeNames.IsEmpty then None
+            else
+                // For each context type, get its field names (function members)
+                let contextFnNames =
+                    contextTypeNames
+                    |> List.collect (fun ctxTypeName ->
+                        typeLayouts |> Map.tryFind ctxTypeName |> Option.defaultValue [])
+                if contextFnNames.IsEmpty then None
+                else Some (name, contextFnNames))
+        |> Map.ofList
+
+    let moduleUsesDbg = 
+        (defs |> List.exists (fun (_, _, expr) -> containsDbgCallExpr expr)) ||
+        (contextDefs |> List.exists (fun (_, expr) -> containsDbgCallExpr expr))
+    let moduleUsesRegularDbg = 
+        (defs |> List.exists (fun (_, _, expr) -> containsRegularDbgExpr expr)) ||
+        (contextDefs |> List.exists (fun (_, expr) -> containsRegularDbgExpr expr))
+    let moduleUsesDbgString = 
+        (defs |> List.exists (fun (_, _, expr) -> containsDbgStringLiteralExpr expr)) ||
+        (contextDefs |> List.exists (fun (_, expr) -> containsDbgStringLiteralExpr expr))
+    let moduleUsesHeap = 
+        (defs |> List.exists (fun (_, _, expr) -> usesHeapAllocationExpr expr)) ||
+        (contextDefs |> List.exists (fun (_, expr) -> usesHeapAllocationExpr expr))
+    let dbgTagNames =
+        (defs |> List.collect (fun (_, _, expr) -> collectDbgTagNamesExpr expr)) @
+        (contextDefs |> List.collect (fun (_, expr) -> collectDbgTagNamesExpr expr))
         |> List.distinct
         |> List.sort
     let dbgTagPayloadNames =
-        defs
-        |> List.collect (fun (_, _, expr) -> collectDbgTagPayloadNamesExpr expr)
+        (defs |> List.collect (fun (_, _, expr) -> collectDbgTagPayloadNamesExpr expr)) @
+        (contextDefs |> List.collect (fun (_, expr) -> collectDbgTagPayloadNamesExpr expr))
         |> List.distinct
         |> List.sort
     let tagIdMap =
-        defs
-        |> List.collect (fun (_, _, expr) -> collectTagNamesExpr expr)
+        (defs |> List.collect (fun (_, _, expr) -> collectTagNamesExpr expr)) @
+        (contextDefs |> List.collect (fun (_, expr) -> collectTagNamesExpr expr))
         |> List.distinct
         |> List.sort
         |> List.mapi (fun index name -> name, index + 1)
         |> Map.ofList
 
     let stringLiterals =
-        defs
-        |> List.collect (fun (_, _, expr) -> collectStringLiteralsExpr expr)
+        (defs |> List.collect (fun (_, _, expr) -> collectStringLiteralsExpr expr)) @
+        (contextDefs |> List.collect (fun (_, expr) -> collectStringLiteralsExpr expr))
         |> List.distinct
 
     let stringLiteralMap, stringLiteralData = buildStringLiteralMap stringLiterals
@@ -1356,24 +1452,70 @@ let transpileModuleToWat (module': Module) : string =
                 |> List.map (fun (n, _, types) -> (n, types))
                 |> Map.ofList
 
+            // Check if this function requires contexts (from TypeWithContext annotation)
+            let requiredContextFns = functionContextRequirements |> Map.tryFind name |> Option.defaultValue []
+            let contextParamNames =
+                requiredContextFns
+                |> List.map (fun ctxFnName -> (ctxFnName, $"__ctx_{sanitizeIdentifier ctxFnName}"))
+
+            // Context functions from params - they don't have fixed slots, the slot comes from the param value
+            // We'll use ContextParams to store the param name for each context fn
+            let contextParamsMap =
+                contextParamNames
+                |> Map.ofList
+
+            // Determine arity of each context function from type definitions
+            let contextFunctionsFromParams =
+                contextParamNames
+                |> List.mapi (fun _ (ctxFnName, paramName) ->
+                    // Look up the context function's arity from the type field definitions
+                    // Default to 1 if we can't determine
+                    let arity =
+                        typeFieldTypes
+                        |> Map.toList
+                        |> List.tryPick (fun (_, fieldTypes) ->
+                            fieldTypes |> Map.tryFind ctxFnName
+                            |> Option.bind (fun t ->
+                                // Parse arity from type like "(string) -> ()" - count the function params
+                                // For now, just default to 1 for simplicity
+                                Some 1))
+                        |> Option.defaultValue 1
+                    // The slot isn't known at compile time - it's in the param
+                    // We use -1 as a marker meaning "read from ContextParams"
+                    ctxFnName, (paramName, -1, arity))
+                |> Map.ofList
+
             let env =
                 { KnownFunctions = knownFunctions
+                  FunctionArities = functionArities
+                  FunctionContextRequirements = functionContextRequirements
                   Locals = locals
                   DbgTempLocal = dbgLocalName
                   TagIds = tagIdMap
                   MatchTempNames = matchTempNames
                   NextMatchTemp = 0
                   StringLiterals = stringLiteralMap
-                  ContextFunctions = Map.empty
+                  ContextFunctions = contextFunctionsFromParams
+                  ContextParams = contextParamsMap
                   PendingUseBindings = ref pendingUseBindings
                   RecordLayouts = initialRecordLayouts
                   TypeLayouts = typeLayouts
                   TypeFieldTypes = typeFieldTypes
                   RecordFieldTypes = initialRecordFieldTypes }
             let fn = sanitizeIdentifier name
-            let parameterSig =
+            
+            // Build parameter signature including context params
+            let regularParamSig =
                 parameters
                 |> List.map (fun (paramName, _) -> $"(param ${parameterMap.[paramName]} i32)")
+                |> String.concat " "
+            let contextParamSig =
+                contextParamNames
+                |> List.map (fun (_, paramName) -> $"(param ${paramName} i32)")
+                |> String.concat " "
+            let parameterSig =
+                [regularParamSig; contextParamSig]
+                |> List.filter (String.IsNullOrWhiteSpace >> not)
                 |> String.concat " "
             // Collect all identifier payloads in match patterns
             let rec collectPayloadLocals expr =

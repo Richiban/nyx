@@ -1,0 +1,13 @@
+-- Tuple/record and multi-param function unification
+def f = { x, y -> x + y }
+
+def main = {
+    -- Direct call
+    def r1 = f(3, 4)
+    
+    -- Pass tuple variable
+    def args = (10, 20)
+    def r2 = f(args)
+    
+    r1 + r2
+}

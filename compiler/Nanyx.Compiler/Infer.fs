@@ -335,7 +335,15 @@ let rec private collectContextMembers (state: InferState) (ctxExpr: TypeExpr) : 
     | TypeApply(name, _) ->
         match state.ContextDefs |> Map.tryFind name with
         | Some ctxDef -> collectContextMembers state ctxDef
-        | None -> [], state
+        | None -> 
+            // Also check TypeDefs for non-context types used as contexts
+            match state.TypeDefs |> Map.tryFind name with
+            | Some info ->
+                match info.Underlying with
+                | TyRecord fields -> 
+                    fields |> Map.toList, state
+                | _ -> [], state
+            | None -> [], state
     | _ -> [], state
 
 let private extendEnvWithContexts (env: TypeEnv) (state: InferState) (contexts: TypeExpr list) =

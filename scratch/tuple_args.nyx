@@ -1,0 +1,6 @@
+﻿def f = { x, y -> x + y }
+
+def main = {
+    def args = (1, 2)
+    f(args)
+}
